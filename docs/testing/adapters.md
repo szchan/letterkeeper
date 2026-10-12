@@ -33,3 +33,9 @@ cargo test -p letterkeeper-adapters --offline
 TestBackend 是终端 cell 验证，不是实际字体、真实终端键盘或视觉精致度验收。没有在此模块声称 HTTP/DNS 无外联完整证明：应用 worker 隔离及受控网络观测由应用/content 测试负责，未验证公开 MCP 客户端下游展示。全部数据为合成身份和恶意样本，没有真实邮箱、凭据或私有邮件。
 
 额外覆盖六条工具路由、Host 未授权发送返回协议 tool error、大小限制、附件/approve 字段拒绝、最后/空列表页、长草稿裁剪声明、TUI 顶部截断提示及重复键盘边界。`cargo clippy -p letterkeeper-adapters --all-targets --offline -- -D warnings` 用于静态质量检查。
+
+## 选中邮件可见性回归
+
+后续审查发现列表每项实际两行，旧版却按 `selected * 3` 滚动，80×15 终端在选择第二封时会隐藏其主题及选择箭头。`f53bcc5` 加入 TestBackend 回归并实际 RED：选中主题和箭头未出现在输出 cells 中。修复使用 Ratatui `List`/`ListState`，由 widget 根据每项高度维护选中项可见性，不手工估算行数。主题/发件人按终端宽度裁切；完整主题仍可进入阅读页查看。
+
+回归覆盖 12 封中文邮件，80×15 和 24×15，两种宽度连续 j 下移八次并 k 上移，逐次断言选中箭头与主题可见。全部 11 个测试、rustfmt 和 clippy `-D warnings` 通过。实际字体、键盘和视觉评审限制不变。

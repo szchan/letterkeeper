@@ -10,7 +10,7 @@ use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout},
     style::{Color, Style},
-    widgets::{Block, Borders, Paragraph, Wrap},
+    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
 };
 use rmcp::{RoleServer, ServerHandler, ServiceExt, model::*, service::RequestContext};
 use serde::{Deserialize, Serialize};
@@ -153,38 +153,45 @@ pub fn render(
             })
             .unwrap_or_else(|| "没有邮件".into())
     } else {
-        messages
+        String::new()
+    };
+    if !state.reading && !state.help {
+        let items = messages
             .iter()
-            .enumerate()
-            .map(|(i, m)| {
-                format!(
-                    "{} {}\n   {}",
-                    if i == state.selected { "▶" } else { " " },
+            .map(|m| {
+                ListItem::new(format!(
+                    "{}\n  {}",
                     inert_text(&m.subject, 120),
                     inert_text(&m.from, 100)
-                )
+                ))
             })
-            .collect::<Vec<_>>()
-            .join("\n")
-    };
-    frame.render_widget(
-        Paragraph::new(text)
-            .wrap(Wrap { trim: false })
-            .scroll((
-                if state.reading {
-                    state.scroll
-                } else {
-                    state.selected.saturating_mul(3).min(u16::MAX as usize) as u16
-                },
-                0,
-            ))
+            .collect::<Vec<_>>();
+        let list = List::new(items)
+            .highlight_symbol("▶ ")
+            .highlight_style(Style::default().fg(Color::Cyan))
             .block(
                 Block::default()
                     .borders(Borders::ALL)
                     .title("不可信邮件文本"),
-            ),
-        areas[1],
-    );
+            );
+        let mut selection = ListState::default();
+        selection.select(
+            (!messages.is_empty()).then_some(state.selected.min(messages.len().saturating_sub(1))),
+        );
+        frame.render_stateful_widget(list, areas[1], &mut selection);
+    } else {
+        frame.render_widget(
+            Paragraph::new(text)
+                .wrap(Wrap { trim: false })
+                .scroll((if state.reading { state.scroll } else { 0 }, 0))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("不可信邮件文本"),
+                ),
+            areas[1],
+        );
+    }
     frame.render_widget(
         Paragraph::new("↑↓ j/k · Enter Tab 阅读 · ? 帮助 · q 退出"),
         areas[2],

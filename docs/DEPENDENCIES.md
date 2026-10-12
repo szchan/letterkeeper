@@ -14,7 +14,7 @@
 | `html5ever` 0.35.0 | HTML5 文档解析。 | MIT OR Apache-2.0 | [servo/html5ever](https://github.com/servo/html5ever)；近期活跃度待核实。 | 解析阶段必须维持无资源获取行为；不能将解析成功或安全文本转换当作网络隔离证明。 |
 | `markup5ever_rcdom` 0.35.0+unofficial | 为 html5ever 提供 RcDom 树表示，以遍历解析结果。 | MIT OR Apache-2.0 | [servo/html5ever](https://github.com/servo/html5ever)；近期活跃度待核实。 | 树中仍可能保留恶意标记和 URL；显示前需要安全转换，并验证下游不执行或加载内容。 |
 | `rusqlite` 0.32.1（启用 `bundled`） | 本地状态及草稿数据的 SQLite 访问；bundled feature 构建随依赖打包的 SQLite。 | MIT | [rusqlite/rusqlite](https://github.com/rusqlite/rusqlite)；近期活跃度待核实。 | 增加随包 SQLite 原生代码和构建链；输入仍需参数化，数据库文件权限及本地数据保护另行设计。 |
-| `sha2` 0.10.9 | 对草稿版本化内容计算 SHA-256 摘要，用于一致性/幂等状态关联。 | MIT OR Apache-2.0 | [RustCrypto/hashes](https://github.com/RustCrypto/hashes)；近期活跃度待核实。 | 哈希不提供加密、认证或秘密保护；摘要算法用途不能代替发送授权。 |
+| `sha2` 0.10.9 | 对草稿版本化内容计算 SHA-256 摘要，用于授权快照一致性关联。 | MIT OR Apache-2.0 | [RustCrypto/hashes](https://github.com/RustCrypto/hashes)；近期活跃度待核实。 | 哈希不提供加密、认证或秘密保护；摘要算法用途不能代替发送授权。 |
 | `serde` 1.0.229 | Rust 数据结构序列化与反序列化。 | MIT OR Apache-2.0 | [serde-rs/serde](https://github.com/serde-rs/serde)；近期活跃度待核实。 | 不可信数据反序列化仍需限制输入大小并校验业务约束。 |
 | `serde_json` 1.0.154 | CLI、MCP 与内部数据的 JSON 编解码。 | MIT OR Apache-2.0 | [serde-rs/json](https://github.com/serde-rs/json)；近期活跃度待核实。 | JSON 编解码不会自动清理邮件内容；输出消费者仍须把不可信正文当文本处理。 |
 | `thiserror` 2.0.21 | 定义 Rust 错误类型。 | MIT OR Apache-2.0 | [dtolnay/thiserror](https://github.com/dtolnay/thiserror)；近期活跃度待核实。 | 错误消息不应携带邮件正文、凭据或其他私有数据。 |
@@ -25,7 +25,7 @@
 | `clap` 4.6.7（derive） | 命令行参数与子命令解析。 | MIT OR Apache-2.0 | [clap-rs/clap](https://github.com/clap-rs/clap)；近期活跃度待核实。 | 命令行参数可能出现在进程列表或历史记录；不得通过参数传递密码、token 或正文秘密。 |
 | `lettre` 0.11.23（builder、SMTP、Rustls、ring、webpki-roots） | 构造邮件并通过 SMTP 发送；配置使用 Rustls 和内置 WebPKI 根。 | MIT | [lettre/lettre](https://github.com/lettre/lettre)；近期活跃度待核实。 | 处理 SMTP 凭据和收件人等敏感数据；网络超时可能导致发送结果不确定，调用方不能盲目重试。此依赖不代表当前已验证真实账户收发。 |
 | `libc` 0.2.190 | Unix 资源限制接口，供 Linux 沙箱 worker 设置资源上限。 | MIT OR Apache-2.0 | [rust-lang/libc](https://github.com/rust-lang/libc)；近期活跃度待核实。 | 是底层系统接口封装；资源限制调用失败必须被视为失败，不能假定隔离仍然有效。 |
-| `tempfile` 3.27.0（开发/测试） | 测试期间创建临时文件和目录。 | MIT OR Apache-2.0 | [Stebalien/tempfile](https://github.com/Stebalien/tempfile)；近期活跃度待核实。 | 临时测试数据应使用合成内容；生产缓存和敏感文件生命周期不由此依赖自动保证。 |
+| `tempfile` 3.27.0（应用与测试） | 创建沙箱只读标记的临时文件，以及合成测试目录。 | MIT OR Apache-2.0 | [Stebalien/tempfile](https://github.com/Stebalien/tempfile)；近期活跃度待核实。 | 临时测试数据应使用合成内容；生产缓存和敏感文件生命周期不由此依赖自动保证。 |
 
 ## 系统依赖与平台限制
 

@@ -1,6 +1,6 @@
 # LetterKeeper 需求文档
 
-版本：0.1 · 日期：2026-10-12 · 状态：需求基线，尚未实现。
+版本：0.1 · 日期：2026-10-12 · 状态：需求基线，已开始离线原型；实际实现与缺口见 [STATUS.md](STATUS.md)。
 
 ## 1. 项目定位与已确认决定
 
@@ -146,3 +146,7 @@ Gmail OAuth client 的注册、个人自用与公开发布流程尚待设计。�
 - [DOMParser 解析与资源行为](https://developer.mozilla.org/en-US/docs/Web/API/DOMParser/parseFromString)：脚本不执行不等于没有资源请求，具体环境仍需验证。
 - [MCP 官方规范入口](https://modelcontextprotocol.io/specification/latest)。
 - [SPDX GPL-3.0-only](https://spdx.org/licenses/GPL-3.0-only.html)。
+
+## 12. 实施记录
+
+2026-10-12：用户同意 Rust 共享核心、独立正文 worker、TUI/MCP 方案并要求 Git/worktree、成本分级子代理及 TDD。新增 [架构决定](decisions/0001-phase-a.md)、[协作流程](WORKFLOW.md) 和 [验收状态](STATUS.md)。保留所有需求编号、优先级和安全边界，原型功能不替代真实邮箱验收。

@@ -1,0 +1,10 @@
+# 本地私有数据、凭据和运行测试产物
+/.local/
+/.private/
+/.runtime/
+/.env
+/.env.*
+!/.env.example
+
+# 系统文件
+.DS_Store

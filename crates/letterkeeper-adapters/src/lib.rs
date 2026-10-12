@@ -426,9 +426,79 @@ impl ServerHandler for McpAdapter {
         Ok(result.into())
     }
 }
+/// Maximum bytes in one input line, including its newline when present.
+pub const MAX_STDIO_FRAME_BYTES: usize = 128 * 1024;
+
+/// Byte-counting guard before the official SDK's decoder. It does not inspect
+/// JSON or implement MCP framing; the SDK remains responsible for the protocol.
+/// Oversized input permanently fails this stream and the SDK closes transport.
+pub struct BoundedReader<R> {
+    inner: R,
+    limit: usize,
+    line_bytes: usize,
+    failed: bool,
+}
+impl<R> BoundedReader<R> {
+    pub fn new(inner: R, limit: usize) -> Self {
+        Self {
+            inner,
+            limit,
+            line_bytes: 0,
+            failed: false,
+        }
+    }
+}
+impl<R: tokio::io::AsyncRead + Unpin> tokio::io::AsyncRead for BoundedReader<R> {
+    fn poll_read(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        output: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<io::Result<()>> {
+        use std::{pin::Pin, task::Poll};
+        let this = self.get_mut();
+        if output.remaining() == 0 {
+            return Poll::Ready(Ok(()));
+        }
+        if this.failed {
+            return Poll::Ready(Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "stdio frame exceeds limit",
+            )));
+        }
+        // Fixed stack scratch prevents additional allocation. Only validated
+        // chunks reach the SDK's buffering; partial reads retain line_bytes.
+        let mut scratch = [0u8; 4096];
+        let size = output.remaining().min(scratch.len());
+        let mut input = tokio::io::ReadBuf::new(&mut scratch[..size]);
+        match Pin::new(&mut this.inner).poll_read(cx, &mut input) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(Err(error)) => Poll::Ready(Err(error)),
+            Poll::Ready(Ok(())) => {
+                for byte in input.filled() {
+                    this.line_bytes = this.line_bytes.saturating_add(1);
+                    if this.line_bytes > this.limit {
+                        this.failed = true;
+                        return Poll::Ready(Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "stdio frame exceeds limit",
+                        )));
+                    }
+                    if *byte == b'\n' {
+                        this.line_bytes = 0;
+                    }
+                }
+                output.put_slice(input.filled());
+                Poll::Ready(Ok(()))
+            }
+        }
+    }
+}
 pub async fn run_mcp(host: Arc<dyn Host>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     McpAdapter::new(host)
-        .serve(rmcp::transport::stdio())
+        .serve((
+            BoundedReader::new(tokio::io::stdin(), MAX_STDIO_FRAME_BYTES),
+            tokio::io::stdout(),
+        ))
         .await?
         .waiting()
         .await?;

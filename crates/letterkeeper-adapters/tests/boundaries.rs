@@ -141,8 +141,19 @@ async fn input_policy_and_pagination() {
 async fn official_sdk_initialize_list_call() {
     use rmcp::ServiceExt;
     let (server_io, client_io) = tokio::io::duplex(65536);
-    let server =
-        tokio::spawn(async move { McpAdapter::new(fake()).serve(server_io).await.unwrap() });
+    let server = tokio::spawn(async move {
+        let (read, write) = tokio::io::split(server_io);
+        McpAdapter::new(fake())
+            .serve((
+                letterkeeper_adapters::BoundedReader::new(
+                    read,
+                    letterkeeper_adapters::MAX_STDIO_FRAME_BYTES,
+                ),
+                write,
+            ))
+            .await
+            .unwrap()
+    });
     let client = ().serve(client_io).await.unwrap();
     let server = server.await.unwrap();
     let tools = client.list_tools(Default::default()).await.unwrap();
@@ -362,6 +373,11 @@ async fn stdio_frame_limit_rejects_unterminated_and_fragmented_input() {
     let mut reader = BoundedReader::new(&b"123456789"[..], 8);
     let mut output = Vec::new();
     assert!(reader.read_to_end(&mut output).await.is_err());
+    let mut retry = [0; 1];
+    assert_eq!(
+        reader.read(&mut retry).await.unwrap_err().kind(),
+        std::io::ErrorKind::InvalidData
+    );
     let (mut writer, input) = tokio::io::duplex(4);
     let sender = tokio::spawn(async move {
         writer.write_all(b"123456789").await.unwrap();

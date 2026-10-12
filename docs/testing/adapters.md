@@ -39,3 +39,11 @@ TestBackend 是终端 cell 验证，不是实际字体、真实终端键盘或�
 后续审查发现列表每项实际两行，旧版却按 `selected * 3` 滚动，80×15 终端在选择第二封时会隐藏其主题及选择箭头。`f53bcc5` 加入 TestBackend 回归并实际 RED：选中主题和箭头未出现在输出 cells 中。修复使用 Ratatui `List`/`ListState`，由 widget 根据每项高度维护选中项可见性，不手工估算行数。主题/发件人按终端宽度裁切；完整主题仍可进入阅读页查看。
 
 回归覆盖 12 封中文邮件，80×15 和 24×15，两种宽度连续 j 下移八次并 k 上移，逐次断言选中箭头与主题可见。全部 11 个测试、rustfmt 和 clippy `-D warnings` 通过。实际字体、键盘和视觉评审限制不变。
+
+## stdio 解码前帧大小限制
+
+官方 rmcp 3.5.1 `AsyncRwTransport` 的 `receive` 使用 `read_until` 累积字节，源码未提供每行长度上限；工具参数的 64 KiB 检查发生在 JSON 解码之后，不能保护初始帧。因此 `run_mcp` 在官方 SDK 的 AsyncRead 输入前安装 `BoundedReader`，每行最多 128 KiB（包括换行），跨 poll 累计计数并在换行后重置。计数超限返回固定 `InvalidData` I/O 错误且后续读取永久失败，SDK 负责关闭 transport。计数器不解析 JSON、不实现 MCP framing，输出和协议解码仍由官方 SDK 完成；无新增依赖。
+
+reader 使用 4 KiB 固定栈缓冲，只有验证通过的 chunk 才交给 SDK；未终止的超长输入也会在达到上限后拒绝，不需等待 EOF 或换行。空目标缓冲返回成功而不消费输入，EOF 保持标准 AsyncRead 行为。此上限限制单帧累积，不替代下游结构/正文大小限制或业务层资源约束。
+
+RED `88bbd81`：实际测试因 `BoundedReader` 尚不存在而编译失败。实现后 13 个测试通过，其中覆盖无换行超长输入、4-byte duplex 导致的跨 poll 累积、超限后永久失败、合法多帧计数重置、空目标缓冲与 EOF。官方 SDK initialize/list/call 测试也通过同一 reader wrapper。rustfmt 与 clippy `-D warnings` 通过。实际子进程超长 stdin 验证由 root 应用测试补充。

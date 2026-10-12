@@ -11,3 +11,7 @@
 ## RED：SMTP 边界
 
 `cargo test --offline -p letterkeeper --test smtp`（获准本机测试服务）：5 项，2 通过 / 3 失败。失败为尚未实现 MIME/信封构造、SMTP 接受状态和 DATA 后断连不确定状态；测试服务只绑定 loopback，身份均为 example.test。
+
+## RED：应用入口
+
+`cargo test --offline -p letterkeeper --test cli`：2 项全失败，分别为尚未提供命令帮助和草稿持久化/拒绝管道批准流程。应用入口实现随后进行。

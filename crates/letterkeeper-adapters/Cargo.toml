@@ -12,6 +12,8 @@ thiserror.workspace = true
 tokio.workspace = true
 ratatui = "0.29"
 crossterm = "0.28"
+rmcp = { version = "=3.5.1", default-features = false, features = ["server", "transport-io"] }
 
 [dev-dependencies]
+rmcp = { version = "=3.5.1", default-features = false, features = ["client"] }
 tempfile.workspace = true

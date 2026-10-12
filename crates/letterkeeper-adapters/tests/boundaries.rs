@@ -354,3 +354,34 @@ fn selected_list_subject_and_marker_remain_visible() {
         assert!(compact.contains(&format!("▶邮件{}", state.selected)));
     }
 }
+
+#[tokio::test]
+async fn stdio_frame_limit_rejects_unterminated_and_fragmented_input() {
+    use letterkeeper_adapters::BoundedReader;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut reader = BoundedReader::new(&b"123456789"[..], 8);
+    let mut output = Vec::new();
+    assert!(reader.read_to_end(&mut output).await.is_err());
+    let (mut writer, input) = tokio::io::duplex(4);
+    let sender = tokio::spawn(async move {
+        writer.write_all(b"123456789").await.unwrap();
+    });
+    let mut reader = BoundedReader::new(input, 8);
+    let mut output = Vec::new();
+    assert!(reader.read_to_end(&mut output).await.is_err());
+    sender.await.unwrap();
+}
+#[tokio::test]
+async fn stdio_frame_limit_resets_per_line_and_handles_eof_empty_buffer() {
+    use letterkeeper_adapters::BoundedReader;
+    use tokio::io::AsyncReadExt;
+    let input = b"1234567\nabcdefg\nlast";
+    let mut reader = BoundedReader::new(&input[..], 8);
+    let mut empty = [];
+    assert_eq!(reader.read(&mut empty).await.unwrap(), 0);
+    let mut output = Vec::new();
+    reader.read_to_end(&mut output).await.unwrap();
+    assert_eq!(output, input);
+    let mut buf = [0; 1];
+    assert_eq!(reader.read(&mut buf).await.unwrap(), 0);
+}

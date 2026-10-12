@@ -4,6 +4,8 @@
 
 2026-10-12：完成正文模块原型并补充 4 项回归测试。执行 `cargo test --offline -p letterkeeper-content`，结果为 **22 passed / 0 failed**；`cargo fmt -p letterkeeper-content -- --check` 和 `cargo clippy --offline -p letterkeeper-content --all-targets -- -D warnings` 均通过。
 
+2026-10-12：独立复核发现两个边界缺陷，先新增合成回归测试并运行 `cargo test --offline -p letterkeeper-content --test content`，结果为 **22 passed / 2 failed**（真实 RED）：80 层 `<template>` 内容未计入 HTML 深度，RFC 2231 附件名在控制字符清除后可变成 `..`。修复后，深度遍历包含 `template_contents`，且在附件名清洗与截断后再次将空名、`.`、`..` 规范化为 `unnamed`；合法中文文件名保留。相同命令复测 **24 passed / 0 failed**。完整 crate 测试、格式和 Clippy 的最终结果在提交前复核。
+
 实现边界：`parse_message(raw, limits)` 先检查原文大小，再解析 MIME，并检查包含嵌套邮件的 parts 数量。`multipart/alternative` 优先纯文本，即使纯文本位于嵌套 multipart 中；无纯文本时才选可显示的 HTML。中文 UTF-8、编码头和 ISO-8859-1 quoted-printable 的合成用例已验证。选中的 HTML 经无资源获取能力的 html5ever DOM 解析；主动内容及 SVG/MathML 子树被舍弃，图片仅返回不含来源地址的占位符。链接只保留受限 HTTP(S)/mailto 目标，供用户主动判断，不自动访问。输出为纯文本、编号链接和附件元数据，显示字段共享字符预算；附件元数据作为完整条目纳入预算。原文、MIME parts、HTML DOM 深度和输出字符数都有明确限值，超过限值时拒绝或标记截断。终端控制字符与双向格式控制字符被清除。
 
 这些单元测试不构成运行时 HTTP/DNS 隔离证明。库本身没有网络获取接口；生产调用仍须由应用的独立隔离 worker 执行，并由整合测试观察解析、TUI、MCP 和下游展示期间的 HTTP/DNS 行为。HTML DOM 在深度检查之前已由解析器构建，因此内存和 CPU 上界还依赖 worker 限额；调用方不得将原文 HTML、Markdown 或链接交给会自动预览/获取资源的组件。CID 内容目前不解码或显示，附件仅列元数据，不保存/打开。固定警告文字和条目 ID 不计入字符预算，列表长度由 MIME parts 上限约束。

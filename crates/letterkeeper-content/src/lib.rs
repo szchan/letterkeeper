@@ -198,6 +198,11 @@ pub fn parse_message(raw: &[u8], limits: Limits) -> Result<SafeDocument, Content
         let safe_name = sanitize_text(name);
         let safe_media = sanitize_text(&media);
         let name: String = safe_name.chars().take(256).collect();
+        let name = if name.is_empty() || name == "." || name == ".." {
+            "unnamed".to_owned()
+        } else {
+            name
+        };
         let media_type: String = safe_media.chars().take(128).collect();
         if safe_name.chars().count() > 256 || safe_media.chars().count() > 128 {
             budget.truncated = true;
@@ -407,6 +412,13 @@ fn render_html(
     while let Some((node, depth)) = depth_stack.pop() {
         if depth > max_depth {
             return Err(ContentError::HtmlDepthExceeded);
+        }
+        if let NodeData::Element {
+            template_contents, ..
+        } = &node.data
+            && let Some(contents) = template_contents.borrow().as_ref()
+        {
+            depth_stack.push((contents.clone(), depth + 1));
         }
         for child in node.children.borrow().iter() {
             depth_stack.push((child.clone(), depth + 1));

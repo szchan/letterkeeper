@@ -226,6 +226,35 @@ fn html_depth_limit_rejects_instead_of_rendering_partial_tree() {
     );
 }
 #[test]
+fn html_depth_limit_counts_discarded_template_contents() {
+    for prefix in ["<template>", "<template><template>"] {
+        let suffix = "</template>".repeat(prefix.matches("<template>").count());
+        let body = format!(
+            "{prefix}{}hidden{}{}<p>visible</p>",
+            "<div>".repeat(80),
+            "</div>".repeat(80),
+            suffix
+        );
+        assert_eq!(
+            parse_message(&eml("text/html", &body), Limits::default()),
+            Err(ContentError::HtmlDepthExceeded)
+        );
+    }
+}
+#[test]
+fn attachment_name_is_normalized_after_control_removal() {
+    for filename in ["utf-8''%2E%1B%2E", "utf-8''%1B"] {
+        let raw = format!(
+            "Content-Type: multipart/mixed; boundary=b\r\n\r\n--b\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename*={filename}\r\n\r\nx\r\n--b--\r\n"
+        );
+        let doc = parse_message(raw.as_bytes(), Limits::default()).unwrap();
+        assert_eq!(doc.attachments[0].name, "unnamed", "{filename}");
+    }
+    let raw = "Content-Type: multipart/mixed; boundary=b\r\n\r\n--b\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename*=utf-8''%E4%B8%AD%E6%96%87.txt\r\n\r\nx\r\n--b--\r\n";
+    let doc = parse_message(raw.as_bytes(), Limits::default()).unwrap();
+    assert_eq!(doc.attachments[0].name, "中文.txt");
+}
+#[test]
 fn output_truncates_on_unicode_boundaries_with_explicit_warning() {
     let doc = parse_message(
         &eml("text/plain", "你好世界你好世界"),

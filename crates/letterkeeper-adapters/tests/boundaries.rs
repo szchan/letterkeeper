@@ -306,3 +306,51 @@ fn tui_long_body_truncation_has_visible_notice() {
         .collect::<String>();
     assert!(compact.contains("截断"));
 }
+
+#[test]
+fn selected_list_subject_and_marker_remain_visible() {
+    let messages = (0..12)
+        .map(|i| MessageSummary {
+            id: i.to_string(),
+            subject: format!("邮件{i} 中文标题"),
+            from: "sender@example.test".into(),
+        })
+        .collect::<Vec<_>>();
+    for width in [80, 24] {
+        let mut state = UiState::default();
+        for _ in 0..8 {
+            state.key(KeyCode::Char('j'), messages.len());
+            let mut t = Terminal::new(TestBackend::new(width, 15)).unwrap();
+            t.draw(|f| render(f, &state, &messages, &[])).unwrap();
+            let symbols = t
+                .backend()
+                .buffer()
+                .content
+                .iter()
+                .map(|c| c.symbol())
+                .collect::<String>();
+            let compact = symbols
+                .chars()
+                .filter(|c| !c.is_whitespace())
+                .collect::<String>();
+            assert!(
+                compact.contains(&format!("▶邮件{}", state.selected)),
+                "selected subject missing at width {width}: {compact}"
+            );
+        }
+        state.key(KeyCode::Char('k'), messages.len());
+        let mut t = Terminal::new(TestBackend::new(width, 15)).unwrap();
+        t.draw(|f| render(f, &state, &messages, &[])).unwrap();
+        let compact = t
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<String>()
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .collect::<String>();
+        assert!(compact.contains(&format!("▶邮件{}", state.selected)));
+    }
+}

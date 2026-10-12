@@ -13,6 +13,15 @@ fn policy() -> AccessPolicy {
 fn store() -> Store {
     Store::memory().unwrap().with_policy(policy())
 }
+fn private_dir() -> tempfile::TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    dir
+}
 fn input() -> DraftInput {
     DraftInput {
         account: "demo".into(),
@@ -154,7 +163,7 @@ fn rejects_header_injection_paths_controls_and_size() {
 }
 #[test]
 fn persistence_does_not_recover_other_workers() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = private_dir();
     let path = dir.path().join("state.sqlite");
     let mut s = Store::open(&path).unwrap().with_policy(policy());
     let d = s.create_draft(input()).unwrap();
@@ -175,7 +184,7 @@ fn persistence_does_not_recover_other_workers() {
 }
 #[test]
 fn concurrent_connections_claim_once() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = private_dir();
     let path = dir.path().join("state.sqlite");
     let mut s = Store::open(&path).unwrap().with_policy(policy());
     let d = s.create_draft(input()).unwrap();
@@ -199,4 +208,190 @@ fn concurrent_connections_claim_once() {
             .count(),
         1
     );
+}
+
+#[test]
+fn terminal_outcomes_cannot_be_rewritten() {
+    for outcome in [
+        SendOutcome::Accepted,
+        SendOutcome::Failed,
+        SendOutcome::Uncertain,
+    ] {
+        let mut s = store();
+        let d = s.create_draft(input()).unwrap();
+        s.approve(d.id, &d.digest, 50).unwrap();
+        let sub = s.claim_send(d.id, 10).unwrap();
+        let finished = s.finish_submission(sub.id, outcome).unwrap();
+        assert!(s.finish_submission(sub.id, SendOutcome::Failed).is_err());
+        assert_eq!(s.get_submission(sub.id).unwrap(), finished);
+    }
+}
+#[test]
+fn read_scope_checks_submissions_and_existing_account_updates() {
+    let dir = private_dir();
+    let path = dir.path().join("state.sqlite");
+    let mut s = Store::open(&path).unwrap().with_policy(policy());
+    let d = s.create_draft(input()).unwrap();
+    s.approve(d.id, &d.digest, 50).unwrap();
+    let sub = s.claim_send(d.id, 10).unwrap();
+    let mut outsider = Store::open(&path).unwrap().with_policy(AccessPolicy::new(
+        vec!["other".into()],
+        Permissions {
+            read: true,
+            draft: true,
+            send: true,
+        },
+    ));
+    assert!(outsider.get_draft(d.id).is_err());
+    assert!(outsider.get_submission(sub.id).is_err());
+    assert!(
+        outsider
+            .finish_submission(sub.id, SendOutcome::Failed)
+            .is_err()
+    );
+    let mut other = input();
+    other.account = "other".into();
+    assert!(outsider.update_draft(d.id, 1, other).is_err());
+    let no_read = Store::open(&path).unwrap().with_policy(AccessPolicy::new(
+        vec!["demo".into()],
+        Permissions {
+            read: false,
+            draft: true,
+            send: true,
+        },
+    ));
+    assert!(no_read.get_submission(sub.id).is_err());
+}
+#[test]
+fn private_paths_and_schema_versions_fail_closed() {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{PermissionsExt, symlink};
+        let dir = private_dir();
+        let path = dir.path().join("db.sqlite");
+        Store::open(&path).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        assert!(Store::open(&path).is_err());
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        let link = dir.path().join("link.sqlite");
+        symlink(&path, &link).unwrap();
+        assert!(Store::open(&link).is_err());
+        let linked = dir.path().join("hard.sqlite");
+        std::fs::hard_link(&path, &linked).unwrap();
+        assert!(Store::open(&path).is_err());
+        std::fs::remove_file(linked).unwrap();
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.pragma_update(None, "user_version", 2).unwrap();
+        drop(conn);
+        assert!(matches!(Store::open(&path), Err(Error::SchemaVersion)));
+        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(Store::open(dir.path().join("new.sqlite")).is_err());
+    }
+}
+#[test]
+fn generated_parent_directory_and_file_are_private() {
+    let dir = tempfile::tempdir().unwrap();
+    let parent = dir.path().join("private");
+    let path = parent.join("drafts.sqlite");
+    Store::open(&path).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            std::fs::metadata(parent).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+        assert_eq!(
+            std::fs::metadata(path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+    }
+}
+
+#[test]
+fn digest_covers_each_field_independently_of_revision() {
+    let mut s = Store::memory().unwrap().with_policy(AccessPolicy::new(
+        vec!["demo".into(), "other".into()],
+        Permissions {
+            read: true,
+            draft: true,
+            send: true,
+        },
+    ));
+    let mut baseline = input();
+    baseline.attachments.push(Attachment {
+        name: "data.txt".into(),
+        content_type: "text/plain".into(),
+        bytes: vec![1, 2, 3],
+    });
+    let first = s.create_draft(baseline.clone()).unwrap();
+    assert_eq!(
+        s.create_draft(baseline.clone()).unwrap().digest,
+        first.digest
+    );
+    for field in 0..10 {
+        let mut variant = baseline.clone();
+        match field {
+            0 => variant.account = "other".into(),
+            1 => variant.from = "other@example.invalid".into(),
+            2 => variant.to.push("other@example.invalid".into()),
+            3 => variant.cc.push("other@example.invalid".into()),
+            4 => variant.bcc.push("other@example.invalid".into()),
+            5 => variant.subject.push('!'),
+            6 => variant.body.push('!'),
+            7 => variant.attachments[0].name = "other.txt".into(),
+            8 => variant.attachments[0].content_type = "application/octet-stream".into(),
+            _ => variant.attachments[0].bytes[0] = 9,
+        }
+        let next = s.create_draft(variant).unwrap();
+        assert_eq!(next.revision, first.revision);
+        assert_ne!(next.digest, first.digest);
+    }
+}
+#[test]
+fn approval_survives_reopen_then_is_consumed_durably() {
+    let dir = private_dir();
+    let path = dir.path().join("state.sqlite");
+    let mut s = Store::open(&path).unwrap().with_policy(policy());
+    let d = s.create_draft(input()).unwrap();
+    s.approve(d.id, &d.digest, 50).unwrap();
+    drop(s);
+    let mut s = Store::open(&path).unwrap().with_policy(policy());
+    let sub = s.claim_send(d.id, 10).unwrap();
+    s.finish_submission(sub.id, SendOutcome::Uncertain).unwrap();
+    drop(s);
+    let mut s = Store::open(&path).unwrap().with_policy(policy());
+    assert_eq!(
+        s.get_submission(sub.id).unwrap().state,
+        SubmissionState::Uncertain
+    );
+    assert!(s.claim_send(d.id, 11).is_err());
+    assert!(s.approve(d.id, &d.digest, 99).is_err());
+}
+#[test]
+fn rejects_attachment_and_recipient_resource_limits() {
+    let mut s = store();
+    let attachment = Attachment {
+        name: "data.txt".into(),
+        content_type: "text/plain".into(),
+        bytes: vec![],
+    };
+    let mut bad = input();
+    bad.attachments = vec![attachment.clone(); 17];
+    assert!(s.create_draft(bad).is_err());
+    let mut bad = input();
+    bad.attachments.push(Attachment {
+        bytes: vec![0; 10 * 1024 * 1024 + 1],
+        ..attachment.clone()
+    });
+    assert!(s.create_draft(bad).is_err());
+    let mut bad = input();
+    bad.attachments.push(Attachment {
+        content_type: "/".into(),
+        ..attachment
+    });
+    assert!(s.create_draft(bad).is_err());
+    let mut bad = input();
+    bad.bcc = vec!["extra@example.invalid".into(); 100];
+    assert!(s.create_draft(bad).is_err());
 }

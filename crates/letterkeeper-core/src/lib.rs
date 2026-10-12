@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Shared draft, authorization and submission state.
+use rusqlite::{Connection, OpenFlags, OptionalExtension, TransactionBehavior, params};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use sha2::{Digest, Sha256};
+use std::{collections::BTreeSet, path::Path, time::Duration};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Attachment {
@@ -56,56 +58,461 @@ pub struct Permissions {
     pub draft: bool,
     pub send: bool,
 }
-pub struct AccessPolicy;
+/// Constructed by the application host from user configuration, never tool arguments.
+pub struct AccessPolicy {
+    accounts: BTreeSet<String>,
+    permissions: Permissions,
+}
 impl AccessPolicy {
-    pub fn new(_accounts: Vec<String>, _permissions: Permissions) -> Self {
-        Self
+    pub fn new(accounts: Vec<String>, permissions: Permissions) -> Self {
+        Self {
+            accounts: accounts.into_iter().collect(),
+            permissions,
+        }
+    }
+    fn check(&self, account: &str, operation: Operation) -> Result<()> {
+        let allowed = match operation {
+            Operation::Read => self.permissions.read,
+            Operation::Draft => self.permissions.draft,
+            Operation::Send => self.permissions.send,
+        };
+        if allowed && self.accounts.contains(account) {
+            Ok(())
+        } else {
+            Err(Error::Denied)
+        }
     }
 }
-#[derive(Debug, thiserror::Error)]
+enum Operation {
+    Read,
+    Draft,
+    Send,
+}
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum Error {
-    #[error("core operation unavailable")]
-    Unavailable,
+    #[error("account or operation is outside the configured scope")]
+    Denied,
+    #[error("draft or submission was not found")]
+    NotFound,
+    #[error("draft revision or approved content changed")]
+    Conflict,
+    #[error("a current, unexpired human approval is required")]
+    ApprovalRequired,
+    #[error("submission state prevents this operation")]
+    InvalidState,
+    #[error("input violates field or size limits")]
+    InvalidInput,
+    #[error("private database path or permissions are unsafe")]
+    UnsafePath,
+    #[error("database schema version is unsupported")]
+    SchemaVersion,
+    #[error("private storage operation failed")]
+    Storage,
 }
 pub type Result<T> = std::result::Result<T, Error>;
-pub struct Store;
+impl From<rusqlite::Error> for Error {
+    fn from(_: rusqlite::Error) -> Self {
+        Self::Storage
+    }
+}
+impl From<serde_json::Error> for Error {
+    fn from(_: serde_json::Error) -> Self {
+        Self::Storage
+    }
+}
+
+/// SQLite owns durable state only. No network operations run inside transactions.
+pub struct Store {
+    conn: Connection,
+    policy: AccessPolicy,
+}
 impl Store {
     pub fn memory() -> Result<Self> {
-        Ok(Self)
+        Self::initialize(Connection::open_in_memory()?)
     }
-    pub fn open(_path: impl AsRef<Path>) -> Result<Self> {
-        Ok(Self)
+    /// The parent directory must be private (0700), and existing files must be 0600.
+    /// Missing directories/files are created privately. Symlinks are rejected.
+    pub fn open(path: impl AsRef<Path>) -> Result<Self> {
+        let path = path.as_ref();
+        private_path(path)?;
+        let conn = Connection::open_with_flags(
+            path,
+            OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NOFOLLOW,
+        )?;
+        Self::initialize(conn)
     }
-    pub fn with_policy(self, _policy: AccessPolicy) -> Self {
+    fn initialize(mut conn: Connection) -> Result<Self> {
+        conn.busy_timeout(Duration::from_secs(5))?;
+        conn.pragma_update(None, "foreign_keys", "ON")?;
+        conn.pragma_update(None, "journal_mode", "DELETE")?;
+        conn.pragma_update(None, "synchronous", "FULL")?;
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let version: i64 = tx.pragma_query_value(None, "user_version", |r| r.get(0))?;
+        match version {
+            0 => {
+                let tables: i64 = tx.query_row("SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'", [], |r| r.get(0))?;
+                if tables != 0 {
+                    return Err(Error::SchemaVersion);
+                }
+                tx.execute_batch("CREATE TABLE drafts(id INTEGER PRIMARY KEY AUTOINCREMENT, revision INTEGER NOT NULL, digest TEXT NOT NULL, content TEXT NOT NULL);
+                    CREATE TABLE approvals(draft_id INTEGER PRIMARY KEY REFERENCES drafts(id), revision INTEGER NOT NULL, digest TEXT NOT NULL, expires_at INTEGER NOT NULL);
+                    CREATE TABLE submissions(id INTEGER PRIMARY KEY AUTOINCREMENT, draft_id INTEGER NOT NULL REFERENCES drafts(id), revision INTEGER NOT NULL, digest TEXT NOT NULL, message_id TEXT NOT NULL UNIQUE, content TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('submitting','accepted','failed','uncertain')));
+                    CREATE INDEX submission_draft ON submissions(draft_id); PRAGMA user_version=1;")?;
+            }
+            1 => {}
+            _ => return Err(Error::SchemaVersion),
+        }
+        tx.commit()?;
+        Ok(Self {
+            conn,
+            policy: AccessPolicy::new(
+                vec![],
+                Permissions {
+                    read: false,
+                    draft: false,
+                    send: false,
+                },
+            ),
+        })
+    }
+    pub fn with_policy(mut self, policy: AccessPolicy) -> Self {
+        self.policy = policy;
         self
     }
-    pub fn create_draft(&mut self, _input: DraftInput) -> Result<Draft> {
-        Err(Error::Unavailable)
+    pub fn create_draft(&mut self, input: DraftInput) -> Result<Draft> {
+        self.policy.check(&input.account, Operation::Draft)?;
+        validate(&input)?;
+        let digest = content_digest(1, &input)?;
+        let content = serde_json::to_string(&input)?;
+        self.conn.execute(
+            "INSERT INTO drafts(revision,digest,content) VALUES(1,?1,?2)",
+            params![digest, content],
+        )?;
+        Ok(Draft {
+            id: self.conn.last_insert_rowid(),
+            revision: 1,
+            digest,
+            input,
+        })
     }
-    pub fn get_draft(&self, _id: i64) -> Result<Draft> {
-        Err(Error::Unavailable)
+    pub fn get_draft(&self, id: i64) -> Result<Draft> {
+        let d = load_draft(&self.conn, id)?;
+        self.policy.check(&d.input.account, Operation::Read)?;
+        Ok(d)
     }
     pub fn update_draft(
         &mut self,
-        _id: i64,
-        _expected_revision: i64,
-        _input: DraftInput,
+        id: i64,
+        expected_revision: i64,
+        input: DraftInput,
     ) -> Result<Draft> {
-        Err(Error::Unavailable)
+        self.policy.check(&input.account, Operation::Draft)?;
+        validate(&input)?;
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let old = load_draft(&tx, id)?;
+        self.policy.check(&old.input.account, Operation::Draft)?;
+        if old.revision != expected_revision {
+            return Err(Error::Conflict);
+        }
+        require_editable(&tx, id)?;
+        let revision = old.revision.checked_add(1).ok_or(Error::Conflict)?;
+        let digest = content_digest(revision, &input)?;
+        tx.execute(
+            "UPDATE drafts SET revision=?1,digest=?2,content=?3 WHERE id=?4 AND revision=?5",
+            params![
+                revision,
+                digest,
+                serde_json::to_string(&input)?,
+                id,
+                expected_revision
+            ],
+        )?;
+        tx.execute("DELETE FROM approvals WHERE draft_id=?1", [id])?;
+        tx.commit()?;
+        Ok(Draft {
+            id,
+            revision,
+            digest,
+            input,
+        })
     }
-    pub fn approve(&mut self, _id: i64, _expected_digest: &str, _expires_at: i64) -> Result<()> {
-        Err(Error::Unavailable)
+    /// Only the trusted human CLI/TUI approval path may call this method.
+    /// `send` permission permits consuming approval; it does not itself create approval.
+    /// MCP must never expose this method, or an equivalent model-writable flag.
+    pub fn approve(&mut self, id: i64, expected_digest: &str, expires_at: i64) -> Result<()> {
+        if expires_at <= 0 {
+            return Err(Error::InvalidInput);
+        }
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let d = load_draft(&tx, id)?;
+        self.policy.check(&d.input.account, Operation::Send)?;
+        require_editable(&tx, id)?;
+        if d.digest != expected_digest {
+            return Err(Error::Conflict);
+        }
+        tx.execute("INSERT INTO approvals(draft_id,revision,digest,expires_at) VALUES(?1,?2,?3,?4) ON CONFLICT(draft_id) DO UPDATE SET revision=excluded.revision,digest=excluded.digest,expires_at=excluded.expires_at", params![id,d.revision,d.digest,expires_at])?;
+        tx.commit()?;
+        Ok(())
     }
-    pub fn claim_send(&mut self, _id: i64, _now: i64) -> Result<Submission> {
-        Err(Error::Unavailable)
+    /// Atomically consumes approval and persists an immutable sending snapshot.
+    pub fn claim_send(&mut self, id: i64, now: i64) -> Result<Submission> {
+        if now < 0 {
+            return Err(Error::InvalidInput);
+        }
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let d = load_draft(&tx, id)?;
+        self.policy.check(&d.input.account, Operation::Send)?;
+        require_editable(&tx, id)?;
+        let valid: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM approvals WHERE draft_id=?1 AND revision=?2 AND digest=?3 AND expires_at>?4)", params![id,d.revision,d.digest,now], |r| r.get(0))?;
+        if !valid {
+            return Err(Error::ApprovalRequired);
+        }
+        let nonce: String = tx.query_row("SELECT lower(hex(randomblob(16)))", [], |r| r.get(0))?;
+        let message_id = format!("<lk-{nonce}@letterkeeper.invalid>");
+        tx.execute("INSERT INTO submissions(draft_id,revision,digest,message_id,content,state) VALUES(?1,?2,?3,?4,?5,'submitting')", params![id,d.revision,d.digest,message_id,serde_json::to_string(&d.input)?])?;
+        let submission_id = tx.last_insert_rowid();
+        tx.execute("DELETE FROM approvals WHERE draft_id=?1", [id])?;
+        tx.commit()?;
+        Ok(Submission {
+            id: submission_id,
+            draft_id: id,
+            revision: d.revision,
+            digest: d.digest,
+            message_id,
+            input: d.input,
+            state: SubmissionState::Submitting,
+        })
     }
-    pub fn finish_submission(&mut self, _id: i64, _outcome: SendOutcome) -> Result<Submission> {
-        Err(Error::Unavailable)
+    pub fn finish_submission(&mut self, id: i64, outcome: SendOutcome) -> Result<Submission> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let mut sub = load_submission(&tx, id)?;
+        self.policy.check(&sub.input.account, Operation::Send)?;
+        if sub.state != SubmissionState::Submitting {
+            return Err(Error::InvalidState);
+        }
+        let (state, label) = match outcome {
+            SendOutcome::Accepted => (SubmissionState::Accepted, "accepted"),
+            SendOutcome::Failed => (SubmissionState::Failed, "failed"),
+            SendOutcome::Uncertain => (SubmissionState::Uncertain, "uncertain"),
+        };
+        tx.execute(
+            "UPDATE submissions SET state=?1 WHERE id=?2 AND state='submitting'",
+            params![label, id],
+        )?;
+        tx.commit()?;
+        sub.state = state;
+        Ok(sub)
     }
-    pub fn get_submission(&self, _id: i64) -> Result<Submission> {
-        Err(Error::Unavailable)
+    pub fn get_submission(&self, id: i64) -> Result<Submission> {
+        let sub = load_submission(&self.conn, id)?;
+        self.policy.check(&sub.input.account, Operation::Read)?;
+        Ok(sub)
     }
-    pub fn recover_interrupted(&mut self, _id: i64) -> Result<Submission> {
-        Err(Error::Unavailable)
+    /// Explicit recovery after the host has established that this sender exited.
+    /// Never call based solely on age or opening a second connection.
+    pub fn recover_interrupted(&mut self, id: i64) -> Result<Submission> {
+        self.finish_submission(id, SendOutcome::Uncertain)
     }
+}
+fn require_editable(conn: &Connection, id: i64) -> Result<()> {
+    let blocked: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM submissions WHERE draft_id=?1 AND state!='failed')",
+        [id],
+        |r| r.get(0),
+    )?;
+    if blocked {
+        Err(Error::InvalidState)
+    } else {
+        Ok(())
+    }
+}
+fn load_draft(conn: &Connection, id: i64) -> Result<Draft> {
+    let row: Option<(i64, String, String)> = conn
+        .query_row(
+            "SELECT revision,digest,content FROM drafts WHERE id=?1",
+            [id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .optional()?;
+    let (revision, digest, content) = row.ok_or(Error::NotFound)?;
+    Ok(Draft {
+        id,
+        revision,
+        digest,
+        input: serde_json::from_str(&content)?,
+    })
+}
+fn load_submission(conn: &Connection, id: i64) -> Result<Submission> {
+    let row = conn
+        .query_row(
+            "SELECT draft_id,revision,digest,message_id,content,state FROM submissions WHERE id=?1",
+            [id],
+            |r| {
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    r.get::<_, i64>(1)?,
+                    r.get::<_, String>(2)?,
+                    r.get::<_, String>(3)?,
+                    r.get::<_, String>(4)?,
+                    r.get::<_, String>(5)?,
+                ))
+            },
+        )
+        .optional()?;
+    let (draft_id, revision, digest, message_id, content, state) = row.ok_or(Error::NotFound)?;
+    let state = match state.as_str() {
+        "submitting" => SubmissionState::Submitting,
+        "accepted" => SubmissionState::Accepted,
+        "failed" => SubmissionState::Failed,
+        "uncertain" => SubmissionState::Uncertain,
+        _ => return Err(Error::Storage),
+    };
+    Ok(Submission {
+        id,
+        draft_id,
+        revision,
+        digest,
+        message_id,
+        input: serde_json::from_str(&content)?,
+        state,
+    })
+}
+fn content_digest(revision: i64, input: &DraftInput) -> Result<String> {
+    let bytes = serde_json::to_vec(&("letterkeeper-draft-v1", revision, input))?;
+    Ok(format!("{:x}", Sha256::digest(bytes)))
+}
+fn dangerous(c: char) -> bool {
+    c.is_control()
+        || matches!(c, '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}' | '\u{200e}' | '\u{200f}' | '\u{061c}')
+}
+fn header(value: &str, max: usize) -> bool {
+    value.len() <= max && !value.chars().any(dangerous)
+}
+fn address(value: &str) -> bool {
+    if !header(value, 254) || !value.is_ascii() {
+        return false;
+    }
+    let Some((local, domain)) = value.split_once('@') else {
+        return false;
+    };
+    !local.is_empty()
+        && local.len() <= 64
+        && !domain.is_empty()
+        && !domain.contains('@')
+        && local
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || b".!#$%&'*+-/=?^_`{|}~".contains(&c))
+        && domain
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || b".-".contains(&c))
+        && !local.starts_with('.')
+        && !local.ends_with('.')
+        && !local.contains("..")
+        && !domain.starts_with(['.', '-'])
+        && !domain.ends_with(['.', '-'])
+        && !domain.contains("..")
+}
+fn validate(input: &DraftInput) -> Result<()> {
+    let recipients = input
+        .to
+        .len()
+        .checked_add(input.cc.len())
+        .and_then(|n| n.checked_add(input.bcc.len()))
+        .ok_or(Error::InvalidInput)?;
+    if input.account.is_empty()
+        || !header(&input.account, 128)
+        || !address(&input.from)
+        || recipients == 0
+        || recipients > 100
+        || !input
+            .to
+            .iter()
+            .chain(&input.cc)
+            .chain(&input.bcc)
+            .all(|s| address(s))
+        || !header(&input.subject, 998)
+        || input.body.len() > 1024 * 1024
+        || input
+            .body
+            .chars()
+            .any(|c| dangerous(c) && c != '\n' && c != '\t')
+        || input.attachments.len() > 16
+    {
+        return Err(Error::InvalidInput);
+    }
+    let mut total = 0usize;
+    for a in &input.attachments {
+        if a.name.is_empty()
+            || !header(&a.name, 255)
+            || matches!(a.name.as_str(), "." | "..")
+            || a.name.contains(['/', '\\'])
+            || !header(&a.content_type, 127)
+            || a.content_type.split('/').count() != 2
+            || a.content_type.split('/').any(str::is_empty)
+            || !a
+                .content_type
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric() || b"!#$&^_.+-/".contains(&c))
+        {
+            return Err(Error::InvalidInput);
+        }
+        total = total
+            .checked_add(a.bytes.len())
+            .ok_or(Error::InvalidInput)?;
+        if total > 10 * 1024 * 1024 {
+            return Err(Error::InvalidInput);
+        }
+    }
+    Ok(())
+}
+#[cfg(unix)]
+fn private_path(path: &Path) -> Result<()> {
+    use std::{
+        fs::{self, DirBuilder, OpenOptions},
+        os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt, PermissionsExt},
+    };
+    let parent = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .ok_or(Error::UnsafePath)?;
+    if !parent.exists() {
+        DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(parent)
+            .map_err(|_| Error::UnsafePath)?;
+    }
+    let metadata = fs::symlink_metadata(parent).map_err(|_| Error::UnsafePath)?;
+    if !metadata.is_dir() || metadata.permissions().mode() & 0o777 != 0o700 {
+        return Err(Error::UnsafePath);
+    }
+    match fs::symlink_metadata(path) {
+        Ok(m) if m.is_file() && m.nlink() == 1 && m.permissions().mode() & 0o777 == 0o600 => Ok(()),
+        Ok(_) => Err(Error::UnsafePath),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            match OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(path)
+            {
+                Ok(_) => Ok(()),
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => private_path(path),
+                Err(_) => Err(Error::UnsafePath),
+            }
+        }
+        Err(_) => Err(Error::UnsafePath),
+    }
+}
+#[cfg(not(unix))]
+fn private_path(_: &Path) -> Result<()> {
+    Err(Error::UnsafePath)
 }

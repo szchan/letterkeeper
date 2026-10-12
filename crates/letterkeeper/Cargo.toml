@@ -1,0 +1,21 @@
+[package]
+name = "letterkeeper"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+letterkeeper-content.workspace = true
+letterkeeper-core.workspace = true
+letterkeeper-adapters.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tempfile.workspace = true
+clap = { version = "4", features = ["derive"] }
+lettre = { version = "0.11", default-features = false, features = ["builder", "smtp-transport", "rustls-tls", "ring", "webpki-roots"] }
+libc = "0.2"
+
+[dev-dependencies]
+tempfile.workspace = true

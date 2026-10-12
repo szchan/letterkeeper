@@ -8,3 +8,7 @@
 
 # 系统文件
 .DS_Store
+
+# Rust build output and isolated Git workspaces
+**/target/
+/.worktrees/

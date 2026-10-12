@@ -1,0 +1,19 @@
+[workspace]
+members = ["crates/letterkeeper-content", "crates/letterkeeper-core", "crates/letterkeeper-adapters", "crates/letterkeeper"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-only"
+rust-version = "1.85"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tempfile = "3"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "io-util", "sync", "time"] }
+letterkeeper-content = { path = "crates/letterkeeper-content" }
+letterkeeper-core = { path = "crates/letterkeeper-core" }
+letterkeeper-adapters = { path = "crates/letterkeeper-adapters" }

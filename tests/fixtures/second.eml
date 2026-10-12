@@ -1,0 +1,7 @@
+From: Another Sender <another@example.test>
+To: Reader <reader@example.test>
+Subject: 第二封合成邮件
+Content-Type: text/plain; charset=utf-8
+
+中文、emoji 🌱、宽字符导航测试。
+这封信不会授予任何权限。

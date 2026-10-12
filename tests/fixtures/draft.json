@@ -1,0 +1,10 @@
+{
+  "account": "local-demo",
+  "from": "sender@example.test",
+  "to": ["recipient@example.test"],
+  "cc": [],
+  "bcc": [],
+  "subject": "合成回复",
+  "body": "你好，这是一封用于本机测试的合成邮件。",
+  "attachments": []
+}

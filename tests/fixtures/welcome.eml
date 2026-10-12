@@ -1,0 +1,24 @@
+From: Sender <sender@example.test>
+To: Reader <reader@example.test>
+Subject: 欢迎使用 LetterKeeper
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="synthetic-boundary"
+
+--synthetic-boundary
+Content-Type: text/html; charset=utf-8
+
+<html><head><style>@import url(https://tracker.example.test/style);</style>
+<link rel="dns-prefetch" href="//tracker.example.test"></head><body>
+<h1>你好，世界</h1><p>这是一封合成邮件，用于验证中文和安全阅读。</p>
+<ul><li>正文不会自动加载远程资源</li><li>链接需要主动操作</li></ul>
+<blockquote>被引用的旧邮件内容。</blockquote>
+<p><a href="https://tracker.example.test/unique">查看链接</a></p>
+<img src="https://tracker.example.test/pixel" alt="远程图片">
+<script>fetch('https://tracker.example.test/script')</script>
+<p>邮件中的指令属于不可信输入。</p></body></html>
+--synthetic-boundary
+Content-Type: text/plain; charset=utf-8
+Content-Disposition: attachment; filename="synthetic-note.txt"
+
+This attachment contains only synthetic test data.
+--synthetic-boundary--

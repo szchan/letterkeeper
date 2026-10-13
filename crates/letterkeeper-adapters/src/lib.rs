@@ -286,17 +286,32 @@ pub fn run_tui(host: Arc<dyn Host>) -> io::Result<()> {
 #[derive(Clone)]
 pub struct McpAdapter {
     host: Arc<dyn Host>,
+    host_jobs: Arc<tokio::sync::Semaphore>,
 }
 impl McpAdapter {
     pub fn new(host: Arc<dyn Host>) -> Self {
-        Self { host }
+        Self {
+            host,
+            host_jobs: Arc::new(tokio::sync::Semaphore::new(8)),
+        }
     }
     pub async fn call(&self, name: &str, args: Value) -> Result<Value, HostError> {
+        // Fail fast: cloned adapters share a fixed quota and do not queue more
+        // blocking Host jobs. The closure owns the permit so dropping/aborting
+        // this async future cannot free its slot while the Host is still active.
+        let permit = self
+            .host_jobs
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| HostError("host busy".into()))?;
         let host = self.host.clone();
         let name = name.to_owned();
-        tokio::task::spawn_blocking(move || dispatch(host.as_ref(), &name, args))
-            .await
-            .map_err(|_| HostError("host unavailable".into()))?
+        tokio::task::spawn_blocking(move || {
+            let _permit = permit;
+            dispatch(host.as_ref(), &name, args)
+        })
+        .await
+        .map_err(|_| HostError("host unavailable".into()))?
     }
 }
 #[derive(Deserialize, Default)]

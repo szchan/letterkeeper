@@ -378,3 +378,35 @@ fn network_block_does_not_block_local_save_and_worker_drop_does_not_cancel_send(
     *m.gate.0.lock().unwrap() = true;
     m.gate.1.notify_all();
 }
+#[test]
+fn reload_does_not_discard_text_typed_after_reload_request() {
+    let mut s = saved_state();
+    s.request(WorkflowJob::Load(1));
+    let (g, e, job) = s.take_request(false).unwrap();
+    s.event(key(KeyCode::Char('z')));
+    let mut d = draft();
+    d.revision = 2;
+    s.complete(WorkflowResponse {
+        generation: g,
+        edit_generation: e,
+        job,
+        result: Ok(WorkflowData::Draft(Box::new(d))),
+    });
+    assert!(s.editor.as_ref().unwrap().fields[0].lines()[0].contains('z'));
+    assert!(s.editor.as_ref().unwrap().dirty);
+}
+#[test]
+fn readonly_loaded_draft_cannot_mutate_or_request_path_dialog() {
+    let mut s = saved_state();
+    s.capabilities.draft = false;
+    let before = s.editor.as_ref().unwrap().input();
+    s.event(key(KeyCode::Char('z')));
+    assert_eq!(s.editor.as_ref().unwrap().input(), before);
+    s.event(Event::Key(KeyEvent::new(
+        KeyCode::Char('s'),
+        KeyModifiers::CONTROL,
+    )));
+    assert!(s.take_request(false).is_none());
+    s.event(key(KeyCode::F(2)));
+    assert!(s.dialog.is_none());
+}

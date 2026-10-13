@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use letterkeeper::app::{ACCOUNT, AppHost, SENDER};
 use letterkeeper_adapters::workspace::{HumanWorkspace, WorkflowError};
-use letterkeeper_core::{Attachment, DraftInput};
+use letterkeeper_core::{Attachment, DraftInput, Submission, SubmissionState};
 use sha2::{Digest, Sha256};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
@@ -80,6 +81,32 @@ fn read_only_and_attachment_path_denial_precede_io() {
     );
     assert_eq!(host.remove_attachment(1, 1, 0), Err(WorkflowError::Denied));
     assert_eq!(host.list_drafts(0, 50).unwrap().len(), 0);
+}
+
+#[test]
+fn read_only_can_review_existing_draft_but_cannot_approve_it() {
+    let dir = private_dir();
+    let writer = AppHost::open(dir.path(), vec![], false, None).unwrap();
+    let draft = writer.create(input("full body")).unwrap();
+    let reader = AppHost::open(dir.path(), vec![], true, None).unwrap();
+    assert_eq!(
+        reader.review(draft.id).unwrap().draft.input.body,
+        "full body"
+    );
+    assert_eq!(
+        reader.approve(draft.id, &draft.digest, &draft.digest),
+        Err(WorkflowError::Denied)
+    );
+}
+
+#[test]
+fn configured_transport_still_requires_an_unexpired_approval() {
+    let dir = private_dir();
+    let endpoint = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 1);
+    let host = AppHost::open(dir.path(), vec![], false, Some(endpoint)).unwrap();
+    let draft = host.create(input("body")).unwrap();
+    assert_eq!(host.send(draft.id), Err(WorkflowError::ApprovalRequired));
+    assert!(host.list_submissions(0, 50).unwrap().is_empty());
 }
 
 #[test]
@@ -179,6 +206,61 @@ fn approval_rejects_oversized_mime_before_grant() {
         .collect();
     let d = host.create(data).unwrap();
     assert_eq!(host.review(d.id).unwrap().draft.input.attachments.len(), 2);
+    assert_eq!(
+        host.approve(d.id, &d.digest, &d.digest),
+        Err(WorkflowError::InvalidInput)
+    );
+}
+
+#[test]
+fn approval_uses_actual_message_id_length_at_wire_boundary() {
+    let dir = private_dir();
+    let host = AppHost::open(dir.path(), vec![], false, None).unwrap();
+    let mut data = input("");
+    data.attachments = (0..2)
+        .map(|i| Attachment {
+            name: format!("{i}.bin"),
+            content_type: "application/octet-stream".into(),
+            bytes: vec![0u8; 512 * 1024],
+        })
+        .collect();
+    let mut probe = Submission {
+        id: 0,
+        draft_id: 0,
+        revision: 1,
+        digest: String::new(),
+        message_id: "<lk-00000000000000000000000000000000@letterkeeper.invalid>".into(),
+        input: data.clone(),
+        state: SubmissionState::Submitting,
+    };
+    let wire_len = |probe: &mut Submission, n: usize| {
+        probe.input.body = "x".repeat(n);
+        letterkeeper::transport::prepare(probe)
+            .unwrap()
+            .formatted()
+            .len()
+    };
+    let limit = 2 * 1024 * 1024;
+    assert!(wire_len(&mut probe, 0) < limit);
+    assert!(wire_len(&mut probe, 1024 * 1024) > limit);
+    let (mut lo, mut hi) = (0, 1024 * 1024);
+    while lo + 1 < hi {
+        let mid = (lo + hi) / 2;
+        if wire_len(&mut probe, mid) > limit {
+            hi = mid;
+        } else {
+            lo = mid;
+        }
+    }
+    let actual = wire_len(&mut probe, hi);
+    probe.message_id = "<review@letterkeeper.invalid>".into();
+    let old_probe = wire_len(&mut probe, hi);
+    assert!(
+        actual > limit && old_probe <= limit,
+        "actual={actual} old={old_probe}"
+    );
+    data.body = "x".repeat(hi);
+    let d = host.create(data).unwrap();
     assert_eq!(
         host.approve(d.id, &d.digest, &d.digest),
         Err(WorkflowError::InvalidInput)

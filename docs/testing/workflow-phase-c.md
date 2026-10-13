@@ -6,7 +6,9 @@
 
 先提交测试 `c2b44f0`。`cargo test -p letterkeeper --test workflow --offline` 初次编译失败：`AppHost` 尚无 `HumanWorkspace` 的 `capabilities/create/list_drafts/review/approve/send` 等方法（E0599，共 21 处）。`cargo test -p letterkeeper-core --test workspace --offline` 初次编译失败：`Store` 尚无 `list_drafts/list_submissions`（E0599，共 5 处）。这两个 RED 是真实编译失败，不是断言失败。
 
-实现后，`cargo test -p letterkeeper --test workflow --offline` 的 6 个测试和 `cargo test -p letterkeeper-core --test workspace --offline` 的 3 个测试通过。覆盖只读权限先于文件访问、账户作用域与 50 项分页、完整草稿审阅、附件精确字节 SHA-256、乐观版本冲突、旧摘要失效、双 Store 争抢、过大 MIME 批准拒绝，以及离线不可用操作的明确结果。既有 `letterkeeper-core/tests/state.rs` 另覆盖批准到期与单次消费；此处复用同一状态机而不另建批准表。
+实现后，`cargo test -p letterkeeper --test workflow --offline` 的 9 个测试和 `cargo test -p letterkeeper-core --test workspace --offline` 的 3 个测试通过。覆盖只读权限先于文件访问及可审阅不可批准、账户作用域与 50 项分页、完整草稿审阅、附件精确字节 SHA-256、乐观版本冲突、旧摘要失效、双 Store 争抢、无批准发送拒绝、精确 2 MiB MIME 边界批准拒绝，以及离线不可用操作的明确结果。既有 `letterkeeper-core/tests/state.rs` 另覆盖批准到期与单次消费；此处复用同一状态机而不另建批准表。
+
+`cargo test -p letterkeeper --test smtp --offline` 在普通文件系统沙箱内因 loopback `bind()` 返回 EPERM，8 项中 5 项在启动合成服务时失败；在允许 loopback 的受控环境重跑，8/8 通过，包含断连结果不确定和重启不重发。无真实外发。
 
 ## 边界
 

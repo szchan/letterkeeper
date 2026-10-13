@@ -85,6 +85,15 @@ fn callback(login: &OAuthLogin, tail: &str) -> thread::JoinHandle<()> {
             .unwrap();
         let mut out = String::new();
         s.read_to_string(&mut out).unwrap();
+        let (head, body) = out.split_once("\r\n\r\n").unwrap();
+        let declared = head
+            .lines()
+            .find_map(|line| {
+                line.strip_prefix("Content-Length: ")
+                    .and_then(|value| value.parse::<usize>().ok())
+            })
+            .unwrap();
+        assert_eq!(declared, body.len());
     })
 }
 #[test]

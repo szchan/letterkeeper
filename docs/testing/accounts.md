@@ -8,7 +8,7 @@ OAuth RED：`cargo test --offline -p letterkeeper-accounts --test oauth`，exit 
 
 ## GREEN 与集成验证
 
-`cargo test --offline -p letterkeeper-accounts`：2026-10-13，账户 7 个、OAuth 10 个测试通过（XDG 子进程额外执行两次），无 ignored。`cargo fmt --all -- --check` 与 `cargo clippy --offline -p letterkeeper-accounts --all-targets -- -D warnings` 通过。全 workspace 验证由主分支集成执行；本 worktree 不提交根 manifest/lock。
+`cargo test --offline -p letterkeeper-accounts`：2026-10-13，账户 8 个、OAuth 10 个测试通过（XDG 子进程额外执行两次），无 ignored。`cargo fmt --all -- --check` 与 `cargo clippy --offline -p letterkeeper-accounts --all-targets -- -D warnings` 通过。全 workspace 验证由主分支集成执行；本 worktree 不提交根 manifest/lock。
 
 行为覆盖：有效/未知配置、命名空间、身份控制字符、文件夹范围、TLS 端点、0600/0700、symlink/hardlink、64 KiB 上限、文件名绑定账户 ID、原子替换、XDG 和绝对目录覆盖；凭据按账户隔离，缺失拒绝且 Secret Debug 不泄漏。
 
@@ -23,3 +23,5 @@ OAuth RED：`cargo test --offline -p letterkeeper-accounts --test oauth`，exit 
 - Secret wrapper 和持久化 bundle 字符串会清零；第三方 OAuth/HTTP/DBus 库的内部复制与分配不声称全部清零。代码无日志/println，所有错误为固定字符串；整个程序仍需阻断上游 TRACE 日志以避免 wire 内容泄漏。
 - 配置和缓存未静态加密；0700/0600 不保护同 UID 任意 shell 攻击者。目录 fd+NOFOLLOW 防止配置路径中的符号链接；同 UID 主动更换祖先目录不在声明的边界中。
 - 没有更改 README/STATUS，也不声称全部 AUTH/P0 或真实邮箱闭环已完成；集成代理负责跨文档状态同步。
+
+最终硬化 RED：callback length 断言真实 exit 101（43 != 44），以及 `private_permissions_reject_special_bits_and_changed_parent_modes` 真实 exit 101（04600 被错误接受）。修复响应长度取 body.len()，精确比较 07777 模式，并在每次 load/save/list 验证配置和数据目录 fd 权限。最终 GREEN 为 8+10 测试及 Clippy；没有跳过失败项。

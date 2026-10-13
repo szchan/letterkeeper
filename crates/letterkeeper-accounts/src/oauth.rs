@@ -410,7 +410,9 @@ fn receive_callback(
         "400 Bad Request"
     };
     let _ = stream.set_write_timeout(Some(Duration::from_secs(1)));
-    let _=stream.write_all(format!("HTTP/1.1 {status}\r\nContent-Type: text/plain; charset=utf-8\r\nCache-Control: no-store\r\nContent-Length: 43\r\nConnection: close\r\n\r\nLetterKeeper login handled. Close this tab.\n").as_bytes());
+    let body = "LetterKeeper login handled. Close this tab.\n";
+    let length = body.len();
+    let _=stream.write_all(format!("HTTP/1.1 {status}\r\nContent-Type: text/plain; charset=utf-8\r\nCache-Control: no-store\r\nContent-Length: {length}\r\nConnection: close\r\n\r\n{body}").as_bytes());
     result
 }
 fn read_callback(

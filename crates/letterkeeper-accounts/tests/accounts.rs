@@ -148,3 +148,22 @@ fn default_paths_subprocess_probe() {
         })
     );
 }
+
+#[test]
+fn private_permissions_reject_special_bits_and_changed_parent_modes() {
+    let t = tempfile::tempdir().unwrap();
+    let config_dir = t.path().join("config");
+    let data_dir = t.path().join("data");
+    let repo = AccountRepository::new(config_dir.clone(), data_dir.clone()).unwrap();
+    repo.save(&config()).unwrap();
+    let p = config_dir.join("synthetic.json");
+    std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o4600)).unwrap();
+    assert!(repo.load("synthetic").is_err());
+    std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o600)).unwrap();
+    std::fs::set_permissions(&config_dir, std::fs::Permissions::from_mode(0o1700)).unwrap();
+    assert!(AccountRepository::new(config_dir.clone(), data_dir).is_err());
+    std::fs::set_permissions(&config_dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert!(repo.load("synthetic").is_err());
+    assert!(repo.save(&config()).is_err());
+    assert!(repo.list().is_err());
+}

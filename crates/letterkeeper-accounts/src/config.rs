@@ -120,6 +120,7 @@ pub struct AccountRepository {
     config_dir: PathBuf,
     data_dir: PathBuf,
     config_fd: OwnedFd,
+    data_fd: OwnedFd,
 }
 fn private_dir(path: &Path) -> Result<OwnedFd, AccountError> {
     if !path.is_absolute() {
@@ -151,16 +152,23 @@ fn private_dir(path: &Path) -> Result<OwnedFd, AccountError> {
             _ => return Err(AccountError::UnsafeStorage),
         }
     }
-    let stat = fs::fstat(&dir).map_err(|_| AccountError::UnsafeStorage)?;
-    if stat.st_mode & 0o777 != 0o700 || stat.st_uid != rustix::process::geteuid().as_raw() {
+    check_dir(&dir)?;
+    Ok(dir)
+}
+fn check_dir(dir: &OwnedFd) -> Result<(), AccountError> {
+    let stat = fs::fstat(dir).map_err(|_| AccountError::UnsafeStorage)?;
+    if FileType::from_raw_mode(stat.st_mode) != FileType::Directory
+        || stat.st_mode & 0o7777 != 0o700
+        || stat.st_uid != rustix::process::geteuid().as_raw()
+    {
         return Err(AccountError::UnsafeStorage);
     }
-    Ok(dir)
+    Ok(())
 }
 fn check_file(file: &OwnedFd) -> Result<(), AccountError> {
     let s = fs::fstat(file).map_err(|_| AccountError::UnsafeStorage)?;
     if FileType::from_raw_mode(s.st_mode) != FileType::RegularFile
-        || s.st_mode & 0o777 != 0o600
+        || s.st_mode & 0o7777 != 0o600
         || s.st_nlink != 1
         || s.st_uid != rustix::process::geteuid().as_raw()
         || s.st_size < 0
@@ -173,11 +181,12 @@ fn check_file(file: &OwnedFd) -> Result<(), AccountError> {
 impl AccountRepository {
     pub fn new(config_dir: PathBuf, data_dir: PathBuf) -> Result<Self, AccountError> {
         let config_fd = private_dir(&config_dir)?;
-        private_dir(&data_dir)?;
+        let data_fd = private_dir(&data_dir)?;
         Ok(Self {
             config_dir,
             data_dir,
             config_fd,
+            data_fd,
         })
     }
     pub fn default_paths() -> Result<(PathBuf, PathBuf), AccountError> {
@@ -202,7 +211,12 @@ impl AccountRepository {
     pub fn data_dir(&self) -> &Path {
         &self.data_dir
     }
+    fn verify_dirs(&self) -> Result<(), AccountError> {
+        check_dir(&self.config_fd)?;
+        check_dir(&self.data_fd)
+    }
     pub fn load(&self, id: &str) -> Result<AccountConfig, AccountError> {
+        self.verify_dirs()?;
         validate_account_id(id)?;
         let fd = fs::openat(
             &self.config_fd,
@@ -235,6 +249,7 @@ impl AccountRepository {
         Ok(account)
     }
     pub fn save(&self, account: &AccountConfig) -> Result<(), AccountError> {
+        self.verify_dirs()?;
         account.validate()?;
         let bytes =
             serde_json::to_vec_pretty(account).map_err(|_| AccountError::InvalidConfiguration)?;
@@ -276,6 +291,7 @@ impl AccountRepository {
         result
     }
     pub fn list(&self) -> Result<Vec<String>, AccountError> {
+        self.verify_dirs()?;
         let mut accounts = Vec::new();
         let entries =
             std::fs::read_dir(&self.config_dir).map_err(|_| AccountError::UnsafeStorage)?;

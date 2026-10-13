@@ -1,12 +1,12 @@
 # 依赖清单
 
-本清单记录当前原型工作区 `Cargo.lock` 锁定的 crates.io 依赖。机器可读的完整清单在 [dependencies.json](dependencies.json)，每项只包含名称、版本、上游声明的许可证、官方仓库地址及上游声明的 Rust 版本；未声明的 Rust 版本为 `null`。清单包括构建、测试及非 Linux 目标依赖，因此不是仅运行时依赖列表。
+本清单记录当前原型工作区 `Cargo.lock` 锁定的 crates.io 依赖。机器可读的完整清单在 [dependencies.json](dependencies.json)，每项只包含名称、版本、上游声明的许可证、官方仓库地址及上游声明的 Rust 版本；未声明的 Rust 版本为 `null`。清单按集成工作区 `Cargo.lock` 经 Cargo metadata 得到，共 **384 个 registry package 条目、361 个不同 crate 名称**（同名多版本分别计数）；包括构建、测试及非 Linux 目标依赖，因此不是仅运行时依赖列表。
 
-版本和元数据来自集成工作区的 `cargo metadata --offline --locked --format-version 1` 结果；未从网络核查最新版本或近期维护活动。仓库地址仅作上游来源线索，不代表已审计代码或维护状态。对所有依赖的漏洞、安全、许可证兼容性均未完成审计或法律审查；发布前仍须核对依赖实际许可证原文、传递依赖和目标平台要求。项目原创源码与文档继续采用 `GPL-3.0-only`，不改变 [LICENSE](../LICENSE)。
+版本和元数据来自集成 worktree 的 `cargo metadata --offline --locked --format-version 1` 输出；完整 JSON 仅保留 name/version/license/repository/rust_version 五字段，没有绝对路径或包内容。直接依赖用途及已配置安全边界按 manifest、代码和 ADR 0002 记录交叉核对。没有声称依赖版本是最新或已完成安全审计。仓库地址仅作上游来源线索，不代表已审计代码或维护状态。对所有依赖的漏洞、安全、许可证兼容性均未完成审计或法律审查；发布前仍须核对依赖实际许可证原文、传递依赖和目标平台要求。项目原创源码与文档继续采用 `GPL-3.0-only`，不改变 [LICENSE](../LICENSE)。
 
 ## 直接依赖
 
-下表用途按当前原型代码和 Cargo 配置描述。维护证据仅限锁定版本与包元数据给出的官方仓库；没有核查近期提交、响应速度或安全公告，故均待发布前核实。
+下表记录 Stage A 与 Stage B 当前直接依赖的用途和 Cargo feature。维护证据仅限 Cargo 包元数据给出的上游仓库；没有核查近期提交、响应速度或安全公告，故均待发布前核实。
 
 | 依赖（锁定版本） | 用途 | 包元数据许可证 | 维护证据 | 安全影响与边界 |
 | --- | --- | --- | --- | --- |
@@ -27,10 +27,33 @@
 | `libc` 0.2.190 | Unix 资源限制接口，供 Linux 沙箱 worker 设置资源上限。 | MIT OR Apache-2.0 | [rust-lang/libc](https://github.com/rust-lang/libc)；近期活跃度待核实。 | 是底层系统接口封装；资源限制调用失败必须被视为失败，不能假定隔离仍然有效。 |
 | `tempfile` 3.27.0（应用与测试） | 创建沙箱只读标记的临时文件，以及合成测试目录。 | MIT OR Apache-2.0 | [Stebalien/tempfile](https://github.com/Stebalien/tempfile)；近期活跃度待核实。 | 临时测试数据应使用合成内容；生产缓存和敏感文件生命周期不由此依赖自动保证。 |
 
+### Stage B 新增直接依赖
+
+以下用途和安全边界按集成工作区 manifest、代码及 ADR 0002 交叉核对；上游链接来自 Cargo 包元数据。除 ADR 已明确记录的来源核验外，近期活跃度、安全公告与漏洞状态未独立审查，不能据此声称已完成安全审计。
+
+| 依赖（锁定版本） | 用途 | 包元数据许可证 | 维护证据 | 安全影响与边界 |
+| --- | --- | --- | --- | --- |
+| `async-imap` 0.12.0 | IMAP 协议解析和会话处理，运行在受限 TLS transport 之上。 | MIT OR Apache-2.0 | [上游仓库](https://github.com/async-email/async-imap)；近期维护状态未审计。 | 处理不可信服务器响应；操作上限和 deadline 仍由 protocol 层负责。 |
+| `futures-util` 0.3.34 | IMAP adapter 使用的 Stream 和 Future 工具。 | MIT OR Apache-2.0 | [上游仓库](https://github.com/rust-lang/futures-rs)；近期维护状态未审计。 | 异步组合本身不提供 protocol 资源上限。 |
+| `tokio-rustls` 0.26.6 | 为 IMAP TLS 将 Tokio stream 接入 rustls。 | MIT OR Apache-2.0 | [上游仓库](https://github.com/rustls/tokio-rustls)；近期维护状态未审计。 | 发送凭据前必须完成证书链和主机名验证。 |
+| `rustls` 0.23.45 | TLS 客户端配置和证书验证，启用 ring 与 TLS 1.2。 | Apache-2.0 OR ISC OR MIT | [上游仓库](https://github.com/rustls/rustls)；近期维护状态未审计。 | 不绕过验证；额外 PEM 根仅增加信任锚。 |
+| `rustls-pemfile` 2.2.0 | 解析用户配置的附加 PEM 信任锚。 | Apache-2.0 OR ISC OR MIT | [上游仓库](https://github.com/rustls/pemfile)；近期维护状态未审计。 | 无效证书输入应拒绝，不能关闭常规验证。 |
+| `webpki-roots` 1.0.9 | 用于服务器证书验证的 Mozilla 派生根证书集。 | CDLA-Permissive-2.0 | [上游仓库](https://github.com/rustls/webpki-roots)；近期维护状态未审计。 | 根集合影响信任决定；许可证来自包元数据声明，尚未核对实际许可证文件。 |
+| `zeroize` 1.9.1 | Secret wrapper 在 drop 时清理，以及 protocol 凭据处理。 | Apache-2.0 OR MIT | [上游仓库](https://github.com/RustCrypto/utils)；近期维护状态未审计。 | 尽力清除内存；HTTP/TLS 依赖内部副本不保证清零。 |
+| `log` 0.4.34 | 编译时将 protocol 诊断日志最高级别设为 debug。 | MIT OR Apache-2.0 | [上游仓库](https://github.com/rust-lang/log)；近期维护状态未审计。 | 启用了 debug 级别；日志调用不得输出凭据、正文、URL 或上游错误文本。 |
+| `secret-service` 5.2.0 | Linux Secret Service 凭据后端，使用 async-io 与 RustCrypto 加密 features。 | MIT OR Apache-2.0 | [上游仓库](https://github.com/hwchen/secret-service-rs)；近期维护状态未审计。 | 要求加密 DH；服务不可用或锁定时失败关闭，不回退到明文或文件存储。 |
+| `oauth2` 5.0.0 | OAuth 授权、state/PKCE、token 请求构造和解析；禁用默认 features。 | MIT OR Apache-2.0 | [上游仓库](https://github.com/ramosbugs/oauth2-rs)；近期维护状态未审计。 | token 保留在凭据库；state/PKCE 和严格端点/响应限制由应用负责。 |
+| `reqwest` 0.12.28 | OAuth 使用的 blocking rustls HTTP transport；禁用默认 features。 | MIT OR Apache-2.0 | [上游仓库](https://github.com/seanmonstar/reqwest)；近期维护状态未审计。 | 关闭 redirect 和 proxy；调用端实施 deadline 与 64 KiB 响应上限。 |
+| `url` 2.5.8 | 解析和校验 OAuth callback URL。 | MIT OR Apache-2.0 | [上游仓库](https://github.com/servo/rust-url)；近期维护状态未审计。 | URL 解析本身不代表 callback 可信；仍核对固定 loopback host/path/state。 |
+| `rustix` 1.1.5 | 私有账户存储与锁使用的 fd-relative filesystem/process 原语。 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | [上游仓库](https://github.com/bytecodealliance/rustix)；近期维护状态未审计。 | 安全边界依赖调用点的 no-follow、owner、mode 和目录 fd 检查。 |
+| `rpassword` 7.5.4 | 从终端交互读取凭据且不回显。 | Apache-2.0 | [上游仓库](https://github.com/conradkleinespel/rpassword)；近期维护状态未审计。 | 仅用于交互终端读取；值不得进入日志、参数或普通配置。 |
+| `rcgen` 0.14.10 | 为合成 loopback protocol 测试生成临时 TLS 证书，仅用于开发/测试。 | MIT OR Apache-2.0 | [上游仓库](https://github.com/rustls/rcgen)；近期维护状态未审计。 | 仅测试使用；私钥临时生成，不应提交到仓库。 |
+| `rustls-pki-types` 1.15.1 | 测试 TLS 配置使用的 PKI 类型。 | MIT OR Apache-2.0 | [上游仓库](https://github.com/rustls/pki-types)；近期维护状态未审计。 | 仅测试证书/key 表示，不单独定义生产信任策略。 |
+
 ## 系统依赖与平台限制
 
 原型的正文沙箱通过固定路径 `/usr/bin/bwrap` 启动 bubblewrap。当前本机 Arch Linux 的只读包信息确认 bubblewrap 版本为 `0.12.0-1`，许可证字段为 `LGPL-2.1-or-later`，上游仓库为 [containers/bubblewrap](https://github.com/containers/bubblewrap)。这只是本机包元数据证据，不是对其他发行版、安装布局或功能行为的验证。当前固定的 Arch/Linux 路径和启动方式限制了可移植性；非 Linux 目标依赖虽然会出现在 Cargo 锁定清单中，原型沙箱仍未证明能在其上运行。缺少程序、权限或必需隔离能力时应拒绝处理，而不能回退为普通渲染。近期维护状态待核实。
 
 ## 适用范围
 
-此清单描述当前原型的锁定依赖，不表示项目已经实现完整邮件客户端，也不构成安全漏洞审计、隐私保证或法律意见。Cargo 清单覆盖锁文件解析到的构建、测试及目标平台依赖；JSON 中未包含本地 workspace crate，因为它们不是第三方 registry 依赖。发布前应重新生成并审查清单，逐项核对许可证原文及依赖树，确认所发布目标的系统依赖和实际沙箱能力。
+此清单描述 Stage B 集成工作区的锁定依赖，不表示项目已经实现完整邮件客户端，也不构成安全漏洞审计、隐私保证或法律意见。源码已核对的事实包括 OAuth、凭据存储及 IMAP/TLS 选型与配置；尚未完成真实 Gmail/服务商端到端验证、近期维护/公告审查、全部传递依赖许可证原文核对及目标平台审查。Cargo 清单覆盖锁文件解析到的构建、测试及目标平台依赖；JSON 中未包含本地 workspace crate，因为它们不是第三方 registry 依赖。发布前应重新生成并审查清单，逐项核对许可证原文及依赖树，确认所发布目标的系统依赖和实际沙箱能力。

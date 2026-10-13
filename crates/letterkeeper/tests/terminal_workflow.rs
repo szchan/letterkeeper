@@ -15,7 +15,7 @@ mod performance_server;
 use std::{
     fs::File,
     io::{BufRead, BufReader, Read, Write},
-    net::{SocketAddr, TcpListener},
+    net::{SocketAddr, TcpListener, TcpStream, UdpSocket},
     os::{
         fd::{AsRawFd, FromRawFd},
         unix::process::CommandExt,
@@ -566,6 +566,18 @@ fn pty_approval_requires_full_digest_and_f9_sends_once() {
     for accept in [true, false] {
         let dir = tempfile::tempdir().unwrap();
         let (endpoint, captures) = smtp_once(accept);
+        let http = TcpListener::bind("127.0.0.1:0").unwrap();
+        let dns = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let connection = TcpStream::connect(http.local_addr().unwrap()).unwrap();
+        let _ = http.accept().unwrap();
+        drop(connection);
+        let sender = UdpSocket::bind("127.0.0.1:0").unwrap();
+        sender
+            .send_to(b"positive-control", dns.local_addr().unwrap())
+            .unwrap();
+        assert!(dns.recv_from(&mut [0; 512]).unwrap().0 > 0);
+        http.set_nonblocking(true).unwrap();
+        dns.set_nonblocking(true).unwrap();
         let state = dir.path().join("private");
         let host = AppHost::open(&state, vec![], false, Some(endpoint)).unwrap();
         let draft = host
@@ -576,7 +588,7 @@ fn pty_approval_requires_full_digest_and_f9_sends_once() {
                 cc: vec!["copy@example.test".into()],
                 bcc: vec!["hidden@example.test".into()],
                 subject: "Synthetic SMTP".into(),
-                body: "Chinese body 你好 q".into(),
+                body: format!("Chinese body 你好 q\n<img src=\"http://{}/pixel\">\n<link rel=\"dns-prefetch\" href=\"//tracker.example.test\">\n{}\nTAIL_SENTINEL", http.local_addr().unwrap(), "中文长行 body\n".repeat(2_000)),
                 attachments: vec![],
                 in_reply_to: None,
                 references: vec![],
@@ -636,6 +648,8 @@ fn pty_approval_requires_full_digest_and_f9_sends_once() {
         recv(&mut master, "Ctrl+S");
         master.write_all(b"\x1b[17~").unwrap(); // F6 review
         recv(&mut master, "完整审阅");
+        master.write_all(b"\x1b[F").unwrap(); // End reaches the body tail beyond 16 KiB.
+        recv(&mut master, "TAIL_SENTINEL");
         master.write_all(b"\x1b[19~").unwrap(); // F8 approval dialog
         recv(&mut master, "输入完整摘要");
         assert!(
@@ -665,5 +679,13 @@ fn pty_approval_requires_full_digest_and_f9_sends_once() {
         );
         let queried = host.submission_status(submissions[0].id).unwrap();
         assert_eq!(queried.state, submissions[0].state);
+        assert_eq!(
+            http.accept().unwrap_err().kind(),
+            std::io::ErrorKind::WouldBlock
+        );
+        assert_eq!(
+            dns.recv_from(&mut [0; 512]).unwrap_err().kind(),
+            std::io::ErrorKind::WouldBlock
+        );
     }
 }

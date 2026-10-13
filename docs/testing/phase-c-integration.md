@@ -16,7 +16,7 @@ CARGO_TARGET_DIR=.worktrees/phase-b/target cargo test --offline -p letterkeeper 
 
 - `workflow_mcp` 用同一个 `AppHost` 的 MCP 与人工能力验证：Agent 创建草稿、人工工作区可见、人工编辑 Cc/Bcc/主题/正文、错误摘要拒绝、正确批准不触发发送、模型 `confirm=true` 无授权效力；第二个进程视角通过另一个 Store 打开同目录，修改后旧审阅摘要必须失效。另用 20,001 字节附件与超过 16 KiB 的正文检查完整审阅和 SHA-256，移除附件后旧摘要失效。
 - `terminal_workflow` 在真实 PTY 的 120×40、80×24、40×12、20×6 尺寸运行 `run_tui_workspace`，验证编辑状态里的 `q` 是正文字符、脏草稿退出提示、窗口变化及 termios 恢复。子进程只使用合成本地数据。
-- 同文件的 SMTP PTY 用受控本机服务分别产生 `Accepted` 与 DATA 后断连的 `Uncertain`；从草稿列表进入完整审阅、F8 输入整串摘要、确认批准没有发送，再按 F9 显式提交，查持久化记录并检查无自动重试。Bcc 应只进入收件信封，不能出现在邮件头。
+- 同文件的 SMTP PTY 用受控本机服务分别产生 `Accepted` 与 DATA 后断连的 `Uncertain`；从草稿列表进入完整审阅、F8 输入整串摘要、确认批准没有发送，再按 F9 显式提交，查持久化记录并检查无自动重试。正文嵌入 HTTP 图片和 DNS 预取诱饵，监听器先通过父进程正向控制，编辑/审阅/发送路径不应触发请求。Bcc 应只进入收件信封，不能出现在邮件头。
 - `remote_human_workspace_shares_controlled_tls_mail_and_drafts` 使用注入凭据与本机 TLS IMAP，覆盖 RemoteHost 的无 Seen 读取、草稿、完整审阅和关闭发送权限。
 - `scripts/verify_workspace.py` 从实际二进制启动离线合成 TUI，在四种尺寸重复相同终端路径。此脚本需要集成分支把离线 TUI 接入 `run_tui_workspace` 后运行。
 

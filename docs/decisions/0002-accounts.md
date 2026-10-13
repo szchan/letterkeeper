@@ -1,6 +1,6 @@
 # ADR 0002：账户、私有配置与 Gmail OAuth
 
-日期：2026-10-13。状态：实现中；只授权合成、受控 loopback 验证，未验证真实 Gmail。
+日期：2026-10-13。状态：实现及合成验证通过；只授权合成、受控 loopback 验证，未验证真实 Gmail。
 
 使用独立 accounts crate，账户 ID 是严格 ASCII 命名空间，配置仅保存公开身份、严格 TLS 端点、文件夹、用户拥有的操作权限和认证方法。配置拒绝未知字段，绝不接受密码/token/client secret 内容。额外 CA 仅是公开证书路径。Sent 明确选择 server-managed 或 APPEND，不由协议层猜测。
 
@@ -13,3 +13,5 @@ OAuth 使用 `oauth2` 5（MIT OR Apache-2.0，禁用默认 features）生成 sta
 固定 Google auth/token/revoke URL 和 `https://mail.google.com/` scope。授权返回仅向 trusted CLI 暴露的浏览器 URL，不向 MCP 提供。loopback 127.0.0.1 随机端口，callback 有大小/时间上限，核对 Host/path/state、拒绝重复参数、错误或不足 scope，仅消费一次。token 成功后保存一个 vault bundle（access/refresh/expiry），refresh rotation 原子更新单条 secret；未返回 refresh 时保留旧值。invalid_grant 表示需重新登录；logout 清本地 token，revoke 仅主动调用且成功后清理。本地测试端点只允许通过明确 fixture constructor 传入 loopback URL，不来自账户配置。
 
 官方资料：[Secret Service crate](https://docs.rs/secret-service/5.2.0/secret_service/)、[源仓库](https://github.com/hwchen/secret-service-rs)、[oauth2 5](https://docs.rs/oauth2/5.0.0/oauth2/)、[Google native apps](https://developers.google.com/identity/protocols/oauth2/native-app)、[Gmail XOAUTH2 scope](https://developers.google.com/workspace/gmail/imap/xoauth2-protocol)。Google desktop client 注册、个人使用与公开分发/受限 scope 验证仍待用户独立注册和真实授权验收；实现不借用第三方 client identity。配置 send 权限不替代 core 人工批准。
+
+实现时增加 callback 的账户/client/endpoint owner 绑定与进程内 token mutex。跨进程调用由应用的每账户 auth.lock flock 协调；直接库调用者须承担此协调。测试证据和未授权验证见 [账户验证](../testing/accounts.md)。

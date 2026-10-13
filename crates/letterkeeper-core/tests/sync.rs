@@ -259,3 +259,19 @@ fn sync_keeps_claimed_snapshot_if_local_draft_is_edited() {
     assert_eq!(s.get_sync(record.id).unwrap().input, d.input);
     assert_eq!(s.get_sync(record.id).unwrap().digest, d.digest);
 }
+
+#[test]
+fn message_ids_are_opaque_identifiers_not_limited_email_addresses() {
+    let mut s=store();
+    for msg_id in [format!("<{}@example.test>","x".repeat(80)),"<synthetic@[127.0.0.1]>".into(),"<synthetic@opaque_id>".into(),"<synthetic@[opaque@literal]>".into()] {
+        let mut d=input();d.in_reply_to=Some(msg_id.clone());d.references=vec![msg_id];assert!(s.create_draft(d).is_ok());
+    }
+}
+
+#[test]
+fn malformed_thread_ids_fail_closed() {
+    let mut s=store();
+    for msg_id in ["<x@@test>","<.x@test>","<x..y@test>","<x@a..b>","<x@[a\\b]>","<x@[]]>" ,"<x@a>\n", "<x@a> <y@b>"] {
+        let mut d=input();d.references=vec![msg_id.into()];assert_eq!(s.create_draft(d).unwrap_err(),Error::InvalidInput);
+    }
+}

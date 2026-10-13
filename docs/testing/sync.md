@@ -9,3 +9,5 @@ RED：`cargo test --offline -p letterkeeper-core --test sync` 编译成功，8 �
 GREEN：`cargo test --offline -p letterkeeper-core` 28 项通过（既有 17 + 新增 11），Clippy `--all-targets -- -D warnings` 通过。schema 1 → 2 原子迁移、旧批准与摘要兼容、线程头注入、单次同步/竞争、Pending/Uncertain 重启保持、作用域、不可变快照和 MIME wire 均有验证。原“未来 schema”测试随当前版本提升到 3，继续验证拒绝未知版本。
 
 同步每版本仅允许一次认领，明确失败也不自动重试；用户需要新的草稿版本。服务器旧草稿不自动删除。应用实际 TLS 与 APPEND 闭环另见阶段 B 集成记录。
+
+审查回归 RED：不透明 Message-ID 不应沿用邮箱地址的 64 字节 local-part/DNS 限制。`cargo test --offline -p letterkeeper-core --test sync message_ids_are_opaque_identifiers_not_limited_email_addresses -- --exact` 实际断言失败；补充长 id-left、domain literal、非 DNS id-right 与恶意串测试，随后修复。

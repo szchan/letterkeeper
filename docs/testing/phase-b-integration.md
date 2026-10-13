@@ -9,3 +9,7 @@
 ## 共享远程 Host RED
 
 `cargo test --offline -p letterkeeper --test remote` 编译成功，4 项全部失败，原因均为远程 Host 尚未装配。测试覆盖跨 TLS 会话读取/回复/草稿同步、权限先于凭据获取、MCP 去活化及拒绝自授权、DATA 后断连与重启状态。
+
+## 账户 CLI RED
+
+`cargo test --offline -p letterkeeper --test account_cli`：初始 1 通过/1 失败，失败为尚无 config-dir/账户命令。发现命令帮助断言只检查子串会把描述中的 account/mail 当成命令，改为检查独立命令行；再次 RED 待记录。测试不调用真实系统凭据库，密码/批准管道必须拒绝。

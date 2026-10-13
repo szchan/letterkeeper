@@ -11,3 +11,5 @@ GREEN：`cargo test --offline -p letterkeeper-core` 28 项通过（既有 17 + �
 同步每版本仅允许一次认领，明确失败也不自动重试；用户需要新的草稿版本。服务器旧草稿不自动删除。应用实际 TLS 与 APPEND 闭环另见阶段 B 集成记录。
 
 审查回归 RED：不透明 Message-ID 不应沿用邮箱地址的 64 字节 local-part/DNS 限制。`cargo test --offline -p letterkeeper-core --test sync message_ids_are_opaque_identifiers_not_limited_email_addresses -- --exact` 实际断言失败；补充长 id-left、domain literal、非 DNS id-right 与恶意串测试，随后修复。
+
+最终 GREEN：core 共 30 项（state 17 + sync 13）通过，安全 canonical Message-ID 不再借用邮箱地址长度/DNS 限制，仍拒绝控制字符、注入、空 atom、非法 literal 与过长输入。完整应用闭环及 170 项汇总见 [阶段 B 集成](phase-b-integration.md)。

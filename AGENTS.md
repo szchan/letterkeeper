@@ -10,11 +10,11 @@ LetterKeeper 是隐私优先、轻量、面向人和 Agent 的开源邮件客户
 2. [需求文档](docs/REQUIREMENTS.md)：功能、隐私约束、验收标准与待决策事项。
 3. [LICENSE](LICENSE)：GNU GPL 第 3 版全文；项目采用 `GPL-3.0-only`。
 
-当前已建立 Rust 离线原型；真实邮箱功能尚未实现。先阅读 [验收状态](docs/STATUS.md) 与 [架构决定](docs/decisions/0001-phase-a.md)，不把原型验证写成全部 P0 已完成。
+当前已建立 Rust 受控协议原型；IMAP/SMTP、账户/OAuth、回复与同步代码已实现并以合成服务验证，真实 Gmail/系统凭据库及公开客户端尚未验收。先阅读 [验收状态](docs/STATUS.md) 与 [阶段 B 架构决定](docs/decisions/0002-phase-b.md)，不把原型验证写成全部 P0 已完成。
 
 ## 开发原则
 
-- 以需求文档为依据，沿已记录的 Rust workspace、SQLite、mail-parser/html5ever、Ratatui 和官方 MCP SDK 原型继续纵向验证。新增或改变选型时先写 ADR；真实协议、OAuth 和正式存储方案仍需设计验证。
+- 以需求文档为依据，沿已记录的 Rust workspace、SQLite、mail-parser/html5ever、Ratatui、async-imap/Rustls、Secret Service/oauth2 和官方 MCP SDK 继续纵向验证。新增或改变选型时先写 ADR；真实账户、服务商语义、凭据库与公开发布仍须验收。
 - 核心邮件逻辑、TUI/CLI、MCP 应共用业务能力和隐私策略；不得因接入 Agent 而绕过账户范围、凭据保护、正文处理或发送权限。
 - 账户的 IMAP/SMTP/OAuth 合法联网与正文的外部资源加载必须分别控制。不能通过切断整个客户端网络来满足正文无外联要求。
 - 正文解析、转换和显示全程不得自动加载远程资源或执行邮件脚本。禁止把“转 Markdown”“删除 img”“解析后的 DOM 不执行脚本”当成已经实现网络隔离。

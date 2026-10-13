@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Shared draft, authorization and submission state.
-use rusqlite::{Connection, OpenFlags, OptionalExtension, TransactionBehavior, params};
+use rusqlite::{
+    Connection, OpenFlags, OptionalExtension, TransactionBehavior, params, params_from_iter,
+    types::Value,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeSet, path::Path, time::Duration};
@@ -33,6 +36,13 @@ pub struct Draft {
     pub digest: String,
     pub input: DraftInput,
 }
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DraftListEntry {
+    pub id: i64,
+    pub revision: i64,
+    pub digest: String,
+    pub subject: String,
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SubmissionState {
     Submitting,
@@ -54,6 +64,12 @@ pub struct Submission {
     pub digest: String,
     pub message_id: String,
     pub input: DraftInput,
+    pub state: SubmissionState,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SubmissionListEntry {
+    pub id: i64,
+    pub draft_id: i64,
     pub state: SubmissionState,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -233,6 +249,39 @@ impl Store {
         self.policy.check(&d.input.account, Operation::Read)?;
         Ok(d)
     }
+    pub fn list_drafts(&self, offset: usize, limit: usize) -> Result<Vec<DraftListEntry>> {
+        if !self.policy.permissions.read {
+            return Err(Error::Denied);
+        }
+        check_page(offset, limit)?;
+        if self.policy.accounts.is_empty() {
+            return Ok(Vec::new());
+        }
+        let placeholders = vec!["?"; self.policy.accounts.len()].join(",");
+        let sql = format!(
+            "SELECT id,revision,digest,json_extract(content,'$.subject') FROM drafts WHERE json_extract(content,'$.account') IN ({placeholders}) ORDER BY id DESC LIMIT ? OFFSET ?"
+        );
+        let mut values: Vec<Value> = self
+            .policy
+            .accounts
+            .iter()
+            .cloned()
+            .map(Value::Text)
+            .collect();
+        values.push(Value::Integer(limit as i64));
+        values.push(Value::Integer(offset as i64));
+        let mut stmt = self.conn.prepare(&sql)?;
+        Ok(stmt
+            .query_map(params_from_iter(values), |r| {
+                Ok(DraftListEntry {
+                    id: r.get(0)?,
+                    revision: r.get(1)?,
+                    digest: r.get(2)?,
+                    subject: r.get(3)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?)
+    }
     pub fn update_draft(
         &mut self,
         id: i64,
@@ -348,6 +397,50 @@ impl Store {
         let sub = load_submission(&self.conn, id)?;
         self.policy.check(&sub.input.account, Operation::Read)?;
         Ok(sub)
+    }
+    pub fn list_submissions(
+        &self,
+        offset: usize,
+        limit: usize,
+    ) -> Result<Vec<SubmissionListEntry>> {
+        if !self.policy.permissions.read {
+            return Err(Error::Denied);
+        }
+        check_page(offset, limit)?;
+        if self.policy.accounts.is_empty() {
+            return Ok(Vec::new());
+        }
+        let placeholders = vec!["?"; self.policy.accounts.len()].join(",");
+        let sql = format!(
+            "SELECT id,draft_id,state FROM submissions WHERE json_extract(content,'$.account') IN ({placeholders}) ORDER BY id DESC LIMIT ? OFFSET ?"
+        );
+        let mut values: Vec<Value> = self
+            .policy
+            .accounts
+            .iter()
+            .cloned()
+            .map(Value::Text)
+            .collect();
+        values.push(Value::Integer(limit as i64));
+        values.push(Value::Integer(offset as i64));
+        let mut stmt = self.conn.prepare(&sql)?;
+        Ok(stmt
+            .query_map(params_from_iter(values), |r| {
+                let state: String = r.get(2)?;
+                let state = match state.as_str() {
+                    "submitting" => SubmissionState::Submitting,
+                    "accepted" => SubmissionState::Accepted,
+                    "failed" => SubmissionState::Failed,
+                    "uncertain" => SubmissionState::Uncertain,
+                    _ => return Err(rusqlite::Error::InvalidQuery),
+                };
+                Ok(SubmissionListEntry {
+                    id: r.get(0)?,
+                    draft_id: r.get(1)?,
+                    state,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?)
     }
     /// Explicit recovery after the host has established that this sender exited.
     /// Never call based solely on age or opening a second connection.
@@ -471,6 +564,13 @@ impl Store {
             )
             .optional()?
             .ok_or(Error::NotFound)
+    }
+}
+fn check_page(offset: usize, limit: usize) -> Result<()> {
+    if offset > 100_000 || !(1..=50).contains(&limit) {
+        Err(Error::InvalidInput)
+    } else {
+        Ok(())
     }
 }
 fn validate_folder(folder: &str) -> Result<()> {

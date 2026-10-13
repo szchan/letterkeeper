@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use letterkeeper_adapters::{
     DraftInput as AdapterDraft, FolderSummary, Host, HostError, MessageSummary,
+    workspace::{
+        ApprovalInfo, DraftSummary, HumanWorkspace, ReplyMode, ReviewSnapshot, SentEvidence,
+        SubmissionInfo, SyncInfo, WorkflowError, WorkflowResult, WorkspaceCapabilities,
+    },
 };
 use letterkeeper_content::SafeDocument;
 use letterkeeper_core::{AccessPolicy, Draft, DraftInput, Permissions, Store, Submission};
 use serde_json::{Value, json};
 use std::{
     net::SocketAddr,
-    path::Path,
+    path::{Path, PathBuf},
     sync::Mutex,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -67,6 +71,8 @@ fn numeric_id(id: &str) -> Result<i64, HostError> {
 
 pub struct AppHost {
     store: Mutex<Store>,
+    state_dir: PathBuf,
+    read_only: bool,
     documents: Vec<SafeDocument>,
     smtp_test: Option<SocketAddr>,
 }
@@ -82,9 +88,210 @@ impl AppHost {
         }
         Ok(Self {
             store: Mutex::new(store_at(state_dir, read_only)?),
+            state_dir: state_dir.into(),
+            read_only,
             documents,
             smtp_test,
         })
+    }
+}
+impl HumanWorkspace for AppHost {
+    fn capabilities(&self) -> WorkspaceCapabilities {
+        WorkspaceCapabilities {
+            account: ACCOUNT.into(),
+            from: SENDER.into(),
+            read: true,
+            draft: !self.read_only,
+            send: !self.read_only,
+        }
+    }
+    fn list_drafts(&self, offset: usize, limit: usize) -> WorkflowResult<Vec<DraftSummary>> {
+        Ok(self
+            .store
+            .lock()
+            .map_err(|_| WorkflowError::Unavailable)?
+            .list_drafts(offset, limit)
+            .map_err(crate::workflow::core_error)?
+            .into_iter()
+            .map(crate::workflow::draft_summary)
+            .collect())
+    }
+    fn load_draft(&self, id: i64) -> WorkflowResult<Draft> {
+        self.store
+            .lock()
+            .map_err(|_| WorkflowError::Unavailable)?
+            .get_draft(id)
+            .map_err(crate::workflow::core_error)
+    }
+    fn create(&self, input: DraftInput) -> WorkflowResult<Draft> {
+        if self.read_only {
+            return Err(WorkflowError::Denied);
+        }
+        validate_demo(&input).map_err(|_| WorkflowError::Denied)?;
+        self.store
+            .lock()
+            .map_err(|_| WorkflowError::Unavailable)?
+            .create_draft(input)
+            .map_err(crate::workflow::core_error)
+    }
+    fn save(&self, id: i64, expected_revision: i64, input: DraftInput) -> WorkflowResult<Draft> {
+        if self.read_only {
+            return Err(WorkflowError::Denied);
+        }
+        validate_demo(&input).map_err(|_| WorkflowError::Denied)?;
+        self.store
+            .lock()
+            .map_err(|_| WorkflowError::Unavailable)?
+            .update_draft(id, expected_revision, input)
+            .map_err(crate::workflow::core_error)
+    }
+    fn reply(&self, _: &str, _: ReplyMode, _: &str, _: &[String]) -> WorkflowResult<Draft> {
+        if self.read_only {
+            Err(WorkflowError::Denied)
+        } else {
+            Err(WorkflowError::Unsupported)
+        }
+    }
+    fn add_attachment(
+        &self,
+        id: i64,
+        expected_revision: i64,
+        path: &Path,
+        content_type: &str,
+    ) -> WorkflowResult<Draft> {
+        if self.read_only {
+            return Err(WorkflowError::Denied);
+        }
+        let mut draft = self.load_draft(id)?;
+        if draft.revision != expected_revision {
+            return Err(WorkflowError::Conflict);
+        }
+        validate_demo(&draft.input).map_err(|_| WorkflowError::Denied)?;
+        let attachment = crate::files::import_attachment(path, content_type)
+            .map_err(|_| WorkflowError::InvalidInput)?;
+        draft.input.attachments.push(attachment);
+        self.save(id, expected_revision, draft.input)
+    }
+    fn remove_attachment(
+        &self,
+        id: i64,
+        expected_revision: i64,
+        index: usize,
+    ) -> WorkflowResult<Draft> {
+        if self.read_only {
+            return Err(WorkflowError::Denied);
+        }
+        let mut draft = self.load_draft(id)?;
+        if draft.revision != expected_revision {
+            return Err(WorkflowError::Conflict);
+        }
+        validate_demo(&draft.input).map_err(|_| WorkflowError::Denied)?;
+        if index >= draft.input.attachments.len() {
+            return Err(WorkflowError::InvalidInput);
+        }
+        draft.input.attachments.remove(index);
+        self.save(id, expected_revision, draft.input)
+    }
+    fn export_attachment(&self, _: &str, _: usize, _: &Path) -> WorkflowResult<String> {
+        if self.read_only {
+            Err(WorkflowError::Denied)
+        } else {
+            Err(WorkflowError::Unsupported)
+        }
+    }
+    fn review(&self, id: i64) -> WorkflowResult<ReviewSnapshot> {
+        Ok(crate::workflow::review_snapshot(self.load_draft(id)?))
+    }
+    fn approve(
+        &self,
+        id: i64,
+        expected_digest: &str,
+        typed_digest: &str,
+    ) -> WorkflowResult<ApprovalInfo> {
+        if self.read_only {
+            return Err(WorkflowError::Denied);
+        }
+        let mut store = self.store.lock().map_err(|_| WorkflowError::Unavailable)?;
+        let d = store.get_draft(id).map_err(crate::workflow::core_error)?;
+        validate_demo(&d.input).map_err(|_| WorkflowError::Denied)?;
+        crate::workflow::approve(&mut store, id, expected_digest, typed_digest)
+    }
+    fn send(&self, id: i64) -> WorkflowResult<SubmissionInfo> {
+        if self.read_only {
+            return Err(WorkflowError::Denied);
+        }
+        let endpoint = self.smtp_test.ok_or(WorkflowError::Unavailable)?;
+        let _sender =
+            crate::files::private_lock(&self.state_dir, "send.lock", std::time::Duration::ZERO)
+                .map_err(|_| WorkflowError::Unavailable)?;
+        let sub = {
+            let mut store = self.store.lock().map_err(|_| WorkflowError::Unavailable)?;
+            let d = store.get_draft(id).map_err(crate::workflow::core_error)?;
+            validate_demo(&d.input).map_err(|_| WorkflowError::Denied)?;
+            store
+                .claim_send(id, now().map_err(|_| WorkflowError::Unavailable)?)
+                .map_err(crate::workflow::core_error)?
+        };
+        let outcome = crate::transport::send_test(&sub, endpoint);
+        match self
+            .store
+            .lock()
+            .map_err(|_| WorkflowError::Unavailable)?
+            .finish_submission(sub.id, outcome)
+        {
+            Ok(done) => Ok(crate::workflow::submission_info(done)),
+            Err(_) => Ok(SubmissionInfo {
+                id: sub.id,
+                draft_id: id,
+                state: letterkeeper_core::SubmissionState::Uncertain,
+                state_recorded: false,
+            }),
+        }
+    }
+    fn list_submissions(&self, offset: usize, limit: usize) -> WorkflowResult<Vec<SubmissionInfo>> {
+        Ok(self
+            .store
+            .lock()
+            .map_err(|_| WorkflowError::Unavailable)?
+            .list_submissions(offset, limit)
+            .map_err(crate::workflow::core_error)?
+            .into_iter()
+            .map(crate::workflow::submission_entry_info)
+            .collect())
+    }
+    fn submission_status(&self, id: i64) -> WorkflowResult<SubmissionInfo> {
+        self.store
+            .lock()
+            .map_err(|_| WorkflowError::Unavailable)?
+            .get_submission(id)
+            .map(crate::workflow::submission_info)
+            .map_err(crate::workflow::core_error)
+    }
+    fn sent_evidence(&self, _: i64) -> WorkflowResult<SentEvidence> {
+        Err(WorkflowError::Unsupported)
+    }
+    fn recover_submission(&self, id: i64) -> WorkflowResult<SubmissionInfo> {
+        if self.read_only {
+            return Err(WorkflowError::Denied);
+        }
+        let _sender =
+            crate::files::private_lock(&self.state_dir, "send.lock", std::time::Duration::ZERO)
+                .map_err(|_| WorkflowError::Unavailable)?;
+        self.store
+            .lock()
+            .map_err(|_| WorkflowError::Unavailable)?
+            .recover_interrupted(id)
+            .map(crate::workflow::submission_info)
+            .map_err(crate::workflow::core_error)
+    }
+    fn sync_draft(&self, _: i64) -> WorkflowResult<SyncInfo> {
+        Err(WorkflowError::Unsupported)
+    }
+    fn sync_sent(&self, _: i64) -> WorkflowResult<SyncInfo> {
+        Err(WorkflowError::Unsupported)
+    }
+    fn sync_status(&self, _: i64) -> WorkflowResult<SyncInfo> {
+        Err(WorkflowError::Unsupported)
     }
 }
 impl Host for AppHost {
@@ -196,24 +403,20 @@ impl Host for AppHost {
         ))
     }
     fn send_draft(&self, id: &str) -> Result<Value, HostError> {
-        let endpoint = self
-            .smtp_test
-            .ok_or_else(|| HostError("test_transport_not_configured".into()))?;
-        let sub = {
-            let mut store = self.store.lock().map_err(host_error)?;
-            let draft = store.get_draft(numeric_id(id)?).map_err(host_error)?;
-            validate_demo(&draft.input).map_err(host_error)?;
-            store
-                .claim_send(draft.id, now().map_err(host_error)?)
+        let info = HumanWorkspace::send(self, numeric_id(id)?)
+            .map_err(|error| HostError(error.to_string()))?;
+        if info.state_recorded {
+            let sub = self
+                .store
+                .lock()
                 .map_err(host_error)?
-        };
-        let outcome = crate::transport::send_test(&sub, endpoint);
-        let mut store = self.store.lock().map_err(host_error)?;
-        match store.finish_submission(sub.id, outcome) {
-            Ok(done) => Ok(submission_view(&done)),
-            Err(_) => Ok(
-                json!({"id":sub.id,"draft_id":sub.draft_id,"state":"Uncertain","state_recorded":false,"detail":"query_persisted_submission_before_any_further_action"}),
-            ),
+                .get_submission(info.id)
+                .map_err(host_error)?;
+            Ok(submission_view(&sub))
+        } else {
+            Ok(
+                json!({"id":info.id,"draft_id":info.draft_id,"state":"Uncertain","state_recorded":false,"detail":"query_persisted_submission_before_any_further_action"}),
+            )
         }
     }
     fn send_status(&self, id: &str) -> Result<Value, HostError> {

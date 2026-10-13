@@ -11,6 +11,10 @@ use letterkeeper_accounts::{
 };
 use letterkeeper_adapters::{
     DraftInput as AdapterDraft, FolderSummary, Host, HostError, MessageSummary,
+    workspace::{
+        ApprovalInfo, DraftSummary, HumanWorkspace, ReplyMode, ReviewSnapshot, SentEvidence,
+        SubmissionInfo, SyncInfo, WorkflowError, WorkflowResult, WorkspaceCapabilities,
+    },
 };
 use letterkeeper_content::{ComposeKind, DecodedAttachment, InspectedMail, SafeDocument, compose};
 use letterkeeper_core::{
@@ -306,6 +310,240 @@ impl RemoteHost {
             Ok(done) => Ok(sync_view(&done)),
             Err(_) => Ok(json!({"id":record.id,"state":"Uncertain","state_recorded":false})),
         }
+    }
+}
+impl HumanWorkspace for RemoteHost {
+    fn capabilities(&self) -> WorkspaceCapabilities {
+        WorkspaceCapabilities {
+            account: self.config.id.clone(),
+            from: self.config.email.clone(),
+            read: self.config.permissions.read,
+            draft: self.config.permissions.draft,
+            send: self.config.permissions.send,
+        }
+    }
+    fn list_drafts(&self, offset: usize, limit: usize) -> WorkflowResult<Vec<DraftSummary>> {
+        if !self.config.permissions.read {
+            return Err(WorkflowError::Denied);
+        }
+        Ok(self
+            .store()
+            .map_err(|_| WorkflowError::Unavailable)?
+            .list_drafts(offset, limit)
+            .map_err(crate::workflow::core_error)?
+            .into_iter()
+            .map(crate::workflow::draft_summary)
+            .collect())
+    }
+    fn load_draft(&self, id: i64) -> WorkflowResult<Draft> {
+        if !self.config.permissions.read {
+            return Err(WorkflowError::Denied);
+        }
+        self.store()
+            .map_err(|_| WorkflowError::Unavailable)?
+            .get_draft(id)
+            .map_err(crate::workflow::core_error)
+    }
+    fn create(&self, input: DraftInput) -> WorkflowResult<Draft> {
+        if !self.config.permissions.draft {
+            return Err(WorkflowError::Denied);
+        }
+        validate_identity(&self.config, &input).map_err(|_| WorkflowError::Denied)?;
+        self.store()
+            .map_err(|_| WorkflowError::Unavailable)?
+            .create_draft(input)
+            .map_err(crate::workflow::core_error)
+    }
+    fn save(&self, id: i64, expected_revision: i64, input: DraftInput) -> WorkflowResult<Draft> {
+        if !self.config.permissions.draft {
+            return Err(WorkflowError::Denied);
+        }
+        validate_identity(&self.config, &input).map_err(|_| WorkflowError::Denied)?;
+        self.store()
+            .map_err(|_| WorkflowError::Unavailable)?
+            .update_draft(id, expected_revision, input)
+            .map_err(crate::workflow::core_error)
+    }
+    fn reply(
+        &self,
+        message_id: &str,
+        mode: ReplyMode,
+        body: &str,
+        to: &[String],
+    ) -> WorkflowResult<Draft> {
+        if !self.config.permissions.draft {
+            return Err(WorkflowError::Denied);
+        }
+        let mode = match mode {
+            ReplyMode::Reply => "reply",
+            ReplyMode::ReplyAll => "reply_all",
+            ReplyMode::Forward => "forward",
+        };
+        let value = Host::reply_draft(self, message_id, mode, body, to)
+            .map_err(crate::workflow::host_error)?;
+        let id = value["id"].as_i64().ok_or(WorkflowError::Unavailable)?;
+        self.load_draft(id)
+    }
+    fn add_attachment(
+        &self,
+        id: i64,
+        expected_revision: i64,
+        path: &Path,
+        content_type: &str,
+    ) -> WorkflowResult<Draft> {
+        if !self.config.permissions.draft {
+            return Err(WorkflowError::Denied);
+        }
+        let mut draft = self.load_draft(id)?;
+        validate_identity(&self.config, &draft.input).map_err(|_| WorkflowError::Denied)?;
+        if draft.revision != expected_revision {
+            return Err(WorkflowError::Conflict);
+        }
+        let attachment = crate::files::import_attachment(path, content_type)
+            .map_err(|_| WorkflowError::InvalidInput)?;
+        draft.input.attachments.push(attachment);
+        self.save(id, expected_revision, draft.input)
+    }
+    fn remove_attachment(
+        &self,
+        id: i64,
+        expected_revision: i64,
+        index: usize,
+    ) -> WorkflowResult<Draft> {
+        if !self.config.permissions.draft {
+            return Err(WorkflowError::Denied);
+        }
+        let mut draft = self.load_draft(id)?;
+        validate_identity(&self.config, &draft.input).map_err(|_| WorkflowError::Denied)?;
+        if draft.revision != expected_revision {
+            return Err(WorkflowError::Conflict);
+        }
+        if index >= draft.input.attachments.len() {
+            return Err(WorkflowError::InvalidInput);
+        }
+        draft.input.attachments.remove(index);
+        self.save(id, expected_revision, draft.input)
+    }
+    fn export_attachment(
+        &self,
+        message_id: &str,
+        part: usize,
+        directory: &Path,
+    ) -> WorkflowResult<String> {
+        if !self.config.permissions.read {
+            return Err(WorkflowError::Denied);
+        }
+        let attachment = self
+            .attachment(message_id, part)
+            .map_err(|_| WorkflowError::Unavailable)?;
+        crate::files::export_attachment(directory, &attachment.name, &attachment.bytes)
+            .map_err(|_| WorkflowError::InvalidInput)?;
+        Ok(attachment.name)
+    }
+    fn review(&self, id: i64) -> WorkflowResult<ReviewSnapshot> {
+        Ok(crate::workflow::review_snapshot(self.load_draft(id)?))
+    }
+    fn approve(
+        &self,
+        id: i64,
+        expected_digest: &str,
+        typed_digest: &str,
+    ) -> WorkflowResult<ApprovalInfo> {
+        if !self.config.permissions.send {
+            return Err(WorkflowError::Denied);
+        }
+        let mut store = self.store().map_err(|_| WorkflowError::Unavailable)?;
+        let d = store.get_draft(id).map_err(crate::workflow::core_error)?;
+        validate_identity(&self.config, &d.input).map_err(|_| WorkflowError::Denied)?;
+        crate::workflow::approve(&mut store, id, expected_digest, typed_digest)
+    }
+    fn send(&self, id: i64) -> WorkflowResult<SubmissionInfo> {
+        if !self.config.permissions.send {
+            return Err(WorkflowError::Denied);
+        }
+        let value = Host::send_draft(self, &id.to_string()).map_err(crate::workflow::host_error)?;
+        let sub_id = value["id"].as_i64().ok_or(WorkflowError::Unavailable)?;
+        if value["state_recorded"].as_bool() == Some(false) {
+            return Ok(SubmissionInfo {
+                id: sub_id,
+                draft_id: id,
+                state: SubmissionState::Uncertain,
+                state_recorded: false,
+            });
+        }
+        self.submission_status(sub_id)
+    }
+    fn list_submissions(&self, offset: usize, limit: usize) -> WorkflowResult<Vec<SubmissionInfo>> {
+        if !self.config.permissions.read {
+            return Err(WorkflowError::Denied);
+        }
+        Ok(self
+            .store()
+            .map_err(|_| WorkflowError::Unavailable)?
+            .list_submissions(offset, limit)
+            .map_err(crate::workflow::core_error)?
+            .into_iter()
+            .map(crate::workflow::submission_entry_info)
+            .collect())
+    }
+    fn submission_status(&self, id: i64) -> WorkflowResult<SubmissionInfo> {
+        if !self.config.permissions.read {
+            return Err(WorkflowError::Denied);
+        }
+        self.store()
+            .map_err(|_| WorkflowError::Unavailable)?
+            .get_submission(id)
+            .map(crate::workflow::submission_info)
+            .map_err(crate::workflow::core_error)
+    }
+    fn sent_evidence(&self, id: i64) -> WorkflowResult<SentEvidence> {
+        if !self.config.permissions.read {
+            return Err(WorkflowError::Denied);
+        }
+        let value =
+            Host::sent_evidence(self, &id.to_string()).map_err(crate::workflow::host_error)?;
+        let matching_messages = value["matches"]
+            .as_array()
+            .ok_or(WorkflowError::Unavailable)?
+            .len();
+        Ok(SentEvidence {
+            submission_id: id,
+            matching_messages,
+        })
+    }
+    fn recover_submission(&self, id: i64) -> WorkflowResult<SubmissionInfo> {
+        if !self.config.permissions.send {
+            return Err(WorkflowError::Denied);
+        }
+        self.recover_sender(id)
+            .map_err(crate::workflow::host_error)?;
+        self.submission_status(id)
+    }
+    fn sync_draft(&self, id: i64) -> WorkflowResult<SyncInfo> {
+        if !self.config.permissions.draft {
+            return Err(WorkflowError::Denied);
+        }
+        let value = Host::sync_draft(self, &id.to_string()).map_err(crate::workflow::host_error)?;
+        let record_id = value["id"].as_i64().ok_or(WorkflowError::Unavailable)?;
+        HumanWorkspace::sync_status(self, record_id)
+    }
+    fn sync_sent(&self, id: i64) -> WorkflowResult<SyncInfo> {
+        if !self.config.permissions.send {
+            return Err(WorkflowError::Denied);
+        }
+        let value = Host::sync_sent(self, &id.to_string()).map_err(crate::workflow::host_error)?;
+        let record_id = value["id"].as_i64().ok_or(WorkflowError::Unavailable)?;
+        HumanWorkspace::sync_status(self, record_id)
+    }
+    fn sync_status(&self, id: i64) -> WorkflowResult<SyncInfo> {
+        if !self.config.permissions.read {
+            return Err(WorkflowError::Denied);
+        }
+        self.store()
+            .map_err(|_| WorkflowError::Unavailable)?
+            .get_sync(id)
+            .map(crate::workflow::sync_info)
+            .map_err(crate::workflow::core_error)
     }
 }
 impl Host for RemoteHost {

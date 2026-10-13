@@ -180,7 +180,7 @@ fn benchmark_draft(account: &str, from: &str, body_bytes: usize) -> DraftInput {
         cc: vec![],
         bcc: vec![],
         subject: "Benchmark editor".into(),
-        body: "x".repeat(body_bytes.min(1024 * 1024)),
+        body: "x".repeat(body_bytes.min(1024 * 1024 - 20)),
         attachments: vec![],
         in_reply_to: None,
         references: vec![],

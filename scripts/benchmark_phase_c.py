@@ -90,7 +90,7 @@ def run(binary, count, body_bytes, mode):
     proc = subprocess.Popen([str(binary), "--exact", test_name, "--nocapture"],
                             stdin=slave, stdout=slave, stderr=slave, env=env, start_new_session=True)
     try:
-        await_marker(master, b"Synthetic subject" if mode == "tls_imap" else b"LetterKeeper", timeout=90)
+        await_marker(master, b"Synthetic subject", timeout=90)
         startup = (time.perf_counter() - start) * 1000
         samples = []
         for _ in range(20):
@@ -107,17 +107,19 @@ def run(binary, count, body_bytes, mode):
         read_ms = await_marker(master, b"xxxx" if mode == "tls_imap" else b"mail-0", timeout=90)
         drain(master)
         os.write(master, b"\x1b")
-        await_marker(master, b"Synthetic subject", timeout=15)
+        await_marker(master, "已返回".encode(), timeout=15)
         drain(master)
         os.write(master, b"d")
         await_marker(master, b"Benchmark editor", timeout=15)
         drain(master)
         os.write(master, b"\r")
         await_marker(master, b"Ctrl+S", timeout=15)
-        for _ in range(4):
-            drain(master)
+        for _ in range(3):
             os.write(master, b"\t")
-            await_marker(master, b"Body", timeout=15)
+            time.sleep(0.05)
+            drain(master)
+        os.write(master, b"\t")
+        await_marker(master, b"Body", timeout=15)
         editor_samples = []
         for char in b"ABCDEFGHIJKLMNOPQRST":
             drain(master)
@@ -125,6 +127,11 @@ def run(binary, count, body_bytes, mode):
             os.write(master, bytes([char]))
             await_marker(master, bytes([char]), timeout=15)
             editor_samples.append((time.perf_counter() - before) * 1000)
+        boundary_reject_ms = None
+        if body_bytes >= 1024 * 1024:
+            drain(master)
+            os.write(master, b"U")
+            boundary_reject_ms = await_marker(master, "编辑字段超过限制".encode(), timeout=15)
         peak_rss, peak_pss, _ = usage(proc.pid)
         idle_start = time.perf_counter()
         cpu_start = usage(proc.pid)[2]
@@ -144,8 +151,9 @@ def run(binary, count, body_bytes, mode):
         editor_ordered = sorted(editor_samples)
         return {"mode": mode, "mailbox_count": count, "fixture_bytes": body_bytes,
                 "startup_warm_ms": round(startup, 2), "help_input_p95_ms": round(ordered[18], 2),
-                "editor_body_bytes": min(body_bytes, 1024 * 1024),
+                "editor_initial_body_bytes": min(body_bytes, 1024 * 1024 - 20),
                 "editor_redraw_p95_ms": round(editor_ordered[18], 2),
+                "editor_boundary_reject_ms": round(boundary_reject_ms, 2) if boundary_reject_ms is not None else None,
                 "read_render_ms": round(read_ms, 2), "tree_peak_rss_kib_sampled": peak_rss,
                 "tree_peak_pss_kib_sampled": peak_pss,
                 "idle_cpu_percent_one_core": round(100 * (cpu_end - cpu_start) / hz / idle_elapsed, 3),

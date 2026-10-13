@@ -97,7 +97,7 @@ def run(binary, count, body_bytes, mode):
             drain(master)
             before = time.perf_counter()
             os.write(master, b"?")
-            await_marker(master, "选择".encode())
+            await_marker(master, "禁止自动链接".encode())
             samples.append((time.perf_counter() - before) * 1000)
             drain(master)
             os.write(master, b"?")

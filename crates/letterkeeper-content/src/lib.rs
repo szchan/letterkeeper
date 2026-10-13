@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Resource-free parsing. Production entry points must use the isolated worker.
 use serde::{Deserialize, Serialize};
+mod composition;
+pub use composition::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SafeDocument {
@@ -57,6 +59,18 @@ pub enum ContentError {
     HtmlDepthExceeded,
     #[error("limits must be positive")]
     InvalidLimits,
+    #[error("invalid reply metadata")]
+    InvalidMetadata,
+    #[error("invalid recipient")]
+    InvalidRecipient,
+    #[error("attachment not found")]
+    AttachmentNotFound,
+    #[error("decoded attachment exceeds limit")]
+    AttachmentTooLarge,
+    #[error("attachment decoding failed")]
+    AttachmentDecodeFailed,
+    #[error("draft exceeds limit")]
+    DraftTooLarge,
 }
 
 use html5ever::{parse_document, tendril::TendrilSink};

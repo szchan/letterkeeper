@@ -5,6 +5,7 @@ import fcntl
 import json
 import os
 from pathlib import Path
+import re
 import select
 import signal
 import struct
@@ -28,7 +29,8 @@ def receive(proc, master, marker, timeout=8):
                 data.extend(os.read(master, 65536))
             except OSError:
                 break
-        if marker in data:
+        plain = re.sub(rb"\x1b\[[0-?]*[ -/]*[@-~]", b"", data)
+        if b"".join(marker.split()) in b"".join(plain.split()):
             return bytes(data)
         if proc.poll() is not None:
             break

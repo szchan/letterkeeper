@@ -369,6 +369,7 @@ impl Drop for Child {
 }
 fn recv(master: &mut File, marker: &str) -> Vec<u8> {
     let mut output = Vec::new();
+    let marker = compact(marker.as_bytes());
     let mut buf = [0u8; 8192];
     let until = Instant::now() + Duration::from_secs(8);
     while Instant::now() < until {
@@ -377,7 +378,7 @@ fn recv(master: &mut File, marker: &str) -> Vec<u8> {
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => (),
             _ => (),
         }
-        if String::from_utf8_lossy(&output).contains(marker) {
+        if plain(&output).windows(marker.len()).any(|w| w == marker) {
             return output;
         }
         assert!(
@@ -390,6 +391,32 @@ fn recv(master: &mut File, marker: &str) -> Vec<u8> {
         "PTY missing marker {marker:?}; captured {} bytes",
         output.len()
     );
+}
+fn compact(data: &[u8]) -> Vec<u8> {
+    data.iter()
+        .copied()
+        .filter(|b| !b.is_ascii_whitespace())
+        .collect()
+}
+fn plain(data: &[u8]) -> Vec<u8> {
+    let mut result = Vec::new();
+    let mut i = 0;
+    while i < data.len() {
+        if data[i] == 0x1b && data.get(i + 1) == Some(&b'[') {
+            i += 2;
+            while i < data.len() {
+                let b = data[i];
+                i += 1;
+                if (0x40..=0x7e).contains(&b) {
+                    break;
+                }
+            }
+        } else {
+            result.push(data[i]);
+            i += 1;
+        }
+    }
+    compact(&result)
 }
 fn size(slave: &File, width: u16, height: u16) {
     let winsize = libc::winsize {

@@ -10,6 +10,7 @@ import fcntl
 import json
 import os
 from pathlib import Path
+import re
 import select
 import signal
 import struct
@@ -69,7 +70,8 @@ def await_marker(fd, marker, timeout=15):
     while time.perf_counter() - start < timeout:
         if select.select([fd], [], [], 0.01)[0]:
             data += drain(fd)
-        if marker in data:
+        plain = re.sub(rb"\x1b\[[0-?]*[ -/]*[@-~]", b"", data)
+        if b"".join(marker.split()) in b"".join(plain.split()):
             return (time.perf_counter() - start) * 1000
         assert len(data) < 2 * 1024 * 1024, "terminal output grew without bound"
     raise AssertionError(f"no marker {marker!r}; captured={data[-500:]!r}")
@@ -88,9 +90,7 @@ def run(binary, count, body_bytes, mode):
     proc = subprocess.Popen([str(binary), "--exact", test_name, "--nocapture"],
                             stdin=slave, stdout=slave, stderr=slave, env=env, start_new_session=True)
     try:
-        await_marker(master, b"LetterKeeper")
-        if mode == "tls_imap":
-            await_marker(master, b"Synthetic subject", timeout=90)
+        await_marker(master, b"Synthetic subject" if mode == "tls_imap" else b"LetterKeeper", timeout=90)
         startup = (time.perf_counter() - start) * 1000
         samples = []
         for _ in range(20):

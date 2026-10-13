@@ -32,8 +32,8 @@ fn input() -> DraftInput {
         subject: "合成邮件".into(),
         body: "纯文本\n正文".into(),
         attachments: vec![],
-            in_reply_to: None,
-            references: vec![],
+        in_reply_to: None,
+        references: vec![],
     }
 }
 #[test]
@@ -283,7 +283,7 @@ fn private_paths_and_schema_versions_fail_closed() {
         assert!(Store::open(&path).is_err());
         std::fs::remove_file(linked).unwrap();
         let conn = rusqlite::Connection::open(&path).unwrap();
-        conn.pragma_update(None, "user_version", 2).unwrap();
+        conn.pragma_update(None, "user_version", 3).unwrap();
         drop(conn);
         assert!(matches!(Store::open(&path), Err(Error::SchemaVersion)));
         std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o755)).unwrap();

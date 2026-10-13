@@ -78,6 +78,8 @@ pub struct SyncRecord {
     pub folder: String,
     pub message_id: String,
     pub state: SyncState,
+    pub digest: String,
+    pub input: DraftInput,
 }
 #[derive(Clone, Copy, Debug)]
 pub struct Permissions {
@@ -186,8 +188,12 @@ impl Store {
                     CREATE TABLE submissions(id INTEGER PRIMARY KEY AUTOINCREMENT, draft_id INTEGER NOT NULL REFERENCES drafts(id), revision INTEGER NOT NULL, digest TEXT NOT NULL, message_id TEXT NOT NULL UNIQUE, content TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('submitting','accepted','failed','uncertain')));
                     CREATE INDEX submission_draft ON submissions(draft_id); PRAGMA user_version=1;")?;
             }
-            1 => {}
+            1 | 2 => {}
             _ => return Err(Error::SchemaVersion),
+        }
+        if version < 2 {
+            tx.execute_batch("CREATE TABLE sync_records(id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL CHECK(kind IN ('draft','sent')), local_id INTEGER NOT NULL, revision INTEGER NOT NULL, folder TEXT NOT NULL, message_id TEXT NOT NULL, digest TEXT NOT NULL, content TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('pending','confirmed','failed','uncertain')), UNIQUE(kind,local_id,revision));
+                CREATE TABLE submission_wire(submission_id INTEGER PRIMARY KEY REFERENCES submissions(id), wire BLOB NOT NULL); PRAGMA user_version=2;")?;
         }
         tx.commit()?;
         Ok(Self {
@@ -348,18 +354,183 @@ impl Store {
     pub fn recover_interrupted(&mut self, id: i64) -> Result<Submission> {
         self.finish_submission(id, SendOutcome::Uncertain)
     }
-    pub fn claim_draft_sync(&mut self, _id: i64, _folder: &str) -> Result<SyncRecord> {
-        Err(Error::Storage)
+    pub fn claim_draft_sync(&mut self, id: i64, folder: &str) -> Result<SyncRecord> {
+        validate_folder(folder)?;
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let d = load_draft(&tx, id)?;
+        self.policy.check(&d.input.account, Operation::Draft)?;
+        require_editable(&tx, id)?;
+        let nonce: String = tx.query_row("SELECT lower(hex(randomblob(16)))", [], |r| r.get(0))?;
+        let message_id = format!("<draft-{nonce}@letterkeeper.invalid>");
+        let record = insert_sync(
+            &tx,
+            SyncKind::Draft,
+            id,
+            d.revision,
+            folder,
+            &message_id,
+            &d.digest,
+            &d.input,
+        )?;
+        tx.commit()?;
+        Ok(record)
     }
-    pub fn claim_sent_sync(&mut self, _id: i64, _folder: &str) -> Result<SyncRecord> {
-        Err(Error::Storage)
+    pub fn claim_sent_sync(&mut self, id: i64, folder: &str) -> Result<SyncRecord> {
+        validate_folder(folder)?;
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let sub = load_submission(&tx, id)?;
+        self.policy.check(&sub.input.account, Operation::Send)?;
+        if sub.state != SubmissionState::Accepted {
+            return Err(Error::InvalidState);
+        }
+        let record = insert_sync(
+            &tx,
+            SyncKind::Sent,
+            id,
+            sub.revision,
+            folder,
+            &sub.message_id,
+            &sub.digest,
+            &sub.input,
+        )?;
+        tx.commit()?;
+        Ok(record)
     }
-    pub fn finish_sync(&mut self, _id: i64, _outcome: SendOutcome) -> Result<SyncRecord> {
-        Err(Error::Storage)
+    pub fn finish_sync(&mut self, id: i64, outcome: SendOutcome) -> Result<SyncRecord> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let record = load_sync(&tx, id)?;
+        self.policy.check(
+            &record.account,
+            match record.kind {
+                SyncKind::Draft => Operation::Draft,
+                SyncKind::Sent => Operation::Send,
+            },
+        )?;
+        if record.state != SyncState::Pending {
+            return Err(Error::InvalidState);
+        }
+        let state = match outcome {
+            SendOutcome::Accepted => "confirmed",
+            SendOutcome::Failed => "failed",
+            SendOutcome::Uncertain => "uncertain",
+        };
+        tx.execute(
+            "UPDATE sync_records SET state=?1 WHERE id=?2 AND state='pending'",
+            params![state, id],
+        )?;
+        let record = load_sync(&tx, id)?;
+        tx.commit()?;
+        Ok(record)
     }
-    pub fn get_sync(&self, _id: i64) -> Result<SyncRecord> {
-        Err(Error::Storage)
+    pub fn get_sync(&self, id: i64) -> Result<SyncRecord> {
+        let record = load_sync(&self.conn, id)?;
+        self.policy.check(&record.account, Operation::Read)?;
+        Ok(record)
     }
+    pub fn record_submission_wire(&mut self, id: i64, wire: &[u8]) -> Result<()> {
+        if wire.is_empty() || wire.len() > 16 * 1024 * 1024 {
+            return Err(Error::InvalidInput);
+        }
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let sub = load_submission(&tx, id)?;
+        self.policy.check(&sub.input.account, Operation::Send)?;
+        if sub.state != SubmissionState::Submitting {
+            return Err(Error::InvalidState);
+        }
+        let exists: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM submission_wire WHERE submission_id=?1)",
+            [id],
+            |r| r.get(0),
+        )?;
+        if exists {
+            return Err(Error::InvalidState);
+        }
+        tx.execute(
+            "INSERT INTO submission_wire(submission_id,wire) VALUES(?1,?2)",
+            params![id, wire],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+    pub fn submission_wire(&self, id: i64) -> Result<Vec<u8>> {
+        let sub = load_submission(&self.conn, id)?;
+        self.policy.check(&sub.input.account, Operation::Read)?;
+        self.conn
+            .query_row(
+                "SELECT wire FROM submission_wire WHERE submission_id=?1",
+                [id],
+                |r| r.get(0),
+            )
+            .optional()?
+            .ok_or(Error::NotFound)
+    }
+}
+fn validate_folder(folder: &str) -> Result<()> {
+    if folder.is_empty() || !header(folder, 512) {
+        Err(Error::InvalidInput)
+    } else {
+        Ok(())
+    }
+}
+#[allow(clippy::too_many_arguments)]
+fn insert_sync(
+    conn: &Connection,
+    kind: SyncKind,
+    id: i64,
+    revision: i64,
+    folder: &str,
+    message_id: &str,
+    digest: &str,
+    input: &DraftInput,
+) -> Result<SyncRecord> {
+    let kind = match kind {
+        SyncKind::Draft => "draft",
+        SyncKind::Sent => "sent",
+    };
+    let exists: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM sync_records WHERE kind=?1 AND local_id=?2 AND revision=?3)",
+        params![kind, id, revision],
+        |r| r.get(0),
+    )?;
+    if exists {
+        return Err(Error::InvalidState);
+    }
+    conn.execute("INSERT INTO sync_records(kind,local_id,revision,folder,message_id,digest,content,state) VALUES(?1,?2,?3,?4,?5,?6,?7,'pending')",params![kind,id,revision,folder,message_id,digest,serde_json::to_string(input)?])?;
+    load_sync(conn, conn.last_insert_rowid())
+}
+fn load_sync(conn: &Connection, id: i64) -> Result<SyncRecord> {
+    let row = conn.query_row("SELECT kind,local_id,revision,folder,message_id,digest,content,state FROM sync_records WHERE id=?1",[id], |r| Ok((r.get::<_,String>(0)?,r.get::<_,i64>(1)?,r.get::<_,i64>(2)?,r.get::<_,String>(3)?,r.get::<_,String>(4)?,r.get::<_,String>(5)?,r.get::<_,String>(6)?,r.get::<_,String>(7)?))).optional()?.ok_or(Error::NotFound)?;
+    let input: DraftInput = serde_json::from_str(&row.6)?;
+    Ok(SyncRecord {
+        id,
+        kind: match row.0.as_str() {
+            "draft" => SyncKind::Draft,
+            "sent" => SyncKind::Sent,
+            _ => return Err(Error::Storage),
+        },
+        local_id: row.1,
+        revision: row.2,
+        folder: row.3,
+        message_id: row.4,
+        digest: row.5,
+        account: input.account.clone(),
+        input,
+        state: match row.7.as_str() {
+            "pending" => SyncState::Pending,
+            "confirmed" => SyncState::Confirmed,
+            "failed" => SyncState::Failed,
+            "uncertain" => SyncState::Uncertain,
+            _ => return Err(Error::Storage),
+        },
+    })
 }
 fn require_editable(conn: &Connection, id: i64) -> Result<()> {
     let blocked: bool = conn.query_row(
@@ -484,6 +655,12 @@ fn validate(input: &DraftInput) -> Result<()> {
             .chars()
             .any(|c| dangerous(c) && c != '\n' && c != '\t')
         || input.attachments.len() > 16
+        || input
+            .in_reply_to
+            .as_deref()
+            .is_some_and(|id| !message_id(id))
+        || input.references.len() > 32
+        || !input.references.iter().all(|id| message_id(id))
     {
         return Err(Error::InvalidInput);
     }
@@ -511,6 +688,13 @@ fn validate(input: &DraftInput) -> Result<()> {
         }
     }
     Ok(())
+}
+fn message_id(value: &str) -> bool {
+    value.len() <= 256
+        && value
+            .strip_prefix('<')
+            .and_then(|v| v.strip_suffix('>'))
+            .is_some_and(address)
 }
 #[cfg(unix)]
 fn private_path(path: &Path) -> Result<()> {

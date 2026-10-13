@@ -95,11 +95,32 @@ fn addresses(value: Option<&Address<'_>>) -> Result<Vec<String>, ContentError> {
     }
     Ok(result)
 }
+// RFC 5322 section 3.6.4: msg-ids are opaque identifiers, not SMTP
+// mailboxes. Keep a bounded modern syntax subset without DNS/local-part limits.
 fn valid_id(value: &str) -> bool {
-    value.len() <= 256
-        && value.starts_with('<')
-        && value.ends_with('>')
-        && mailbox(&value[1..value.len() - 1])
+    if value.len() > 256 || !value.is_ascii() {
+        return false;
+    }
+    let Some(inner) = value.strip_prefix('<').and_then(|v| v.strip_suffix('>')) else {
+        return false;
+    };
+    let Some((left, right)) = inner.split_once('@') else {
+        return false;
+    };
+    let dot_atom = |atom: &str| {
+        !atom.is_empty()
+            && atom.split('.').all(|segment| {
+                !segment.is_empty()
+                    && segment.bytes().all(|byte| {
+                        byte.is_ascii_alphanumeric() || b"!#$%&'*+-/=?^_`{|}~".contains(&byte)
+                    })
+            })
+    };
+    let literal = right
+        .strip_prefix('[')
+        .and_then(|v| v.strip_suffix(']'))
+        .is_some_and(|text| text.bytes().all(|byte| matches!(byte, 33..=90 | 94..=126)));
+    dot_atom(left) && (dot_atom(right) || literal)
 }
 fn bound_references(ids: &mut Vec<String>) {
     if ids.len() > 32 {

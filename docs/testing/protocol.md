@@ -21,3 +21,7 @@ Bounds: 15 s whole operation including connection/TLS/authentication; 8 MiB sess
 Dependencies: async-imap 0.12.0, tokio-rustls 0.26.6, rustls 0.23.45, lettre 0.11.23, rcgen 0.14.10; licenses and choice rationale in ADR 0002. Maintained upstream APIs and source were reviewed; no vendored protocol or cryptography implementation.
 
 Limitations: implicit TLS only; real providers and STARTTLS unverified. Blocking APIs reject calls from an active Tokio runtime; use spawn_blocking. SEARCH scans bounded server response then returns a page (no cache/snapshot across concurrent mailbox changes). Credentials are in-memory and redacted, not a credential store. This crate transports raw bytes; it does not parse/render mail bodies, authorize sends or automatically reconcile uncertainty.
+
+## Recovery/refusal regression RED
+
+Expanded TLS tests revealed two behavioral failures: UID SEARCH HEADER alone returned all three substring candidates rather than the one exact Message-ID; APPEND tagged NO after literal submission was conservatively Uncertain although the server explicitly refused. `cargo test -p letterkeeper-protocol --offline`: 14 passed, 2 failed, including a real 15 s authentication deadline. New controls cover explicit Seen, exact 2 MiB body acceptance, header declaration overflow, SMTP CA/hostname failure and compile-time TRACE suppression even with a capturing Trace logger.

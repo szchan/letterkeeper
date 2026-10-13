@@ -6,6 +6,12 @@ use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 #[derive(Clone, Copy)]
 pub enum Scenario {
     Imap,
+    Recovery,
+    MaxBody,
+    HugeHeader,
+    Stall,
+    AppendFinalReject,
+    SmtpFinalReject,
     HugeLiteral,
     AuthReject,
     AppendDisconnect,
@@ -65,7 +71,10 @@ impl Server {
                 let mut io = BufReader::new(tls);
                 let smtp = matches!(
                     scenario,
-                    Scenario::Smtp | Scenario::SmtpReject | Scenario::SmtpDisconnect
+                    Scenario::Smtp
+                        | Scenario::SmtpReject
+                        | Scenario::SmtpDisconnect
+                        | Scenario::SmtpFinalReject
                 );
                 io.get_mut()
                     .write_all(if smtp {
@@ -131,6 +140,10 @@ async fn imap_reply(
     observed: &Arc<Mutex<Vec<String>>>,
 ) -> bool {
     let (tag, cmd) = line.trim_end().split_once(' ').unwrap();
+    if matches!(scenario, Scenario::Stall) {
+        tokio::time::sleep(std::time::Duration::from_millis(16000)).await;
+        return false;
+    }
     let reply = if cmd.starts_with("LOGIN") {
         format!("{tag} OK login\r\n")
     } else if cmd.starts_with("AUTHENTICATE") {
@@ -146,7 +159,30 @@ async fn imap_reply(
     } else if cmd.starts_with("UID SEARCH") {
         format!("* SEARCH 11 12 13\r\n{tag} OK search\r\n")
     } else if cmd.starts_with("UID FETCH") {
-        if matches!(scenario, Scenario::HugeLiteral) {
+        if matches!(scenario, Scenario::Recovery) && cmd.contains("HEADER.FIELDS") {
+            let mut reply = String::new();
+            for (uid, id) in [
+                (11, "<sent@example.test>"),
+                (12, "<other@example.test>"),
+                (13, "<sent@example.test> extra"),
+            ] {
+                let header = format!("Message-ID: {id}\r\n\r\n");
+                reply.push_str(&format!(
+                    "* 1 FETCH (UID {uid} BODY[HEADER.FIELDS (MESSAGE-ID)] {{{}}}\r\n{header})\r\n",
+                    header.len()
+                ));
+            }
+            reply.push_str(&format!("{tag} OK fetch\r\n"));
+            reply
+        } else if matches!(scenario, Scenario::HugeHeader) {
+            "* 1 FETCH (UID 11 BODY[HEADER] {65537}\r\n".to_string()
+        } else if matches!(scenario, Scenario::MaxBody) {
+            let body = "x".repeat(2 * 1024 * 1024);
+            format!(
+                "* 1 FETCH (UID 11 BODY[] {{{}}}\r\n{body})\r\n{tag} OK fetch\r\n",
+                body.len()
+            )
+        } else if matches!(scenario, Scenario::HugeLiteral) {
             "* 1 FETCH (UID 11 BODY[] {999999999}\r\n".to_string()
         } else if cmd.contains("HEADER.FIELDS") {
             let header = "From: person@example.test\r\nSubject: synthetic\r\n\r\n";
@@ -182,7 +218,11 @@ async fn imap_reply(
             if matches!(scenario, Scenario::AppendDisconnect) {
                 return false;
             }
-            format!("{tag} OK append\r\n")
+            if matches!(scenario, Scenario::AppendFinalReject) {
+                format!("{tag} NO rejected\r\n")
+            } else {
+                format!("{tag} OK append\r\n")
+            }
         }
     } else if cmd.starts_with("UID STORE") {
         format!("{tag} OK store\r\n")
@@ -232,7 +272,11 @@ async fn smtp_reply(
         if matches!(scenario, Scenario::SmtpDisconnect) {
             return false;
         }
-        "250 accepted\r\n"
+        if matches!(scenario, Scenario::SmtpFinalReject) {
+            "550 final refusal\r\n"
+        } else {
+            "250 accepted\r\n"
+        }
     } else if line.starts_with("QUIT") {
         let _ = io.get_mut().write_all(b"221 bye\r\n").await;
         return false;

@@ -25,3 +25,5 @@ OAuth RED：`cargo test --offline -p letterkeeper-accounts --test oauth`，exit 
 - 没有更改 README/STATUS，也不声称全部 AUTH/P0 或真实邮箱闭环已完成；集成代理负责跨文档状态同步。
 
 最终硬化 RED：callback length 断言真实 exit 101（43 != 44），以及 `private_permissions_reject_special_bits_and_changed_parent_modes` 真实 exit 101（04600 被错误接受）。修复响应长度取 body.len()，精确比较 07777 模式，并在每次 load/save/list 验证配置和数据目录 fd 权限。最终 GREEN 为 8+10 测试及 Clippy；没有跳过失败项。
+
+协调目录 RED：`cargo test --offline -p letterkeeper-accounts --test coordination` 真实 exit 101，CredentialStore/SystemCredentialStore 缺少 coordination_directory（编译 RED）。测试要求 fake 默认 None、真实后端只返回固定 /run/user/{euid} 账户目录且不写文件，HOME/XDG/config/data 覆盖不改变 vault 账户锁位置。

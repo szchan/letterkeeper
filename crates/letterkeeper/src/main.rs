@@ -384,7 +384,11 @@ fn run(cli: Cli) -> Result<(), String> {
             } else {
                 let host = Arc::new(AppHost::open(
                     &cli.state_dir,
-                    documents(&mail)?,
+                    if mail.is_empty() {
+                        vec![]
+                    } else {
+                        documents(&mail)?
+                    },
                     read_only,
                     smtp_test,
                 )?);

@@ -44,8 +44,10 @@ fn draft_only_tui_starts_without_eml_input() {
     };
     let temp = tempfile::tempdir().unwrap();
     let state = temp.path().join("private");
-    let fixture =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/draft.json").canonicalize().unwrap();
+    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/draft.json")
+        .canonicalize()
+        .unwrap();
     let created = Command::new(env!("CARGO_BIN_EXE_letterkeeper"))
         .arg("--state-dir")
         .arg(&state)

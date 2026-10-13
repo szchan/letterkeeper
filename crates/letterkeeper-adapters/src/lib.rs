@@ -17,6 +17,7 @@ use ratatui::{
 use rmcp::{RoleServer, ServerHandler, ServiceExt, model::*, service::RequestContext};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+pub mod workspace;
 use std::{io, sync::Arc};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MessageSummary {

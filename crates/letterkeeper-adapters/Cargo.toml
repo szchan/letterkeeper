@@ -8,6 +8,8 @@ rust-version.workspace = true
 
 [dependencies]
 letterkeeper-content.workspace = true
+letterkeeper-core.workspace = true
+tui-textarea = { version = "=0.7.0", default-features = false, features = ["crossterm"] }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

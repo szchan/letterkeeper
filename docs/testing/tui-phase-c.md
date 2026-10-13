@@ -15,3 +15,5 @@ TDD RED：`cargo test -p letterkeeper-adapters --test phase_c --offline`，新�
 终端 guard 在 raw mode 成功后立即安装，alternate screen及 bracketed paste失败也由RAII恢复。Crossterm 0.28.1 Unix `TERMINAL_MODE_PRIOR_RAW_MODE` 保留原Termios，disable_raw_mode恢复整个状态。完整审阅以可逆 `\\` 和 `\u{xxxx}` 转义，不使用有损 inert_text，不截断正文；按显示宽度重排并缓存，仅尺寸变化重排。读取视图继续使用保守正文输出。
 
 追加行为RED：`cargo test -p letterkeeper-adapters --test phase_c --offline`，两个测试失败（重新加载覆盖在途新编辑；只读加载草稿仍可本地修改），提交 `62a2532`。修复后14项GREEN；reload期间新输入保留并返回冲突决策，只读编辑器禁止文本/保存/附件。后台轮询返回是否状态变化，TUI仅初次/事件/响应重绘，空闲不再每20ms绘制。内部通道将大请求/响应box化，保持有界队列。
+
+最终适配层验证：`cargo test -p letterkeeper-adapters --offline` 共36项通过（13既有adapter、9阶段B、14阶段C）；`cargo clippy -p letterkeeper-adapters --all-targets --offline -- -D warnings` 和 `cargo fmt --all -- --check` 通过。未修改/提交 Cargo.lock 或 manifest；集成分支负责统一依赖锁与真实PTY/性能/下游验证。TextArea历史最多20次，键编辑为保证超过限额时原子回滚暂保留快照clone；32KiB/1MiB真实输入延迟和进程树内存由集成分支测量，未提前声称性能验收达标。

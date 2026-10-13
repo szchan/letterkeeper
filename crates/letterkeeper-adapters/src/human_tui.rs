@@ -609,10 +609,10 @@ impl WorkspaceState {
                         if let Some(e) = &mut self.editor {
                             e.focus = (e.focus + 1) % 5;
                         }
-                    } else if key.code == KeyCode::BackTab {
-                        if let Some(e) = &mut self.editor {
-                            e.focus = (e.focus + 4) % 5;
-                        }
+                    } else if key.code == KeyCode::BackTab
+                        && let Some(e) = &mut self.editor
+                    {
+                        e.focus = (e.focus + 4) % 5;
                     }
                 }
                 self.status = "只读草稿；禁止编辑或附件路径操作".into();

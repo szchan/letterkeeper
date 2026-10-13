@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Conservative text adapters. Host policy is fixed outside MCP.
 mod browser;
+mod human_tui;
 pub use browser::*;
 use crossterm::{
-    event::{self, Event, KeyCode},
+    event::{self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
+pub use human_tui::*;
 use letterkeeper_content::SafeDocument;
 use ratatui::{
     Frame,
@@ -258,17 +260,23 @@ pub fn render(
     );
 }
 struct TerminalGuard;
+impl TerminalGuard {
+    fn enter() -> io::Result<Self> {
+        enable_raw_mode()?;
+        let guard = Self;
+        execute!(io::stdout(), EnterAlternateScreen, EnableBracketedPaste)?;
+        Ok(guard)
+    }
+}
 impl Drop for TerminalGuard {
     fn drop(&mut self) {
         let _ = disable_raw_mode();
-        let _ = execute!(io::stdout(), LeaveAlternateScreen);
+        let _ = execute!(io::stdout(), DisableBracketedPaste, LeaveAlternateScreen);
     }
 }
 pub fn run_tui(host: Arc<dyn Host>) -> io::Result<()> {
     let mut browser = BrowserWorker::new(host);
-    enable_raw_mode()?;
-    let _guard = TerminalGuard;
-    execute!(io::stdout(), EnterAlternateScreen)?;
+    let _guard = TerminalGuard::enter()?;
     let mut terminal =
         ratatui::Terminal::new(ratatui::backend::CrosstermBackend::new(io::stdout()))?;
     let mut state = BrowserState::default();

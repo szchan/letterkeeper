@@ -12,4 +12,10 @@
 
 ## 账户 CLI RED
 
-`cargo test --offline -p letterkeeper --test account_cli`：初始 1 通过/1 失败，失败为尚无 config-dir/账户命令。发现命令帮助断言只检查子串会把描述中的 account/mail 当成命令，改为检查独立命令行；再次 RED 待记录。测试不调用真实系统凭据库，密码/批准管道必须拒绝。
+`cargo test --offline -p letterkeeper --test account_cli`：初始 1 通过/1 失败，失败为尚无 config-dir/账户命令。发现命令帮助断言只检查子串会把描述中的 account/mail 当成命令，改为检查独立命令行；再次 RED 为 2 项全部失败。测试不调用真实系统凭据库，密码/批准管道必须拒绝。
+
+## 审查与跨模块回归 RED
+
+Sent 文件夹范围测试去掉检查后实际失败（凭据获取 1 次而非 0 次），随后恢复检查。凭据缺失时草稿同步错误地返回 Failed 并永久认领版本，新增 `missing_credentials_do_not_consume_a_draft_sync_revision` 实际断言失败；修复将在 APPEND 认领前完成凭据/CA 本地预检，不联网。
+
+MCP `spawn_blocking` 与协议同步桥接不兼容由实际 TLS 集成暴露，在 protocol 模块补 RED/GREEN。部分初始测试把自身 worker fixture 的身份套用到共享协议 fixture，核对后改为后者真实的 Reply-To 和 Message-ID；没有改动应用输出去迎合错误身份。

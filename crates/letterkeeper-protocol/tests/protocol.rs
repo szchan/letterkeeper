@@ -260,16 +260,11 @@ fn smtp_certificates_fail_before_auth_and_payload() {
 }
 #[tokio::test]
 async fn blocking_api_inside_runtime_uses_safe_bridge_without_panicking() {
-    let c = ImapClient::new(
-        Endpoint {
-            host: "localhost".into(),
-            port: 1,
-        },
-        TlsOptions::default(),
-        Server::credentials(),
-    );
-    assert_eq!(c.list_folders().unwrap_err(), ProtocolError::Connection);
+    let server = Server::start(Scenario::Imap);
+    assert_eq!(client(&server).list_folders().unwrap()[0].name, "INBOX");
+    server.finish();
 }
+
 #[test]
 fn command_deadline_covers_authentication() {
     let server = Server::start(Scenario::Stall);

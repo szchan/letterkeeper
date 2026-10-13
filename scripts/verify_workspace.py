@@ -38,6 +38,22 @@ def receive(proc, master, marker, timeout=8):
     raise AssertionError(f"missing {marker!r}, exit={proc.poll()}, tail={data[-600:]!r}")
 
 
+def wait_exit(proc, master, timeout=5):
+    """Keep the PTY readable while the final redraw and terminal reset finish."""
+    until = time.monotonic() + timeout
+    captured = 0
+    while time.monotonic() < until:
+        if proc.poll() is not None:
+            return proc.returncode
+        if select.select([master], [], [], 0.05)[0]:
+            try:
+                captured += len(os.read(master, 65536))
+            except OSError:
+                pass
+        assert captured < 2 * 1024 * 1024, "unbounded terminal output on exit"
+    raise AssertionError(f"terminal did not exit after q; status={proc.poll()}")
+
+
 def run_size(width, height):
     with tempfile.TemporaryDirectory(prefix="letterkeeper-workspace-") as temp:
         master, slave = os.openpty()
@@ -60,7 +76,7 @@ def run_size(width, height):
             receive(proc, master, "未保存".encode())
             os.write(master, b"d")
             os.write(master, b"q")
-            assert proc.wait(timeout=5) == 0
+            assert wait_exit(proc, master) == 0
             assert termios.tcgetattr(slave) == before, "termios was not restored"
         finally:
             if proc.poll() is None:

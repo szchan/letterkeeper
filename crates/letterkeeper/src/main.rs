@@ -45,6 +45,11 @@ enum Action {
     Tui {
         #[arg(long)]
         mail: Vec<PathBuf>,
+        #[arg(long)]
+        read_only: bool,
+        /// Explicit loopback SMTP for synthetic offline identities only.
+        #[arg(long)]
+        smtp_test: Option<SocketAddr>,
     },
     /// Serve the startup-selected account through local MCP stdio.
     Mcp {
@@ -351,21 +356,42 @@ fn run(cli: Cli) -> Result<(), String> {
             repository(cli.config_dir.as_deref(), cli.data_dir.as_deref())?,
             command,
         ),
-        Action::Tui { mail } => {
-            let host: Arc<dyn Host> = if account.is_some() {
-                if !mail.is_empty() {
-                    return Err("cannot_mix_account_and_local_mail".into());
+        Action::Tui {
+            mail,
+            read_only,
+            smtp_test,
+        } => {
+            terminal_required()?;
+            let (host, workspace): (
+                Arc<dyn Host>,
+                Arc<dyn letterkeeper_adapters::workspace::HumanWorkspace>,
+            ) = if let Some((cfg, state)) = &account {
+                if !mail.is_empty() || smtp_test.is_some() {
+                    return Err("cannot_mix_account_and_test_transport".into());
                 }
-                remote(account.as_ref())?
+                let mut cfg = cfg.clone();
+                if read_only {
+                    cfg.permissions.draft = false;
+                    cfg.permissions.send = false;
+                }
+                let host = Arc::new(RemoteHost::open(
+                    cfg,
+                    state,
+                    Arc::new(SystemCredentialStore::new()),
+                    Sandbox::current()?,
+                )?);
+                (host.clone(), host)
             } else {
-                Arc::new(AppHost::open(
+                let host = Arc::new(AppHost::open(
                     &cli.state_dir,
                     documents(&mail)?,
-                    true,
-                    None,
-                )?)
+                    read_only,
+                    smtp_test,
+                )?);
+                (host.clone(), host)
             };
-            letterkeeper_adapters::run_tui(host).map_err(|_| "terminal_unavailable".into())
+            letterkeeper_adapters::run_tui_workspace(host, workspace)
+                .map_err(|_| "terminal_unavailable".into())
         }
         Action::Mcp {
             mail,

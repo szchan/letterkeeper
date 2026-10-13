@@ -35,3 +35,7 @@ Recovery/refusal GREEN: 16/16 tests passed (16.14 s). Recovery now fetches Messa
 `cargo test -p letterkeeper-protocol --test protocol shared_mailbox_preserves_append_across_tls_sessions --offline`: passed (1.29 s). Clippy all targets with `-D warnings`: passed. This fixture is deliberately a limited transcript service, not a complete reference server; full Dovecot/provider semantics remain unverified.
 
 Final crate checks after fixture cleanup: `cargo test --offline --locked -p letterkeeper-protocol` passed 17/17 (16.18 s); `cargo fmt --all -- --check` passed; `cargo clippy --offline --locked -p letterkeeper-protocol --all-targets -- -D warnings` passed. The worktree's root workspace member and generated lock change are intentionally left uncommitted for root integration.
+
+## MCP runtime bridge regression RED
+
+Application integration revealed that Tokio `spawn_blocking` threads still have an entered runtime handle. The former `Handle::try_current` rejection prevented legitimate MCP remote calls. A real TLS regression compares ordinary `std::thread` and `tokio::task::spawn_blocking`; the ordinary thread succeeds and spawn_blocking returns InvalidInput. This is an actual behavioral regression, not a test transport failure.

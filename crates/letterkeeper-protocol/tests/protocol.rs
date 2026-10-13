@@ -337,3 +337,23 @@ fn shared_mailbox_preserves_append_across_tls_sessions() {
     let log = server.finish();
     assert_eq!(log.iter().filter(|s| s.contains("APPEND")).count(), 1);
 }
+
+#[tokio::test]
+async fn tls_operations_work_from_std_thread_and_tokio_spawn_blocking() {
+    let server = Server::start(Scenario::Imap);
+    let c = client(&server);
+    let direct = std::thread::spawn(move || c.list_messages("INBOX", 0, 1, None))
+        .join()
+        .unwrap()
+        .unwrap();
+    assert_eq!(direct.messages[0].uid, 11);
+    server.finish();
+    let server = Server::start(Scenario::Imap);
+    let c = client(&server);
+    let blocked = tokio::task::spawn_blocking(move || c.list_messages("INBOX", 0, 1, None))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(blocked.messages[0].uid, 11);
+    server.finish();
+}

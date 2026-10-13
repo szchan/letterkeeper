@@ -16,3 +16,5 @@ Reply-To 优先于 From；全部回复以 ASCII 不区分大小写去重并去�
 附件原文沿既有默认 2 MiB、part/depth/字符预算；解码字节最多 512 KiB，使最坏 Vec<u8> JSON 字节输出小于应用 4 MiB worker 上限。使用 mail-parser transport 解码，不做文本字符集转换，保存原始字节。文件名移除控制字符后再次取 basename，`.`/`..`/空白变为 unnamed，UTF-8 边界最多 255 字节；MIME token 最多 127 字节，非法类型回退 application/octet-stream。未知/重复传输编码或解码异常拒绝。嵌套 multipart 附件保持已有 part ID；message/rfc822 附件目前拒绝提取，不遍历其内部附件。压缩包只是字节，不解压、不预览、不执行、不写盘。
 
 这些是离线库测试，并不能独立证明进程网络/宿主文件隔离。应用必须仅在既有 bubblewrap worker 内调用原文 inspect/extract；集成代理另行验证 worker HTTP/DNS、输出传输、MCP/CLI 输出与保存权限。引用文本仍含正文 URL，消费端只能当纯文本，不能启用资源预览；本次没有进行真实邮箱、OAuth、远程收发或下游渲染验收。
+
+2026-10-13 回复头正确性回归 RED：`cargo test --offline --locked -p letterkeeper-content --test composition opaque_message`，两项新增测试中合法 opaque msg-id 测试失败（InvalidMetadata），拒绝边界测试通过。问题是错误复用邮箱地址的 64 字节本地部分及 DNS label 限制，拒绝 RFC 5322 的长 id-left / no-fold-literal / 非 DNS dot-atom id-right。合成测试分别检查 inspect 和 compose 保留原 ID，256 字符边界，以及控制字符、bidi、角括号、空 dot-atom、超限和不支持的 obsolete forms 拒绝。

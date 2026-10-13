@@ -283,3 +283,71 @@ fn unicode_header_bounds_and_truncated_quote_are_visible() {
     assert!(decoded.name.len() <= 255);
     assert!(!decoded.name.contains(['/', '\\', '\n']));
 }
+
+#[test]
+fn opaque_message_ids_support_long_atoms_literals_and_nondns_right_parts() {
+    let ids = [
+        format!("<{}@example.test>", "synthetic".repeat(12)),
+        "<synthetic@[127.0.0.1]>".to_owned(),
+        "<synthetic@-opaque_token+.!right>".to_owned(),
+        "<synthetic@[]>".to_owned(),
+        "<synthetic@[x@y]>".to_owned(),
+        format!("<{}@x>", "a".repeat(252)), // exactly 256 ASCII chars
+    ];
+    for id in ids {
+        let raw = format!(
+            "From: alice@example.test\r\nMessage-ID: {id}\r\nReferences: <root@opaque_+>\r\n\r\ntext"
+        );
+        let mail = inspect_message(raw.as_bytes(), Limits::default()).unwrap();
+        assert_eq!(mail.reply.message_id.as_deref(), Some(id.as_str()));
+        let draft = compose(&mail, "me@example.test", ComposeKind::Reply, "").unwrap();
+        assert_eq!(draft.in_reply_to.as_deref(), Some(id.as_str()));
+        assert_eq!(draft.references, ["<root@opaque_+>".to_owned(), id]);
+    }
+}
+#[test]
+fn opaque_message_id_subset_rejects_injection_controls_and_obsolete_forms() {
+    let mail = inspect_message(MAIL, Limits::default()).unwrap();
+    let mut invalid = vec![
+        "<bad..atom@right>".to_owned(),
+        "<.bad@right>".to_owned(),
+        "<bad@right.>".to_owned(),
+        "<bad@right..atom>".to_owned(),
+        "<bad@@right>".to_owned(),
+        "<bad@[nested[]]>".to_owned(),
+        "<bad@[escaped\\x]>".to_owned(),
+        "<bad@[white space]>".to_owned(),
+        "<bad@[\u{1b}]>".to_owned(),
+        "<bad@[\u{202e}]>".to_owned(),
+        "<\"quoted\"@right>".to_owned(),
+        "<bad@(comment)right>".to_owned(),
+        "<bad@>".to_owned(),
+        "<@right>".to_owned(),
+        "bad@right>".to_owned(),
+        "<bad@right>>".to_owned(),
+        "<bad\r\n @right>".to_owned(),
+        "<bad@right>\r\n Bcc: evil@example.test".to_owned(),
+    ];
+    invalid.push(format!("<{}@x>", "a".repeat(253))); // 257 chars exceeds policy cap
+    for id in invalid {
+        let raw = format!("From: alice@example.test\r\nMessage-ID: {id}\r\n\r\ntext");
+        assert_eq!(
+            inspect_message(raw.as_bytes(), Limits::default()),
+            Err(ContentError::InvalidMetadata),
+            "inspect {id:?}"
+        );
+        for reference in [false, true] {
+            let mut edited = mail.clone();
+            if reference {
+                edited.reply.references = vec![id.clone()];
+            } else {
+                edited.reply.message_id = Some(id.clone());
+            }
+            assert_eq!(
+                compose(&edited, "me@example.test", ComposeKind::Reply, ""),
+                Err(ContentError::InvalidMetadata),
+                "compose {id:?}"
+            );
+        }
+    }
+}

@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![allow(dead_code)]
 use letterkeeper_protocol::{Credentials, Endpoint, TlsOptions};
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
+};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 #[derive(Clone, Copy)]
 pub enum Scenario {
     Imap,
+    Mailbox,
     Recovery,
     MaxBody,
     HugeHeader,
@@ -25,8 +29,13 @@ pub struct Server {
     pub tls: TlsOptions,
     pub transcript: Arc<Mutex<Vec<String>>>,
     thread: Option<std::thread::JoinHandle<()>>,
+    stop: Arc<AtomicBool>,
 }
 impl Server {
+    /// Persistent synthetic mailbox; serves sequential independent TLS sessions until finish().
+    pub fn start_shared() -> Self {
+        Self::with_name(Scenario::Mailbox, "localhost")
+    }
     pub fn start(scenario: Scenario) -> Self {
         Self::with_name(scenario, "localhost")
     }
@@ -47,6 +56,8 @@ impl Server {
         listener.set_nonblocking(true).unwrap();
         let transcript = Arc::new(Mutex::new(Vec::new()));
         let observed = transcript.clone();
+        let stop = Arc::new(AtomicBool::new(false));
+        let stopping = stop.clone();
         let thread = std::thread::spawn(move || {
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
@@ -54,56 +65,87 @@ impl Server {
                 .unwrap();
             rt.block_on(async move {
                 let listener = tokio::net::TcpListener::from_std(listener).unwrap();
-                let Ok(Ok((tcp, _))) =
-                    tokio::time::timeout(std::time::Duration::from_secs(3), listener.accept())
-                        .await
-                else {
-                    return;
-                };
-                let Ok(Ok(tls)) = tokio::time::timeout(
-                    std::time::Duration::from_secs(3),
-                    tokio_rustls::TlsAcceptor::from(Arc::new(config)).accept(tcp),
-                )
-                .await
-                else {
-                    return;
-                };
-                let mut io = BufReader::new(tls);
-                let smtp = matches!(
-                    scenario,
-                    Scenario::Smtp
-                        | Scenario::SmtpReject
-                        | Scenario::SmtpDisconnect
-                        | Scenario::SmtpFinalReject
-                );
-                io.get_mut()
-                    .write_all(if smtp {
-                        b"220 synthetic.test ready\r\n"
-                    } else {
-                        b"* OK ready\r\n"
-                    })
-                    .await
-                    .unwrap();
+                let acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(config));
+                let shared = matches!(scenario, Scenario::Mailbox);
+                let mut mailbox = Mailbox::default();
                 loop {
-                    let mut line = String::new();
-                    let Ok(Ok(n)) = tokio::time::timeout(
+                    if stopping.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    let (tcp, _) = match tokio::time::timeout(
+                        std::time::Duration::from_millis(if shared { 100 } else { 3000 }),
+                        listener.accept(),
+                    )
+                    .await
+                    {
+                        Ok(Ok(pair)) => pair,
+                        Err(_) if shared => continue,
+                        _ => break,
+                    };
+                    let Ok(Ok(tls)) = tokio::time::timeout(
                         std::time::Duration::from_secs(3),
-                        io.read_line(&mut line),
+                        acceptor.accept(tcp),
                     )
                     .await
                     else {
-                        break;
+                        if shared {
+                            continue;
+                        } else {
+                            break;
+                        }
                     };
-                    if n == 0 {
-                        break;
+                    let mut selected = "INBOX".to_string();
+                    let mut io = BufReader::new(tls);
+                    let smtp = matches!(
+                        scenario,
+                        Scenario::Smtp
+                            | Scenario::SmtpReject
+                            | Scenario::SmtpDisconnect
+                            | Scenario::SmtpFinalReject
+                    );
+                    io.get_mut()
+                        .write_all(if smtp {
+                            b"220 synthetic.test ready\r\n"
+                        } else {
+                            b"* OK ready\r\n"
+                        })
+                        .await
+                        .unwrap();
+                    loop {
+                        let mut line = String::new();
+                        let Ok(Ok(n)) = tokio::time::timeout(
+                            std::time::Duration::from_secs(3),
+                            io.read_line(&mut line),
+                        )
+                        .await
+                        else {
+                            break;
+                        };
+                        if n == 0 {
+                            break;
+                        }
+                        observed.lock().unwrap().push(line.clone());
+                        let result = if smtp {
+                            smtp_reply(&mut io, &line, scenario, &observed).await
+                        } else {
+                            if shared {
+                                mailbox_reply(
+                                    &mut io,
+                                    &line,
+                                    &observed,
+                                    &mut mailbox,
+                                    &mut selected,
+                                )
+                                .await
+                            } else {
+                                imap_reply(&mut io, &line, scenario, &observed).await
+                            }
+                        };
+                        if !result {
+                            break;
+                        }
                     }
-                    observed.lock().unwrap().push(line.clone());
-                    let result = if smtp {
-                        smtp_reply(&mut io, &line, scenario, &observed).await
-                    } else {
-                        imap_reply(&mut io, &line, scenario, &observed).await
-                    };
-                    if !result {
+                    if !shared {
                         break;
                     }
                 }
@@ -119,6 +161,7 @@ impl Server {
             },
             transcript,
             thread: Some(thread),
+            stop,
         }
     }
     pub fn credentials() -> Credentials {
@@ -129,6 +172,7 @@ impl Server {
         }
     }
     pub fn finish(mut self) -> Vec<String> {
+        self.stop.store(true, Ordering::Relaxed);
         self.thread.take().unwrap().join().unwrap();
         self.transcript.lock().unwrap().clone()
     }
@@ -284,4 +328,152 @@ async fn smtp_reply(
         panic!("unexpected synthetic SMTP command")
     };
     io.get_mut().write_all(reply.as_bytes()).await.is_ok()
+}
+
+/// Synthetic mail only. It intentionally contains remote HTML resources so root
+/// tests can verify that the separate content worker never requests them.
+pub const MESSAGE:&[u8]=b"From: Author <author@example.test>\r\nTo: person@example.test\r\nCc: colleague@example.test\r\nReply-To: reply@example.test\r\nSubject: Synthetic thread\r\nDate: Tue, 13 Oct 2026 10:00:00 +0800\r\nMessage-ID: <inbox@example.test>\r\nReferences: <earlier@example.test>\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=synthetic\r\n\r\n--synthetic\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<p>synthetic body</p><img src=\"https://resource.invalid/track\"><script>fetch('https://resource.invalid/script')</script>\r\n--synthetic\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename=\"sample.txt\"\r\nContent-Transfer-Encoding: base64\r\n\r\nc3ludGhldGlj\r\n--synthetic--\r\n";
+struct Mailbox {
+    messages: Vec<(String, u32, Vec<u8>)>,
+    next: u32,
+}
+impl Default for Mailbox {
+    fn default() -> Self {
+        Self {
+            messages: vec![("INBOX".into(), 11, MESSAGE.to_vec())],
+            next: 20,
+        }
+    }
+}
+fn field(raw: &[u8], name: &str) -> String {
+    std::str::from_utf8(raw)
+        .unwrap_or_default()
+        .split("\r\n\r\n")
+        .next()
+        .unwrap_or_default()
+        .lines()
+        .find_map(|l| {
+            l.split_once(':')
+                .filter(|(n, _)| n.eq_ignore_ascii_case(name))
+                .map(|(_, v)| v.trim().to_string())
+        })
+        .unwrap_or_default()
+}
+async fn mailbox_reply(
+    io: &mut BufReader<tokio_rustls::server::TlsStream<tokio::net::TcpStream>>,
+    line: &str,
+    observed: &Arc<Mutex<Vec<String>>>,
+    mailbox: &mut Mailbox,
+    selected: &mut String,
+) -> bool {
+    let (tag, cmd) = line.trim_end().split_once(' ').unwrap();
+    let reply = if cmd.starts_with("LOGIN") {
+        format!("{tag} OK login\r\n")
+    } else if cmd.starts_with("LIST") {
+        format!(
+            "* LIST (\\HasNoChildren) \"/\" \"INBOX\"\r\n* LIST (\\Drafts) \"/\" \"Drafts\"\r\n* LIST (\\Sent) \"/\" \"Sent\"\r\n{tag} OK list\r\n"
+        )
+    } else if cmd.starts_with("EXAMINE") || cmd.starts_with("SELECT") {
+        *selected = cmd.split_once(' ').unwrap().1.trim_matches('"').to_string();
+        format!(
+            "* {} EXISTS\r\n* OK [UIDVALIDITY 77] stable\r\n{tag} OK examine\r\n",
+            mailbox
+                .messages
+                .iter()
+                .filter(|(folder, _, _)| folder == selected)
+                .count()
+        )
+    } else if cmd.starts_with("UID SEARCH") {
+        let wanted = cmd
+            .strip_prefix("UID SEARCH HEADER Message-ID ")
+            .map(|s| s.trim_matches('"'));
+        let ids = mailbox
+            .messages
+            .iter()
+            .filter(|(folder, _, raw)| {
+                folder == selected && wanted.is_none_or(|id| field(raw, "Message-ID") == id)
+            })
+            .map(|(_, uid, _)| uid.to_string())
+            .collect::<Vec<_>>()
+            .join(" ");
+        format!(
+            "* SEARCH{space}{ids}\r\n{tag} OK search\r\n",
+            space = if ids.is_empty() { "" } else { " " }
+        )
+    } else if cmd.starts_with("UID FETCH") {
+        let set = cmd.split_whitespace().nth(2).unwrap();
+        let mut reply = String::new();
+        for (_, uid, raw) in mailbox.messages.iter().filter(|(folder, uid, _)| {
+            folder == selected && set.split(',').any(|id| id == uid.to_string())
+        }) {
+            let (section, data) = if cmd.contains("HEADER.FIELDS") {
+                (
+                    "HEADER",
+                    raw.split(|_| false).next().unwrap()
+                        [..raw.windows(4).position(|w| w == b"\r\n\r\n").unwrap() + 4]
+                        .to_vec(),
+                )
+            } else {
+                ("", raw.clone())
+            };
+            reply.push_str(&format!(
+                "* 1 FETCH (UID {uid} RFC822.SIZE {} FLAGS () BODY[{section}] {{{}}}\r\n{})\r\n",
+                raw.len(),
+                data.len(),
+                String::from_utf8_lossy(&data)
+            ));
+        }
+        reply.push_str(&format!("{tag} OK fetch\r\n"));
+        reply
+    } else if cmd.starts_with("APPEND") {
+        let folder = cmd
+            .split_whitespace()
+            .nth(1)
+            .unwrap()
+            .trim_matches('"')
+            .to_string();
+        let size = cmd
+            .rsplit_once('{')
+            .unwrap()
+            .1
+            .trim_end_matches('}')
+            .parse::<usize>()
+            .unwrap();
+        io.get_mut().write_all(b"+ ready\r\n").await.unwrap();
+        let mut raw = vec![0; size];
+        if io.read_exact(&mut raw).await.is_err() {
+            return false;
+        }
+        let mut end = [0; 2];
+        if io.read_exact(&mut end).await.is_err() {
+            return false;
+        }
+        observed
+            .lock()
+            .unwrap()
+            .push(String::from_utf8_lossy(&raw).into_owned());
+        mailbox.messages.push((folder, mailbox.next, raw));
+        mailbox.next += 1;
+        format!("{tag} OK append\r\n")
+    } else if cmd.starts_with("UID STORE") {
+        format!("{tag} OK store\r\n")
+    } else if cmd.starts_with("LOGOUT") {
+        let _ = io
+            .get_mut()
+            .write_all(format!("* BYE bye\r\n{tag} OK logout\r\n").as_bytes())
+            .await;
+        return false;
+    } else {
+        panic!("unexpected synthetic mailbox command {cmd}")
+    };
+    io.get_mut().write_all(reply.as_bytes()).await.is_ok()
+}
+
+impl Drop for Server {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
 }

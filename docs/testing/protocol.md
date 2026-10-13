@@ -27,3 +27,9 @@ Limitations: implicit TLS only; real providers and STARTTLS unverified. Blocking
 Expanded TLS tests revealed two behavioral failures: UID SEARCH HEADER alone returned all three substring candidates rather than the one exact Message-ID; APPEND tagged NO after literal submission was conservatively Uncertain although the server explicitly refused. `cargo test -p letterkeeper-protocol --offline`: 14 passed, 2 failed, including a real 15 s authentication deadline. New controls cover explicit Seen, exact 2 MiB body acceptance, header declaration overflow, SMTP CA/hostname failure and compile-time TRACE suppression even with a capturing Trace logger.
 
 Recovery/refusal GREEN: 16/16 tests passed (16.14 s). Recovery now fetches Message-ID headers with PEEK and confirms a single exact field, rejecting extra text or duplicates. APPEND explicit tagged NO/BAD is Failed; network failure after literal write remains Uncertain. SMTP explicit final refusal is also Failed. A Trace-level capturing logger observed no credential/message text; the static TRACE ceiling was checked.
+
+## Reusable mailbox fixture
+
+`Server::start_shared()` serves sequential independent TLS sessions until `finish()` or drop, with an ephemeral certificate and persistent INBOX/Drafts/Sent synthetic state. APPEND stores exact bytes; SEARCH/FETCH retrieve appended items across sessions. `MESSAGE` includes Reply-To, thread identifiers, a remote HTML image/script and an inert synthetic attachment for application worker/adapter tests. Stop polling is bounded (100 ms accept polling, 3 s idle I/O); no detached fixture survives a failed test.
+
+`cargo test -p letterkeeper-protocol --test protocol shared_mailbox_preserves_append_across_tls_sessions --offline`: passed (1.29 s). Clippy all targets with `-D warnings`: passed. This fixture is deliberately a limited transcript service, not a complete reference server; full Dovecot/provider semantics remain unverified.

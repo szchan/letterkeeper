@@ -306,3 +306,34 @@ fn sensitive_upstream_trace_is_disabled_even_with_trace_logger() {
         assert!(!line.contains("synthetic body"));
     }
 }
+
+#[test]
+fn shared_mailbox_preserves_append_across_tls_sessions() {
+    let server = Server::start_shared();
+    let c = client(&server);
+    assert_eq!(c.list_folders().unwrap().len(), 3);
+    let page = c.list_messages("INBOX", 0, 50, None).unwrap();
+    assert_eq!(page.messages.len(), 1);
+    assert_eq!(c.read_message("INBOX", 77, 11).unwrap(), support::MESSAGE);
+    let raw =
+        b"From: person@example.test\r\nMessage-ID: <persisted@example.test>\r\n\r\nsynthetic draft";
+    assert_eq!(
+        c.append_message("Drafts", raw, &["\\Draft".into()]),
+        WriteOutcome::Accepted
+    );
+    assert_eq!(
+        c.lookup_message_id("Drafts", "<persisted@example.test>")
+            .unwrap(),
+        vec![RemoteKey {
+            uid_validity: 77,
+            uid: 20
+        }]
+    );
+    assert_eq!(
+        c.lookup_message_id("Sent", "<persisted@example.test>")
+            .unwrap(),
+        Vec::<RemoteKey>::new()
+    );
+    let log = server.finish();
+    assert_eq!(log.iter().filter(|s| s.contains("APPEND")).count(), 1);
+}

@@ -27,3 +27,5 @@ OAuth RED：`cargo test --offline -p letterkeeper-accounts --test oauth`，exit 
 最终硬化 RED：callback length 断言真实 exit 101（43 != 44），以及 `private_permissions_reject_special_bits_and_changed_parent_modes` 真实 exit 101（04600 被错误接受）。修复响应长度取 body.len()，精确比较 07777 模式，并在每次 load/save/list 验证配置和数据目录 fd 权限。最终 GREEN 为 8+10 测试及 Clippy；没有跳过失败项。
 
 协调目录 RED：`cargo test --offline -p letterkeeper-accounts --test coordination` 真实 exit 101，CredentialStore/SystemCredentialStore 缺少 coordination_directory（编译 RED）。测试要求 fake 默认 None、真实后端只返回固定 /run/user/{euid} 账户目录且不写文件，HOME/XDG/config/data 覆盖不改变 vault 账户锁位置。
+
+协调目录 GREEN：`--test coordination` 4 个测试与 HOME/XDG 覆盖子进程、`--lib` 1 个 runtime parent 边界测试通过；Clippy all-targets -D warnings 与 fmt check 通过。真实 /run/user/1000 已存在且 uid1000、0700，本轮只读取其元数据，未创建 app/lock 子目录，未调用真实 vault。内部临时夹具明确设为0700后验证成功，以及缺失、符号链接、错误 owner、0740/0755/01700 拒绝；不存在 runtime parent 时无自动创建或 fallback。

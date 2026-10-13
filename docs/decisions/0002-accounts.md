@@ -15,3 +15,5 @@ OAuth 使用 `oauth2` 5（MIT OR Apache-2.0，禁用默认 features）生成 sta
 官方资料：[Secret Service crate](https://docs.rs/secret-service/5.2.0/secret_service/)、[源仓库](https://github.com/hwchen/secret-service-rs)、[oauth2 5](https://docs.rs/oauth2/5.0.0/oauth2/)、[Google native apps](https://developers.google.com/identity/protocols/oauth2/native-app)、[Gmail XOAUTH2 scope](https://developers.google.com/workspace/gmail/imap/xoauth2-protocol)。Google desktop client 注册、个人使用与公开分发/受限 scope 验证仍待用户独立注册和真实授权验收；实现不借用第三方 client identity。配置 send 权限不替代 core 人工批准。
 
 实现时增加 callback 的账户/client/endpoint owner 绑定与进程内 token mutex。跨进程调用由应用的每账户 auth.lock flock 协调；直接库调用者须承担此协调。测试证据和未授权验证见 [账户验证](../testing/accounts.md)。
+
+跨进程锁命名空间补充：系统凭据按全局账户 ID 保存，不能按可覆盖缓存目录加 auth.lock。CredentialStore 返回 coordination_directory，fake 默认 None；System 固定 `/run/user/{effectiveUID}/letterkeeper/credential-locks/{accountID}`，忽略 HOME/XDG/config/data 覆盖。只接受已经存在、本人拥有且0700、路径无 symlink 的 `/run/user/{UID}`，自身仅返回路径，不创建目录/文件，不回退；应用私有创建 descendants 并持有 flock 覆盖完整 login/refresh/logout/revoke。库直接调用仍须应用协调跨进程。

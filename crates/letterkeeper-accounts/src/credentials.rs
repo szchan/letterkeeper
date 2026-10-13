@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::{AccountConfig, AccountError, Authentication, validate_account_id};
-use std::{collections::HashMap, fmt};
+use rustix::fs::{self as fs, FileType, Mode, OFlags};
+use std::{
+    collections::HashMap,
+    fmt,
+    path::{Component, Path, PathBuf},
+};
 use zeroize::Zeroizing;
 /// Explicit exposure is restricted to trusted authentication/CLI adapters.
 pub struct Secret(Zeroizing<String>);
@@ -33,6 +38,11 @@ impl SecretKind {
     }
 }
 pub trait CredentialStore: Send + Sync {
+    /// Shared vault-account lock namespace. Test stores need no system coordination.
+    /// The application must hold an exclusive lock across the whole token operation.
+    fn coordination_directory(&self, _account: &str) -> Result<Option<PathBuf>, AccountError> {
+        Ok(None)
+    }
     fn get(&self, account: &str, kind: SecretKind) -> Result<Option<Secret>, AccountError>;
     fn set(&self, account: &str, kind: SecretKind, secret: &Secret) -> Result<(), AccountError>;
     fn delete(&self, account: &str, kind: SecretKind) -> Result<(), AccountError>;
@@ -52,7 +62,51 @@ fn attributes(account: &str, kind: SecretKind) -> HashMap<&str, &str> {
         ("kind", kind.key()),
     ])
 }
+fn check_runtime_directory(path: &Path, uid: u32) -> Result<(), AccountError> {
+    if !path.is_absolute() {
+        return Err(AccountError::UnsafeStorage);
+    }
+    let mut fd = fs::open(
+        "/",
+        OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC,
+        Mode::empty(),
+    )
+    .map_err(|_| AccountError::UnsafeStorage)?;
+    for component in path.components() {
+        match component {
+            Component::RootDir => (),
+            Component::Normal(part) => {
+                fd = fs::openat(
+                    &fd,
+                    part,
+                    OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+                    Mode::empty(),
+                )
+                .map_err(|_| AccountError::UnsafeStorage)?
+            }
+            _ => return Err(AccountError::UnsafeStorage),
+        }
+    }
+    let stat = fs::fstat(&fd).map_err(|_| AccountError::UnsafeStorage)?;
+    if FileType::from_raw_mode(stat.st_mode) != FileType::Directory
+        || stat.st_uid != uid
+        || stat.st_mode & 0o7777 != 0o700
+    {
+        return Err(AccountError::UnsafeStorage);
+    }
+    Ok(())
+}
 impl CredentialStore for SystemCredentialStore {
+    fn coordination_directory(&self, account: &str) -> Result<Option<PathBuf>, AccountError> {
+        validate_account_id(account)?;
+        let uid = rustix::process::geteuid().as_raw();
+        let runtime = PathBuf::from(format!("/run/user/{uid}"));
+        // Never create the login-session runtime directory or fall back to state/XDG paths.
+        check_runtime_directory(&runtime, uid)?;
+        Ok(Some(
+            runtime.join("letterkeeper/credential-locks").join(account),
+        ))
+    }
     fn get(&self, account: &str, kind: SecretKind) -> Result<Option<Secret>, AccountError> {
         validate_account_id(account)?;
         let service =
@@ -178,4 +232,40 @@ pub fn password_auth_material(
         secret,
         oauth: false,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::{PermissionsExt, symlink};
+    #[test]
+    fn runtime_parent_must_exist_private_owned_and_without_symlinks() {
+        let temp = tempfile::tempdir().unwrap();
+        let uid = rustix::process::geteuid().as_raw();
+        std::fs::set_permissions(temp.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+        check_runtime_directory(temp.path(), uid).unwrap();
+        assert_eq!(
+            check_runtime_directory(temp.path(), uid + 1).unwrap_err(),
+            AccountError::UnsafeStorage
+        );
+        let absent = temp.path().join("absent");
+        assert_eq!(
+            check_runtime_directory(&absent, uid).unwrap_err(),
+            AccountError::UnsafeStorage
+        );
+        assert!(!absent.exists());
+        let link = temp.path().join("link");
+        symlink(temp.path(), &link).unwrap();
+        assert_eq!(
+            check_runtime_directory(&link, uid).unwrap_err(),
+            AccountError::UnsafeStorage
+        );
+        for mode in [0o740, 0o755, 0o1700] {
+            std::fs::set_permissions(temp.path(), std::fs::Permissions::from_mode(mode)).unwrap();
+            assert_eq!(
+                check_runtime_directory(temp.path(), uid).unwrap_err(),
+                AccountError::UnsafeStorage
+            );
+        }
+    }
 }

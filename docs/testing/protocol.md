@@ -25,3 +25,5 @@ Limitations: implicit TLS only; real providers and STARTTLS unverified. Blocking
 ## Recovery/refusal regression RED
 
 Expanded TLS tests revealed two behavioral failures: UID SEARCH HEADER alone returned all three substring candidates rather than the one exact Message-ID; APPEND tagged NO after literal submission was conservatively Uncertain although the server explicitly refused. `cargo test -p letterkeeper-protocol --offline`: 14 passed, 2 failed, including a real 15 s authentication deadline. New controls cover explicit Seen, exact 2 MiB body acceptance, header declaration overflow, SMTP CA/hostname failure and compile-time TRACE suppression even with a capturing Trace logger.
+
+Recovery/refusal GREEN: 16/16 tests passed (16.14 s). Recovery now fetches Message-ID headers with PEEK and confirms a single exact field, rejecting extra text or duplicates. APPEND explicit tagged NO/BAD is Failed; network failure after literal write remains Uncertain. SMTP explicit final refusal is also Failed. A Trace-level capturing logger observed no credential/message text; the static TRACE ceiling was checked.

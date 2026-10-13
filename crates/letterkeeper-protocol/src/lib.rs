@@ -155,6 +155,40 @@ async fn connect(
 fn credentials_valid(c: &Credentials) -> bool {
     valid(&c.username, 320) && valid(&c.secret, 16 * 1024)
 }
+// Conservative identity check over a bounded, server-returned header subset.
+// Reject ambiguous duplicate fields and malformed continuations; do not parse MIME.
+fn exact_message_id(headers: &[u8], expected: &str) -> bool {
+    if headers.len() > MAX_HEADER || !headers.is_ascii() {
+        return false;
+    }
+    let Ok(text) = std::str::from_utf8(headers) else {
+        return false;
+    };
+    let mut value = String::new();
+    let mut found = 0;
+    let mut current = false;
+    for line in text.split("\r\n") {
+        if line.is_empty() {
+            break;
+        }
+        if line.starts_with([' ', '\t']) {
+            if current {
+                value.push_str(line.trim());
+            }
+            continue;
+        }
+        current = false;
+        let Some((name, field)) = line.split_once(':') else {
+            return false;
+        };
+        if name.eq_ignore_ascii_case("Message-ID") {
+            found += 1;
+            current = true;
+            value.push_str(field.trim());
+        }
+    }
+    found == 1 && value == expected
+}
 struct Xoauth {
     response: Option<String>,
 }
@@ -353,11 +387,37 @@ if messages.len()>=limit{return Err(ProtocolError::Limit);}let headers=fetch.hea
                 if ids.len() > 1024 {
                     return Err(ProtocolError::Limit);
                 }
-                let mut out: Vec<_> = ids
-                    .into_iter()
-                    .map(|uid| RemoteKey { uid_validity, uid })
-                    .collect();
+                let mut out = Vec::new();
+                // IMAP HEADER search is substring based. Confirm the exact field
+                // before treating any result as evidence of a prior submission.
+                for chunk in ids.into_iter().collect::<Vec<_>>().chunks(50) {
+                    let set = chunk
+                        .iter()
+                        .map(u32::to_string)
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    let mut stream = s
+                        .uid_fetch(set, "(UID BODY.PEEK[HEADER.FIELDS (MESSAGE-ID)])")
+                        .await
+                        .map_err(|_| ProtocolError::Rejected)?;
+                    while let Some(fetch) = stream
+                        .try_next()
+                        .await
+                        .map_err(|_| ProtocolError::Rejected)?
+                    {
+                        let uid = fetch.uid.ok_or(ProtocolError::Rejected)?;
+                        if chunk.contains(&uid)
+                            && exact_message_id(
+                                fetch.header().ok_or(ProtocolError::Rejected)?,
+                                message_id,
+                            )
+                        {
+                            out.push(RemoteKey { uid_validity, uid });
+                        }
+                    }
+                }
                 out.sort_by_key(|k| k.uid);
+                out.dedup();
                 Ok(out)
             },
             &state,
@@ -412,13 +472,16 @@ if messages.len()>=limit{return Err(ProtocolError::Limit);}let headers=fetch.hea
         let result = run(async {
             let mut s = self.session(state.clone()).await?;
             state.append.store(true, Ordering::Relaxed);
-            s.append(folder, Some(&flaglist), None, raw)
-                .await
-                .map_err(|_| ProtocolError::Rejected)?;
-            Ok(())
+            match s.append(folder, Some(&flaglist), None, raw).await {
+                Ok(()) => Ok(WriteOutcome::Accepted),
+                Err(async_imap::error::Error::No(_) | async_imap::error::Error::Bad(_)) => {
+                    Ok(WriteOutcome::Failed)
+                }
+                Err(_) => Err(ProtocolError::Rejected),
+            }
         });
         match result {
-            Ok(()) => WriteOutcome::Accepted,
+            Ok(outcome) => outcome,
             Err(_) if state.submitted.load(Ordering::Relaxed) => WriteOutcome::Uncertain,
             Err(_) => WriteOutcome::Failed,
         }

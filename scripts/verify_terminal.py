@@ -67,7 +67,7 @@ with tempfile.TemporaryDirectory(prefix="letterkeeper-terminal-") as tmp:
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 12, 24, 0, 0))
         os.kill(process.pid, signal.SIGWINCH)
         os.write(master, b"?")
-        receive(process, master, "选择".encode())
+        receive(process, master, "帮助".encode())
         os.write(master, b"q")
         assert process.wait(timeout=5) == 0
         assert termios.tcgetattr(slave) == before, "terminal settings were not restored"

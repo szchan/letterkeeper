@@ -1,12 +1,12 @@
 # 依赖清单
 
-本清单记录当前原型工作区 `Cargo.lock` 锁定的 crates.io 依赖。机器可读的完整清单在 [dependencies.json](dependencies.json)，每项只包含名称、版本、上游声明的许可证、官方仓库地址及上游声明的 Rust 版本；未声明的 Rust 版本为 `null`。清单按集成工作区 `Cargo.lock` 经 Cargo metadata 得到，共 **384 个 registry package 条目、361 个不同 crate 名称**（同名多版本分别计数）；包括构建、测试及非 Linux 目标依赖，因此不是仅运行时依赖列表。
+本清单记录当前原型工作区 `Cargo.lock` 锁定的 crates.io 依赖。机器可读的完整清单在 [dependencies.json](dependencies.json)，每项只包含名称、版本、上游声明的许可证、官方仓库地址及上游声明的 Rust 版本；未声明的 Rust 版本为 `null`。清单按集成工作区 `Cargo.lock` 经 Cargo metadata 得到，共 **385 个 registry package 条目、362 个不同 crate 名称**（同名多版本分别计数）；包括构建、测试及非 Linux 目标依赖，因此不是仅运行时依赖列表。
 
-版本和元数据来自集成 worktree 的 `cargo metadata --offline --locked --format-version 1` 输出；完整 JSON 仅保留 name/version/license/repository/rust_version 五字段，没有绝对路径或包内容。直接依赖用途及已配置安全边界按 manifest、代码和 ADR 0002 记录交叉核对。没有声称依赖版本是最新或已完成安全审计。仓库地址仅作上游来源线索，不代表已审计代码或维护状态。对所有依赖的漏洞、安全、许可证兼容性均未完成审计或法律审查；发布前仍须核对依赖实际许可证原文、传递依赖和目标平台要求。项目原创源码与文档继续采用 `GPL-3.0-only`，不改变 [LICENSE](../LICENSE)。
+版本和元数据来自集成 worktree 的 `cargo metadata --offline --locked --format-version 1` 输出；完整 JSON 仅保留 name/version/license/repository/rust_version 五字段，没有绝对路径或包内容。直接依赖用途及已配置安全边界按 manifest、代码和 ADR 0002/0003 记录交叉核对。没有声称依赖版本是最新或已完成安全审计。仓库地址仅作上游来源线索，不代表已审计代码或维护状态。对所有依赖的漏洞、安全、许可证兼容性均未完成审计或法律审查；发布前仍须核对依赖实际许可证原文、传递依赖和目标平台要求。项目原创源码与文档继续采用 `GPL-3.0-only`，不改变 [LICENSE](../LICENSE)。
 
 ## 直接依赖
 
-下表记录 Stage A 与 Stage B 当前直接依赖的用途和 Cargo feature。维护证据仅限 Cargo 包元数据给出的上游仓库；没有核查近期提交、响应速度或安全公告，故均待发布前核实。
+下表记录 Stage A、Stage B 与 Stage C 当前直接依赖的用途和 Cargo feature。维护证据仅限 Cargo 包元数据给出的上游仓库；没有核查近期提交、响应速度或安全公告，故均待发布前核实。
 
 | 依赖（锁定版本） | 用途 | 包元数据许可证 | 维护证据 | 安全影响与边界 |
 | --- | --- | --- | --- | --- |
@@ -50,10 +50,16 @@
 | `rcgen` 0.14.10 | 为合成 loopback protocol 测试生成临时 TLS 证书，仅用于开发/测试。 | MIT OR Apache-2.0 | [上游仓库](https://github.com/rustls/rcgen)；近期维护状态未审计。 | 仅测试使用；私钥临时生成，不应提交到仓库。 |
 | `rustls-pki-types` 1.15.1 | 测试 TLS 配置使用的 PKI 类型。 | MIT OR Apache-2.0 | [上游仓库](https://github.com/rustls/pki-types)；近期维护状态未审计。 | 仅测试证书/key 表示，不单独定义生产信任策略。 |
 
+### Stage C 内置编辑器
+
+| 依赖（锁定版本） | 用途 | 包元数据许可证 | 维护证据 | 安全影响与边界 |
+| --- | --- | --- | --- | --- |
+| `tui-textarea` 0.7.0（仅 crossterm feature） | 复用多行编辑、撤销与终端光标操作，兼容当前 Ratatui 0.29/Crossterm 0.28。 | MIT | [原上游](https://github.com/rhysd/tui-textarea)、[固定版本文档](https://docs.rs/crate/tui-textarea/0.7.0)；上游已有独立 fork，当前兼容版本维护风险保留，未完成安全审计。 | 应用限制正文1MiB、撤销20次；粘贴不作为命令，危险控制字符拒绝。控件本身不提供权限/正文网络隔离，MCP不接入编辑器。 |
+
 ## 系统依赖与平台限制
 
 原型的正文沙箱通过固定路径 `/usr/bin/bwrap` 启动 bubblewrap。当前本机 Arch Linux 的只读包信息确认 bubblewrap 版本为 `0.12.0-1`，许可证字段为 `LGPL-2.1-or-later`，上游仓库为 [containers/bubblewrap](https://github.com/containers/bubblewrap)。这只是本机包元数据证据，不是对其他发行版、安装布局或功能行为的验证。当前固定的 Arch/Linux 路径和启动方式限制了可移植性；非 Linux 目标依赖虽然会出现在 Cargo 锁定清单中，原型沙箱仍未证明能在其上运行。缺少程序、权限或必需隔离能力时应拒绝处理，而不能回退为普通渲染。近期维护状态待核实。
 
 ## 适用范围
 
-此清单描述 Stage B 集成工作区的锁定依赖，不表示项目已经实现完整邮件客户端，也不构成安全漏洞审计、隐私保证或法律意见。源码已核对的事实包括 OAuth、凭据存储及 IMAP/TLS 选型与配置；尚未完成真实 Gmail/服务商端到端验证、近期维护/公告审查、全部传递依赖许可证原文核对及目标平台审查。Cargo 清单覆盖锁文件解析到的构建、测试及目标平台依赖；JSON 中未包含本地 workspace crate，因为它们不是第三方 registry 依赖。发布前应重新生成并审查清单，逐项核对许可证原文及依赖树，确认所发布目标的系统依赖和实际沙箱能力。
+此清单描述 Stage C 集成工作区的锁定依赖，不表示项目已经实现完整邮件客户端，也不构成安全漏洞审计、隐私保证或法律意见。源码已核对的事实包括 OAuth、凭据存储及 IMAP/TLS 选型与配置；尚未完成真实 Gmail/服务商端到端验证、近期维护/公告审查、全部传递依赖许可证原文核对及目标平台审查。Cargo 清单覆盖锁文件解析到的构建、测试及目标平台依赖；JSON 中未包含本地 workspace crate，因为它们不是第三方 registry 依赖。发布前应重新生成并审查清单，逐项核对许可证原文及依赖树，确认所发布目标的系统依赖和实际沙箱能力。

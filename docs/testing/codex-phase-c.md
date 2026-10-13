@@ -2,7 +2,7 @@
 
 2026-10-13。已安装 codex-cli 0.162.1，基线服务仍为阶段 B 的14工具；此验证是现有能力的实际客户端正向控制，不冒充新业务的RED。
 
-使用 [OpenAI Docs 技能](/home/szchan/.codex/skills/.system/openai-docs/SKILL.md) 核对[官方 app-server 文档](https://learn.chatgpt.com/docs/app-server)的 `mcpServerStatus/list` / `mcpServer/tool/call`，再用本机 `generate-json-schema` 的临时输出确认实际版本字段。临时参数遵循[官方配置说明](https://learn.chatgpt.com/docs/config-file/config-reference)。没有修改个人配置、打开真实邮件或启动模型回合。
+使用 OpenAI Docs 技能 核对[官方 app-server 文档](https://learn.chatgpt.com/docs/app-server)的 `mcpServerStatus/list` / `mcpServer/tool/call`，再用本机 `generate-json-schema` 的临时输出确认实际版本字段。临时参数遵循[官方配置说明](https://learn.chatgpt.com/docs/config-file/config-reference)。没有修改个人配置、打开真实邮件或启动模型回合。
 
 首次直接 app-server 启动因只读 Codex runtime SQLite 失败。解决方法是在 bubblewrap 中挂载新临时 `.codex` 目录，不重设 HOME/CODEX_HOME，不挂载真实 auth/config/plugins。客户端禁网，只有合成fixture、临时应用数据和必要执行文件；解析另走原 worker。先 config/read 核对只有两个指定测试服务器，然后创建 ephemeral thread，不发 turn/start。
 

@@ -8,7 +8,6 @@ path; it does not certify every graphical frontend or model's behavior.
 """
 import argparse
 import json
-import os
 from pathlib import Path
 import queue
 import shutil

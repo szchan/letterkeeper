@@ -2191,6 +2191,13 @@
     "rust_version": null
   },
   {
+    "name": "tui-textarea",
+    "version": "0.7.0",
+    "license": "MIT",
+    "repository": "https://github.com/rhysd/tui-textarea",
+    "rust_version": "1.56.1"
+  },
+  {
     "name": "typenum",
     "version": "1.20.1",
     "license": "MIT OR Apache-2.0",

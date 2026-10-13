@@ -1,6 +1,6 @@
 # LetterKeeper 需求文档
 
-版本：0.1 · 日期：2026-10-13 · 状态：需求基线，已完成阶段 B 受控协议原型；实际实现与缺口见 [STATUS.md](STATUS.md)。
+版本：0.1 · 日期：2026-10-13 · 状态：需求基线，已完成阶段 C 受控 TUI/Agent 人工审批工作流；实际实现与缺口见 [STATUS.md](STATUS.md)。
 
 ## 1. 项目定位与已确认决定
 
@@ -152,3 +152,5 @@ Gmail OAuth client 的注册、个人自用与公开发布流程尚待设计。�
 2026-10-12：用户同意 Rust 共享核心、独立正文 worker、TUI/MCP 方案并要求 Git/worktree、成本分级子代理及 TDD。新增 [架构决定](decisions/0001-phase-a.md)、[协作流程](WORKFLOW.md) 和 [验收状态](STATUS.md)。保留所有需求编号、优先级和安全边界，原型功能不替代真实邮箱验收。
 
 2026-10-13：用户授权子代理继续阶段 B TDD，先使用本机受控服务，无需真实凭据。实现记录见 [阶段 B 决定](decisions/0002-phase-b.md)、[集成验证](testing/phase-b-integration.md) 和 [开发记录](development/2026-10-13.md)。需求编号/优先级保持不变；Gmail/系统凭据库代码已有受控验证，真实服务商与公开客户端验收仍待后续授权。
+
+2026-10-13：用户确认阶段C内置编辑器/人工审批方案并授权实施。新增共享人工能力、TUI编辑/附件/完整审批/发送查询及实际客户端/展示DNS与HTTP验证，沿用稳定需求编号；受限自动发送、真实服务和图形前端关卡继续保留。见 [阶段C决定](decisions/0003-phase-c.md) 与 [集成结果](testing/phase-c-integration.md)。

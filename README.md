@@ -6,18 +6,18 @@ LetterKeeper 是隐私优先、面向人和 Agent 的开源邮件客户端，目
 
 ## 当前状态
 
-2026-10-13：已完成阶段 B 的**受控协议原型**，可以通过严格隐式 TLS 的 IMAP/SMTP 服务完成文件夹、分页、搜索、安全阅读、回复/转发草稿、附件、人工批准发送和显式 Drafts/Sent 同步。账户配置、Linux Secret Service 凭据适配及 Gmail OAuth 代码已实现；认证验证使用本机合成 OAuth 服务与注入凭据。
+2026-10-13：已完成阶段 C 的**受控 TUI / Agent 人工审批工作流**。严格 TLS IMAP/SMTP、账户/OAuth、分页搜索、安全阅读、回复/转发、附件与显式 Drafts/Sent 同步继续共用后端；新增内置草稿编辑、完整审阅、人工批准、独立发送及结果查询。
 
-真实 Gmail、真实系统凭据库往返和公开 MCP 客户端尚未验收，**不能称为全部 P0 已完成或生产可用**。实际完成项和缺口见 [验收状态](docs/STATUS.md)，目标见 [需求文档](docs/REQUIREMENTS.md)。本轮没有使用真实邮箱或外发邮件。
+210 项 Rust 测试、fmt/Clippy、实际 PTY、可达 HTTP/DNS 观察器和实际 Codex MCP 数据路径已通过。真实 Gmail、真实系统凭据库、公开图形前端及受限自动发送尚未验收，**不能称为全部 P0 已完成或生产可用**。实际完成项和缺口见 [验收状态](docs/STATUS.md)。本轮没有使用真实邮箱或外发邮件。
 
 ## 实现边界
 
 - 六个 Rust crate 共用正文、账户、协议、草稿授权、TUI/MCP 和应用装配能力。
-- 原文与头部经 bubblewrap worker；无正文网络、无用户目录挂载，限制大小、CPU、内存和时间；失败拒绝处理。TUI/MCP 输出保守文本，不提供原始 HTML 或链接目标。
+- 收取的原文与头部经 bubblewrap worker；无正文网络、无用户目录挂载，限制大小、CPU、内存和时间；失败拒绝处理。阅读与 MCP 输出保守文本；草稿编辑和人工审阅显示完整终端安全文本，不解释 HTML 或加载资源。
 - IMAP 使用 EXAMINE / BODY.PEEK 与 UIDVALIDITY；默认阅读不改变 Seen。账户、文件夹和权限由用户配置，MCP 启动时固定账户，模型无批准、配置、凭据或文件路径工具。
-- 人工 CLI 完整审阅正文、收件人、线程头、附件元数据并输入完整摘要；批准绑定内容和版本，五分钟有效、单次消费。内容变化取消原批准。
+- 人工 CLI/TUI 完整审阅正文、全部收件人、线程头和附件元数据；TUI 另显示附件字节 SHA-256。输入完整摘要批准，绑定内容和版本，五分钟有效、单次消费；内容变化取消原批准。批准后另行发送。
 - 发送保留精确 MIME 字节；DATA 后断连记录 Uncertain，不盲目重试。Sent 的 ServerManaged/Append 策略明确分开，Append 使用原发送字节且每提交仅认领一次。Accepted 只表示 SMTP 接受，Sent 查询仅提供观察证据。
-- TUI 使用一个后台 worker，按需正文和 50 项页面，支持加载、取消结果、搜索、刷新和窗口变化。MCP 每会话最多 8 个 Host 任务，取消请求也保留正在运行任务的配额。
+- TUI 使用各一个网络/本地后台 worker、有界通道、按需正文和 50 项页面；本地编辑保存不等待网络。只在事件/结果/窗口变化时重绘。MCP 每会话最多 8 个 Host 任务，取消请求也保留正在运行任务的配额。
 
 CLI `read` JSON 保留链接目标，不能交给会自动预览资源的组件。第三方 MCP 客户端的最终展示行为仍需逐一验证。本地 MCP 不代表本地模型处理：交给云端 Agent 的正文仍会传给模型服务商。
 
@@ -30,11 +30,17 @@ cargo build --locked
 ./target/debug/letterkeeper --help
 ./target/debug/letterkeeper read tests/fixtures/welcome.eml
 ./target/debug/letterkeeper tui --mail tests/fixtures/welcome.eml --mail tests/fixtures/second.eml
+./target/debug/letterkeeper tui --read-only --mail tests/fixtures/welcome.eml
 ./target/debug/letterkeeper mcp --mail tests/fixtures/welcome.eml --read-only
 ```
 
-TUI：`j/k` 或上下键选择/滚动，`Enter/Tab` 阅读，`Esc` 返回或丢弃加载结果，`r` 刷新，`n/p` 分页，`f` 切换文件夹，`/` 搜索，`?` 帮助，`q` 退出。取消不立即强行关闭底层连接；结果被丢弃，底层受 deadline 限制，退出不等待该工作线程。离线 EML 演示目前仍在进入 TUI 前预解析指定文件；账户 TUI 采用后台按需读取。
+TUI：`j/k` 或上下键选择/滚动，`Enter/Tab` 阅读，`r` 刷新，`n/p` 分页，`f` 文件夹，`/` 搜索，`?` 帮助。宽窗口采用文件夹/列表/正文布局，窄窗口切换单页。
 
+`c` 新建、`d` 本地草稿、`s` 提交记录，阅读页 `R/A/F` 回复/全部回复/转发，`x` 显式保存邮件附件。编辑器中 `Tab` 切换 To/Cc/Bcc/主题/正文，`Ctrl+S` 保存，`F2/F3` 添加/移除附件，`F4` 显式草稿同步；`q` 是普通字符。`Esc` 返回和 `Ctrl+Q` 退出会检查未保存内容；冲突保留输入，可重新加载或另存新草稿。
+
+`F6` 进入完整、可滚动审阅；`F8` 输入完整摘要批准，`F9` 单独发送。提交页 `Enter` 查询、`e` Sent 观察证据、`u` 中断恢复、`F4` 显式 Sent 同步，`v` 查询最近同步。Accepted 仅代表 SMTP 接受，Uncertain 不自动重发。
+
+离线草稿工作区可直接运行 `tui`，不必指定 EML。离线 EML 模式仍预解析最多 50 个文件，回复/导出和服务器同步功能需账户后端；账户 TUI 后台按需读取。正文编辑上限 1 MiB、撤销 20 次，危险粘贴拒绝。浏览取消丢弃过期结果，不强行终止连接；退出不宣称正在发送已取消，重启后查询持久化状态。
 合成草稿（假设返回 id 为 1）：
 
 ```sh
@@ -43,7 +49,7 @@ TUI：`j/k` 或上下键选择/滚动，`Enter/Tab` 阅读，`Esc` 返回或丢�
 ./target/debug/letterkeeper draft approve 1
 ```
 
-离线演示发送仅允许显式 `send 1 --smtp-test 127.0.0.1:端口` 与 `.test` / `.invalid` 身份；必须有实际测试服务。自动测试会自行启动服务。批准要求真实交互终端，管道和模型参数不能批准。
+离线演示发送仅允许显式 `send 1 --smtp-test 127.0.0.1:端口` 与 `.test` / `.invalid` 身份；必须有实际测试服务；离线 TUI 可显式使用 `tui --smtp-test 127.0.0.1:端口`。自动测试会自行启动服务。批准要求真实交互终端，管道和模型参数不能批准。
 
 ## 账户、CLI 与 MCP
 
@@ -60,7 +66,7 @@ TUI：`j/k` 或上下键选择/滚动，`Enter/Tab` 阅读，`Esc` 返回或丢�
 - `mail sync-draft 草稿ID` 显式版本快照追加；`mail sync-sent 提交ID` 仅用于 Append 策略。`mail sync-status 同步ID`、`mail sent-evidence 提交ID` 查询；`mail recover-send 提交ID` 在取得发送进程锁后把中断提交保留为 Uncertain。
 - `mail mark-seen 消息ID` 是显式 CLI 操作，需要起草写权限；默认 TUI/MCP 不标记已读，MCP 不暴露此工具。
 
-账户的 `tui` / `mcp` 使用同一 Host；`mcp --read-only` 可进一步收窄配置。MCP 有 14 个工具，工具参数不能改变账户、权限或端点；没有附件文件访问或批准工具。离线演示仅支持其中适用的工具。
+账户的 `tui` / `mcp` 使用同一 Host；`tui --read-only` / `mcp --read-only` 可进一步收窄配置。TUI 人工能力单独注入交互终端，MCP 无法批准。MCP 有 14 个工具，工具参数不能改变账户、权限或端点；没有附件文件访问或批准工具。离线演示仅支持其中适用的工具。
 
 账户默认配置/数据路径为 XDG_CONFIG_HOME/letterkeeper 与 XDG_DATA_HOME/letterkeeper（未设置时 ~/.config、~/.local/share）；可用 `--config-dir` / `--data-dir` 覆盖，每账户单独状态库。`--state-dir` 仅用于原离线演示，缺省 cwd 的 `.local/letterkeeper`。系统凭据刷新锁按 UID/账户固定在 `/run/user/UID/letterkeeper/credential-locks`，不随数据目录覆盖改变。
 
@@ -73,12 +79,18 @@ cargo test --locked --workspace
 cargo fmt --all -- --check
 cargo clippy --locked --workspace --all-targets -- -D warnings
 python3 scripts/verify_terminal.py target/debug/letterkeeper
+python3 scripts/verify_workspace.py target/debug/letterkeeper
+python3 scripts/verify_privacy_workspace.py target/debug/letterkeeper
+# 需要已安装 Codex；临时配置、禁网，无模型调用
+python3 scripts/verify_codex.py target/debug/letterkeeper
 python3 scripts/benchmark.py target/debug/letterkeeper
 ```
 
 测试使用合成邮件、本机 TLS IMAP/SMTP/OAuth、HTTP/DNS 观察器与 PTY；不调用真实凭据库。全套测试须有 loopback、PTY 和 bubblewrap 权限，不能跳过隔离项后宣称通过；缓存依赖时可添加 `--offline`。真实 TLS 终端往返也包含在 Rust 集成测试中。
 
-开发继续使用独立 worktree、TDD 和按任务选择模型的子代理，见 [协作流程](docs/WORKFLOW.md)。
+release 的 1k/10k 合成邮箱、32 KiB/2 MiB 原文与 32 KiB/1 MiB 编辑输入实测见 [阶段 C 性能](docs/testing/performance-phase-c.md)。测量采用从进程启动开始的子进程树采样；输入与空闲 CPU 门槛在该样本上通过，不等于真实服务性能承诺。
+
+开发继续使用独立 worktree、独立编译目录、TDD 和按任务选择模型的子代理，见 [协作流程](docs/WORKFLOW.md)。真实服务操作清单见 [独立验收关卡](docs/testing/live-acceptance.md)。
 
 ## 文档与许可
 
@@ -87,6 +99,8 @@ python3 scripts/benchmark.py target/debug/letterkeeper
 - [阶段 A 记录](docs/development/2026-10-12.md) · [阶段 B 记录](docs/development/2026-10-13.md)
 - [阶段 B 集成](docs/testing/phase-b-integration.md) · [协议](docs/testing/protocol.md) · [账户/OAuth](docs/testing/accounts.md)
 - [正文/回复](docs/testing/composition.md) · [同步](docs/testing/sync.md) · [适配层](docs/testing/adapters-phase-b.md)
-- [性能样本](docs/testing/performance.md) · [依赖及许可证](docs/DEPENDENCIES.md)
+- [阶段 C 决定](docs/decisions/0003-phase-c.md) · [阶段 C 开发](docs/development/2026-10-13-phase-c.md) · [阶段 C 集成](docs/testing/phase-c-integration.md)
+- [实际 Codex 客户端](docs/testing/codex-phase-c.md) · [展示 HTTP/DNS](docs/testing/privacy-workspace-phase-c.md)
+- [性能样本](docs/testing/performance.md) · [阶段 C 性能](docs/testing/performance-phase-c.md) · [依赖及许可证](docs/DEPENDENCIES.md)
 
 同 UID 任意 shell/文件写入权限超出普通 MCP 权限边界，隔离这类主体需要额外 OS 机制。原创代码与文档采用 **GPL-3.0-only**，见未修改的 [LICENSE](LICENSE)；第三方依赖按各自许可证处理，开源许可证本身不构成隐私保证。

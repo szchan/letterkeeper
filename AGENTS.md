@@ -10,7 +10,7 @@ LetterKeeper 是隐私优先、轻量、面向人和 Agent 的开源邮件客户
 2. [需求文档](docs/REQUIREMENTS.md)：功能、隐私约束、验收标准与待决策事项。
 3. [LICENSE](LICENSE)：GNU GPL 第 3 版全文；项目采用 `GPL-3.0-only`。
 
-当前已建立 Rust 受控协议原型；IMAP/SMTP、账户/OAuth、回复与同步代码已实现并以合成服务验证，真实 Gmail/系统凭据库及公开客户端尚未验收。先阅读 [验收状态](docs/STATUS.md) 与 [阶段 B 架构决定](docs/decisions/0002-phase-b.md)，不把原型验证写成全部 P0 已完成。
+当前已完成 Rust 阶段 C 受控 TUI/Agent 人工审批工作流；IMAP/SMTP、账户/OAuth、回复/同步、内置编辑/附件/完整审批/发送查询及实际 Codex 数据路径已验证。真实 Gmail/系统凭据库、图形前端和受限自动发送仍有缺口。先阅读 [验收状态](docs/STATUS.md) 与 [阶段 C 架构决定](docs/decisions/0003-phase-c.md)，不把受控验证写成全部 P0 已完成。
 
 ## 开发原则
 

@@ -29,3 +29,39 @@ CARGO_TARGET_DIR=/home/szchan/Projects/letterkeeper/.worktrees/phase-b/target ca
 - `scripts/verify_workspace.py` 从实际二进制启动离线合成 TUI，在四种尺寸重复相同终端路径。此脚本需要集成分支把离线 TUI 接入 `run_tui_workspace` 后运行。
 
 完整工作区测试、格式检查和 Clippy 由集成分支统一记录。上述受控服务测试不替代真实服务商与公开客户端展示验证。
+
+
+## 最终独立构建 GREEN
+
+在集成worktree使用独立默认target（无共享CARGO_TARGET_DIR）执行：
+
+```sh
+cargo test --offline --locked --workspace
+cargo fmt --all -- --check
+cargo clippy --offline --locked --workspace --all-targets -- -D warnings
+python3 scripts/verify_terminal.py target/debug/letterkeeper
+python3 scripts/verify_workspace.py target/debug/letterkeeper
+python3 scripts/verify_codex.py target/debug/letterkeeper
+python3 scripts/verify_privacy_workspace.py target/debug/letterkeeper
+```
+
+**210项注册Rust测试通过，0失败，0忽略**；不重复加入子进程probe的filtered运行。fmt/Clippy通过。阶段B的170项保留。
+
+| 模块 | 注册测试 |
+| --- | ---: |
+| 应用CLI/SMTP/stdio/Host/worker/进程锁/PTY/人工工作区 | 59 |
+| 账户/OAuth/私有路径 | 23 |
+| TUI/MCP适配 | 36 |
+| MIME/正文/回复/附件 | 38 |
+| 授权/SQLite/同步/分页 | 33 |
+| TLS IMAP/SMTP协议 | 21 |
+
+若干注册项是子进程/基准helper，空环境下立即返回，仅由父测试或独立基准触发；不把它们当作独立业务覆盖，测试数量也不代表全部P0。真实PTY主体还验证了End到16KiB之外的正文尾部、完整摘要批准不发送、F9单次发送、Accepted/Uncertain、Bcc无邮件头与重启查询。
+
+实际命令的四尺寸workspace脚本通过；旧导航/CLI批准脚本通过。初次新脚本在退出处没有读取PTY输出，窗口重绘被管道背压阻塞；补排空输出后通过。旧脚本“选择”帮助标记已不在新帮助页，改为真实标题“帮助”。沒有修改应用去迎合旧标记。
+
+[实际Codex](codex-phase-c.md)验证两个14工具会话，无模型、个人auth/config。[真实resolver/HTTP](privacy-workspace-phase-c.md)脚本正向控制成功后，MCP草稿/编辑/完整审阅无新DNS/HTTP资源请求；既有worker隔离测试仍覆盖原始解析阶段。14工具不含批准/路径/策略能力。
+
+[release性能](performance-phase-c.md)使用从进程启动开始的5ms树采样，8组TUI与4组活跃SDK MCP通过输入p95≤100ms/空闲单核CPU≤1%样本门槛。385项registry清单与锁定metadata匹配，LICENSE未修改。
+
+[真实服务关卡](live-acceptance.md)已准备但未授权执行。真实Gmail/Secret Service、公开图形前端、受限自动发送仍未验收；其它P0缺口见 [STATUS](../STATUS.md)。

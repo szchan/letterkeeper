@@ -16,3 +16,5 @@ TUI 不再预加载 50 封正文：进入终端后单个后台线程按需读取
 `cargo clippy --offline --locked -p letterkeeper-adapters --all-targets -- -D warnings` 和 `cargo fmt -p letterkeeper-adapters -- --check` 通过；初次 Clippy 指出 nested if 和 Option slice 的风格问题，已改为 let-chain / as_slice 后重新验证。搜索输入模式中的 q 为搜索字符；先 Esc 退出输入模式后 q 退出。
 
 转发收件人边界回归：`cargo test --offline --locked -p letterkeeper-adapters --test phase_b forward_requires` 曾失败，证明初始实现允许无收件人的 forward。Host::reply_draft 最终参数为 `(id, mode, body, to: &[String])`。MCP optional `to` 最多 20 个、每项最多 254 字节且不含控制字符；forward 必须显式提供非空收件人，reply/reply_all 不得覆盖已有 Reply-To。实际邮箱地址合法性由共享 Host/core 再验证。无新增账号或批准字段。
+
+2026-10-14 MCP 主机任务并发资源边界 RED：`cargo test --offline --locked -p letterkeeper-adapters --test phase_b mcp_shared_quota` 实际失败。通过 channel 正向控制证明八个不同 Host 调用均已进入阻塞服务；第九调用未立即拒绝，而是在 250 ms timeout 处失败。测试以 Drop gate 释放所有阻塞服务，失败路径不会挂住运行时。另有测试覆盖 Host 普通错误、panic 后配额释放；数据和错误均为合成值。

@@ -403,3 +403,155 @@ async fn forward_requires_explicit_recipients_and_reply_cannot_override_reply_to
             .any(|s| s.contains("recipient@example.test"))
     );
 }
+
+struct ConcurrentHost {
+    entered: tokio::sync::mpsc::UnboundedSender<String>,
+    released: Mutex<bool>,
+    ready: std::sync::Condvar,
+}
+impl ConcurrentHost {
+    fn release(&self) {
+        *self.released.lock().unwrap() = true;
+        self.ready.notify_all();
+    }
+}
+struct ReleaseOnDrop(Arc<ConcurrentHost>);
+impl Drop for ReleaseOnDrop {
+    fn drop(&mut self) {
+        self.0.release();
+    }
+}
+impl Host for ConcurrentHost {
+    fn list_messages(&self, _: usize, _: usize) -> Result<Vec<MessageSummary>, HostError> {
+        Ok(vec![])
+    }
+    fn read_message(&self, _: &str) -> Result<letterkeeper_content::SafeDocument, HostError> {
+        Err(HostError("synthetic error".into()))
+    }
+    fn create_draft(&self, _: DraftInput) -> Result<Value, HostError> {
+        Ok(json!({}))
+    }
+    fn get_draft(&self, id: &str) -> Result<Value, HostError> {
+        if id == "fail" {
+            return Err(HostError("synthetic error".into()));
+        }
+        if id == "panic" {
+            panic!("synthetic host failure");
+        }
+        self.entered.send(id.to_owned()).unwrap();
+        let mut released = self.released.lock().unwrap();
+        while !*released {
+            released = self.ready.wait(released).unwrap();
+        }
+        Ok(json!({"id":id}))
+    }
+    fn send_draft(&self, _: &str) -> Result<Value, HostError> {
+        Err(HostError("unauthorized".into()))
+    }
+    fn send_status(&self, _: &str) -> Result<Value, HostError> {
+        Ok(json!({}))
+    }
+}
+#[tokio::test]
+async fn mcp_shared_quota_rejects_ninth_job_and_cancellation_retains_permit() {
+    use std::time::Duration;
+    let (entered, mut receive) = tokio::sync::mpsc::unbounded_channel();
+    let host = Arc::new(ConcurrentHost {
+        entered,
+        released: Mutex::new(false),
+        ready: std::sync::Condvar::new(),
+    });
+    let _cleanup = ReleaseOnDrop(host.clone());
+    let adapter = McpAdapter::new(host.clone());
+    let mut jobs = Vec::new();
+    for index in 0..8 {
+        let cloned = adapter.clone();
+        jobs.push(tokio::spawn(async move {
+            cloned
+                .call("get_draft", json!({"id":format!("blocked_{index}")}))
+                .await
+        }));
+    }
+    let mut started = std::collections::HashSet::new();
+    for _ in 0..8 {
+        started.insert(
+            tokio::time::timeout(Duration::from_secs(2), receive.recv())
+                .await
+                .unwrap()
+                .unwrap(),
+        );
+    }
+    assert_eq!(
+        started.len(),
+        8,
+        "positive control: all eight host calls entered"
+    );
+    let ninth = tokio::time::timeout(
+        Duration::from_millis(250),
+        adapter.clone().call("get_draft", json!({"id":"ninth"})),
+    )
+    .await
+    .expect("quota must reject immediately without queuing");
+    assert_eq!(ninth.unwrap_err().0, "host busy");
+    let cancelled = jobs.remove(0);
+    cancelled.abort();
+    assert!(cancelled.await.unwrap_err().is_cancelled());
+    let ninth = tokio::time::timeout(
+        Duration::from_millis(250),
+        adapter.call("get_draft", json!({"id":"after_cancel"})),
+    )
+    .await
+    .expect("cancelled async call must keep its blocked host slot");
+    assert_eq!(ninth.unwrap_err().0, "host busy");
+    assert!(
+        receive.try_recv().is_err(),
+        "rejected calls never entered Host"
+    );
+    host.release();
+    for job in jobs {
+        assert!(job.await.unwrap().is_ok());
+    }
+    assert_eq!(
+        adapter
+            .call("get_draft", json!({"id":"reuse"}))
+            .await
+            .unwrap()["id"],
+        "reuse"
+    );
+}
+#[tokio::test]
+async fn mcp_quota_releases_permits_after_host_error_and_panic() {
+    let (entered, _receive) = tokio::sync::mpsc::unbounded_channel();
+    let host = Arc::new(ConcurrentHost {
+        entered,
+        released: Mutex::new(true),
+        ready: std::sync::Condvar::new(),
+    });
+    let adapter = McpAdapter::new(host);
+    for _ in 0..12 {
+        assert_eq!(
+            adapter
+                .call("get_draft", json!({"id":"fail"}))
+                .await
+                .unwrap_err()
+                .0,
+            "synthetic error"
+        );
+        assert_eq!(
+            adapter
+                .clone()
+                .call("get_draft", json!({"id":"panic"}))
+                .await
+                .unwrap_err()
+                .0,
+            "host unavailable"
+        );
+    }
+    assert_eq!(
+        adapter
+            .call("get_draft", json!({"id":"reuse"}))
+            .await
+            .unwrap()["id"],
+        "reuse"
+    );
+}

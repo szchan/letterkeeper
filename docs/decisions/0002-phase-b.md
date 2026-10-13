@@ -12,6 +12,8 @@
 
 OAuth 使用 oauth2 的随机 state 与 S256 PKCE、临时 loopback 回调；固定 Google 端点。代码交换、刷新、撤销使用禁用重定向、限时有界的 HTTPS 客户端。合成 OAuth 测试只允许独立的 loopback 测试构造，不修改生产端点。注册个人 Desktop client 与公开分发验证尚未完成，不能声称真实 Gmail 已验收。
 
+人工密码/client secret 输入使用 rpassword 7（MIT OR Apache-2.0，上游 [rpassword](https://github.com/conradkleinespel/rpassword)，本轮锁定版本以 Cargo.lock 为准），仅在交互终端提示，不提供秘密参数或环境变量降级。文件导入/导出和运行锁使用已有 rustix 的 openat/NOFOLLOW 与 OS flock；不拼接 shell 命令。
+
 参考：[async-imap](https://docs.rs/async-imap/latest/async_imap/)、[显式 Secret Service backend](https://docs.rs/zbus-secret-service-keyring-store/latest/zbus_secret_service_keyring_store/)、[oauth2](https://docs.rs/oauth2/latest/oauth2/)、[Google 桌面 OAuth](https://developers.google.com/identity/protocols/oauth2/native-app)。各子模块补充选型、许可证与实际锁定版本。
 
 ## 邮件身份与同步

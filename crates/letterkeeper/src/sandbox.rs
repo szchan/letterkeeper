@@ -37,6 +37,12 @@ impl Sandbox {
         let output = self.run("__worker", &[], raw)?;
         serde_json::from_slice(&output).map_err(|_| "invalid_worker_output".into())
     }
+    pub fn inspect(&self, _raw: &[u8]) -> Result<letterkeeper_content::InspectedMail, String> {
+        Err("inspect_not_implemented".into())
+    }
+    pub fn attachment(&self, _raw: &[u8], _id: usize) -> Result<letterkeeper_content::DecodedAttachment, String> {
+        Err("attachment_not_implemented".into())
+    }
 
     pub fn probe(
         &self,

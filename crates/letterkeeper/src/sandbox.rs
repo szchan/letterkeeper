@@ -37,11 +37,17 @@ impl Sandbox {
         let output = self.run("__worker", &[], raw)?;
         serde_json::from_slice(&output).map_err(|_| "invalid_worker_output".into())
     }
-    pub fn inspect(&self, _raw: &[u8]) -> Result<letterkeeper_content::InspectedMail, String> {
-        Err("inspect_not_implemented".into())
+    pub fn inspect(&self, raw: &[u8]) -> Result<letterkeeper_content::InspectedMail, String> {
+        serde_json::from_slice(&self.run("__inspect", &[], raw)?)
+            .map_err(|_| "invalid_worker_output".into())
     }
-    pub fn attachment(&self, _raw: &[u8], _id: usize) -> Result<letterkeeper_content::DecodedAttachment, String> {
-        Err("attachment_not_implemented".into())
+    pub fn attachment(
+        &self,
+        raw: &[u8],
+        id: usize,
+    ) -> Result<letterkeeper_content::DecodedAttachment, String> {
+        serde_json::from_slice(&self.run("__attachment", &[id.to_string()], raw)?)
+            .map_err(|_| "invalid_worker_output".into())
     }
 
     pub fn probe(
@@ -192,6 +198,25 @@ pub fn worker_entry(args: &[String]) -> Result<(), String> {
         .take(Limits::default().max_raw_bytes as u64 + 1)
         .read_to_end(&mut raw)
         .map_err(|_| "worker_read_failed")?;
+    if args.first().map(String::as_str) == Some("__inspect") {
+        if args.len() != 1 {
+            return Err("invalid_worker_arguments".into());
+        }
+        let mail = letterkeeper_content::inspect_message(&raw, Limits::default())
+            .map_err(|_| "parse_rejected")?;
+        return serde_json::to_writer(std::io::stdout(), &mail)
+            .map_err(|_| "worker_output_failed".into());
+    }
+    if args.first().map(String::as_str) == Some("__attachment") {
+        if args.len() != 2 {
+            return Err("invalid_worker_arguments".into());
+        }
+        let id = args[1].parse().map_err(|_| "invalid_worker_arguments")?;
+        let attachment = letterkeeper_content::extract_attachment(&raw, id, Limits::default())
+            .map_err(|_| "attachment_rejected")?;
+        return serde_json::to_writer(std::io::stdout(), &attachment)
+            .map_err(|_| "worker_output_failed".into());
+    }
     let doc = parse_message(&raw, Limits::default()).map_err(|_| "parse_rejected")?;
     if args.first().map(String::as_str) == Some("__probe") {
         if args.len() != 4 {

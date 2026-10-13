@@ -34,7 +34,19 @@ async fn actual_stdio_client_reads_safe_mail_and_cannot_approve() {
         .unwrap()
         .unwrap();
     let list = client.list_all_tools().await.unwrap();
-    assert_eq!(list.len(), 6);
+    assert_eq!(list.len(), 14);
+    for name in [
+        "list_accounts",
+        "list_folders",
+        "search_messages",
+        "reply_draft",
+        "sync_draft",
+        "sync_sent",
+        "sync_status",
+        "sent_evidence",
+    ] {
+        assert!(list.iter().any(|tool| tool.name == name));
+    }
     assert!(!list.iter().any(|t| t.name.contains("approve")));
     let read = client
         .call_tool(

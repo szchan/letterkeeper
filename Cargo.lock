@@ -1520,7 +1520,9 @@ dependencies = [
  "rcgen",
  "rmcp",
  "rpassword",
+ "rustix 1.1.5",
  "rustls",
+ "rustls-pki-types",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -1601,6 +1603,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "webpki-roots",
+ "zeroize",
 ]
 
 [[package]]

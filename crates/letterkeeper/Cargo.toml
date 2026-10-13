@@ -4,6 +4,7 @@ name = "letterkeeper"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 letterkeeper-content.workspace = true
@@ -21,11 +22,13 @@ lettre = { version = "0.11", default-features = false, features = ["builder", "s
 libc = "0.2"
 sha2 = "0.10"
 rpassword = "7"
+rustix = { version = "1", features = ["fs", "process"] }
 
 [dev-dependencies]
 tempfile.workspace = true
 rmcp = { version = "=3.5.1", default-features = false, features = ["client"] }
 tokio = { workspace = true, features = ["process"] }
 rcgen = "0.14"
+rustls-pki-types = "1"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }

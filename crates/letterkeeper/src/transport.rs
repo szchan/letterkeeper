@@ -9,11 +9,23 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 pub fn prepare(submission: &Submission) -> Result<Message, String> {
+    prepare_snapshot(submission, false)
+}
+pub fn prepare_snapshot(submission: &Submission, keep_bcc: bool) -> Result<Message, String> {
     let input = &submission.input;
     let mut builder = Message::builder()
         .from(input.from.parse().map_err(|_| "invalid_sender")?)
         .subject(&input.subject)
         .message_id(Some(submission.message_id.clone()));
+    if let Some(id) = &input.in_reply_to {
+        builder = builder.in_reply_to(id.clone());
+    }
+    if !input.references.is_empty() {
+        builder = builder.references(input.references.join(" "));
+    }
+    if keep_bcc {
+        builder = builder.keep_bcc();
+    }
     for address in &input.to {
         builder = builder.to(address.parse().map_err(|_| "invalid_recipient")?);
     }

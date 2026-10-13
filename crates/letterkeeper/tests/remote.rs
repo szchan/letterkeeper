@@ -319,12 +319,61 @@ fn mcp_receives_inert_network_content_and_rejects_path_policy_inputs() {
 fn missing_credentials_do_not_consume_a_draft_sync_revision() {
     struct OptionalVault(std::sync::atomic::AtomicBool);
     impl CredentialStore for OptionalVault {
-        fn get(&self,_account:&str,_kind:SecretKind)->Result<Option<Secret>,AccountError>{Ok(self.0.load(Ordering::SeqCst).then(||Secret::new("synthetic-secret".into())))}
-        fn set(&self,_account:&str,_kind:SecretKind,_secret:&Secret)->Result<(),AccountError>{Ok(())}
-        fn delete(&self,_account:&str,_kind:SecretKind)->Result<(),AccountError>{Ok(())}
+        fn get(&self, _account: &str, _kind: SecretKind) -> Result<Option<Secret>, AccountError> {
+            Ok(self
+                .0
+                .load(Ordering::SeqCst)
+                .then(|| Secret::new("synthetic-secret".into())))
+        }
+        fn set(
+            &self,
+            _account: &str,
+            _kind: SecretKind,
+            _secret: &Secret,
+        ) -> Result<(), AccountError> {
+            Ok(())
+        }
+        fn delete(&self, _account: &str, _kind: SecretKind) -> Result<(), AccountError> {
+            Ok(())
+        }
     }
-    let imap=support::Server::start_shared();let smtp=support::Server::start(support::Scenario::Smtp);let mut cfg=config(&imap,&smtp);let dir=tempfile::tempdir().unwrap();let ca=dir.path().join("ca.pem");std::fs::write(&ca,imap.tls.roots_pem.as_ref().unwrap()).unwrap();cfg.extra_ca_pem=Some(ca);
-    let vault=Arc::new(OptionalVault(std::sync::atomic::AtomicBool::new(false)));let h=RemoteHost::open(cfg,&dir.path().join("state"),vault.clone(),sandbox()).unwrap();
-    let draft=h.create_draft(letterkeeper_adapters::DraftInput{to:vec!["to@example.test".into()],subject:"test".into(),body:"synthetic".into()}).unwrap();let id=draft["id"].to_string();
-    assert!(h.sync_draft(&id).is_err());vault.0.store(true,Ordering::SeqCst);assert_eq!(h.sync_draft(&id).unwrap()["state"],"Confirmed");
+    let imap = support::Server::start_shared();
+    let smtp = support::Server::start(support::Scenario::Smtp);
+    let mut cfg = config(&imap, &smtp);
+    let dir = tempfile::tempdir().unwrap();
+    let ca = dir.path().join("ca.pem");
+    std::fs::write(&ca, imap.tls.roots_pem.as_ref().unwrap()).unwrap();
+    cfg.extra_ca_pem = Some(ca);
+    let vault = Arc::new(OptionalVault(std::sync::atomic::AtomicBool::new(false)));
+    let h = RemoteHost::open(cfg, &dir.path().join("state"), vault.clone(), sandbox()).unwrap();
+    let draft = h
+        .create_draft(letterkeeper_adapters::DraftInput {
+            to: vec!["to@example.test".into()],
+            subject: "test".into(),
+            body: "synthetic".into(),
+        })
+        .unwrap();
+    let id = draft["id"].to_string();
+    assert!(h.sync_draft(&id).is_err());
+    vault.0.store(true, Ordering::SeqCst);
+    assert_eq!(h.sync_draft(&id).unwrap()["state"], "Confirmed");
+}
+
+#[test]
+fn server_managed_sent_policy_never_issues_client_append() {
+    let imap = support::Server::start_shared();
+    let smtp = support::Server::start(support::Scenario::Smtp);
+    let mut cfg = config(&imap, &smtp);
+    cfg.sent_copy = SentCopyStrategy::ServerManaged;
+    let dir = tempfile::tempdir().unwrap();
+    let vault = Arc::new(Vault::default());
+    let h = host(
+        cfg,
+        dir.path(),
+        vault.clone(),
+        imap.tls.roots_pem.as_ref().unwrap(),
+    );
+    assert!(h.sync_sent("1").is_err());
+    assert_eq!(vault.gets.load(Ordering::SeqCst), 0);
+    assert!(imap.finish().is_empty());
 }

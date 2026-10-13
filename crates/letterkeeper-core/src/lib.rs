@@ -690,11 +690,30 @@ fn validate(input: &DraftInput) -> Result<()> {
     Ok(())
 }
 fn message_id(value: &str) -> bool {
-    value.len() <= 256
-        && value
-            .strip_prefix('<')
-            .and_then(|v| v.strip_suffix('>'))
-            .is_some_and(address)
+    if !value.is_ascii() || value.len() > 256 {
+        return false;
+    }
+    let Some(inner) = value.strip_prefix('<').and_then(|v| v.strip_suffix('>')) else {
+        return false;
+    };
+    let Some((left, right)) = inner.split_once('@') else {
+        return false;
+    };
+    let atom = |s: &str| {
+        !s.is_empty()
+            && s.split('.').all(|part| {
+                !part.is_empty()
+                    && part
+                        .bytes()
+                        .all(|b| b.is_ascii_alphanumeric() || b"!#$%&'*+-/=?^_`{|}~".contains(&b))
+            })
+    };
+    atom(left)
+        && (atom(right)
+            || right
+                .strip_prefix('[')
+                .and_then(|v| v.strip_suffix(']'))
+                .is_some_and(|v| v.bytes().all(|b| matches!(b,33..=90|94..=126))))
 }
 #[cfg(unix)]
 fn private_path(path: &Path) -> Result<()> {

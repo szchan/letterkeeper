@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use letterkeeper_adapters::{DraftInput as AdapterDraft, Host, HostError, MessageSummary};
+use letterkeeper_adapters::{
+    DraftInput as AdapterDraft, FolderSummary, Host, HostError, MessageSummary,
+};
 use letterkeeper_content::SafeDocument;
 use letterkeeper_core::{AccessPolicy, Draft, DraftInput, Permissions, Store, Submission};
 use serde_json::{Value, json};
@@ -34,7 +36,7 @@ pub fn now() -> Result<i64, String> {
         .map_err(|_| "clock_unavailable".into())
 }
 pub fn draft_view(d: &Draft) -> Value {
-    json!({"id":d.id,"revision":d.revision,"digest":d.digest,"account":d.input.account,"from":d.input.from,"to":d.input.to,"cc":d.input.cc,"bcc":d.input.bcc,"subject":d.input.subject,"body":d.input.body,"attachments":d.input.attachments.iter().map(|a|json!({"name":a.name,"content_type":a.content_type,"bytes":a.bytes.len()})).collect::<Vec<_>>()})
+    json!({"id":d.id,"revision":d.revision,"digest":d.digest,"account":d.input.account,"from":d.input.from,"to":d.input.to,"cc":d.input.cc,"bcc":d.input.bcc,"subject":d.input.subject,"body":d.input.body,"in_reply_to":d.input.in_reply_to,"references":d.input.references,"attachments":d.input.attachments.iter().map(|a|json!({"name":a.name,"content_type":a.content_type,"bytes":a.bytes.len()})).collect::<Vec<_>>()})
 }
 pub fn submission_view(s: &Submission) -> Value {
     json!({"id":s.id,"draft_id":s.draft_id,"revision":s.revision,"digest":s.digest,"message_id":s.message_id,"state":s.state,"state_recorded":true})
@@ -86,6 +88,55 @@ impl AppHost {
     }
 }
 impl Host for AppHost {
+    fn list_accounts(&self) -> Result<Value, HostError> {
+        Ok(json!({"accounts":[{"id":ACCOUNT,"email":SENDER}]}))
+    }
+    fn list_folders(&self) -> Result<Vec<FolderSummary>, HostError> {
+        Ok(vec![FolderSummary {
+            id: "local".into(),
+            name: "合成演示".into(),
+        }])
+    }
+    fn list_folder_messages(
+        &self,
+        folder: Option<&str>,
+        offset: usize,
+        limit: usize,
+    ) -> Result<Vec<MessageSummary>, HostError> {
+        if folder.is_some_and(|f| f != "local") {
+            return Err(host_error("folder_scope_denied"));
+        }
+        self.list_messages(offset, limit)
+    }
+    fn search_messages(
+        &self,
+        folder: Option<&str>,
+        query: &str,
+        offset: usize,
+        limit: usize,
+    ) -> Result<Vec<MessageSummary>, HostError> {
+        if folder.is_some_and(|f| f != "local") || query.len() > 1024 || limit == 0 || limit > 50 {
+            return Err(host_error("invalid_search"));
+        }
+        let query = query.to_lowercase();
+        Ok(self
+            .documents
+            .iter()
+            .enumerate()
+            .filter(|(_, d)| {
+                format!("{} {} {}", d.subject, d.from, d.text)
+                    .to_lowercase()
+                    .contains(&query)
+            })
+            .skip(offset)
+            .take(limit)
+            .map(|(i, d)| MessageSummary {
+                id: format!("mail-{}", i + 1),
+                subject: d.subject.clone(),
+                from: d.from.clone(),
+            })
+            .collect())
+    }
     fn list_messages(&self, offset: usize, limit: usize) -> Result<Vec<MessageSummary>, HostError> {
         Ok(self
             .documents

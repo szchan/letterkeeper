@@ -1,0 +1,14 @@
+{
+  "id": "controlled",
+  "email": "reader@example.test",
+  "username": "person@example.test",
+  "imap": { "host": "localhost", "port": 9993 },
+  "smtp": { "host": "localhost", "port": 9465 },
+  "allowed_folders": ["INBOX", "Drafts", "Sent"],
+  "permissions": { "read": true, "draft": true, "send": true },
+  "drafts_folder": "Drafts",
+  "sent_folder": "Sent",
+  "sent_copy": "server_managed",
+  "authentication": { "type": "password" },
+  "extra_ca_pem": null
+}

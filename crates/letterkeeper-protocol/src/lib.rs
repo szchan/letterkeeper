@@ -206,6 +206,62 @@ fn exact_message_id(headers: &[u8], expected: &str) -> bool {
     }
     found == 1 && value == expected
 }
+/// Check tagged completion explicitly: async-imap 0.12's uid_search helper
+/// discards tagged NO/BAD. The library still performs all response parsing.
+async fn checked_uid_search(
+    session: &mut Session,
+    criteria: &str,
+    literal: Option<&str>,
+) -> Result<std::collections::HashSet<u32>, ProtocolError> {
+    use async_imap::imap_proto::{MailboxDatum, Response, Status};
+    let tag = session
+        .run_command(format!("UID SEARCH {criteria}"))
+        .await
+        .map_err(|_| ProtocolError::Rejected)?;
+    let mut awaiting_literal = literal.is_some();
+    let mut saw_search = false;
+    let mut ids = std::collections::HashSet::new();
+    loop {
+        let response = session
+            .read_response()
+            .await
+            .map_err(|_| ProtocolError::Rejected)?
+            .ok_or(ProtocolError::Rejected)?;
+        match response.parsed() {
+            Response::Continue(_) if awaiting_literal => {
+                session
+                    .run_command_untagged(literal.ok_or(ProtocolError::Rejected)?)
+                    .await
+                    .map_err(|_| ProtocolError::Rejected)?;
+                awaiting_literal = false;
+            }
+            Response::Continue(_) => return Err(ProtocolError::Rejected),
+            Response::MailboxData(MailboxDatum::Search(found)) if !awaiting_literal => {
+                if found.contains(&0) {
+                    return Err(ProtocolError::Rejected);
+                }
+                ids.extend(found.iter().copied());
+                saw_search = true;
+                if ids.len() > 1_000_000 {
+                    return Err(ProtocolError::Limit);
+                }
+            }
+            Response::MailboxData(MailboxDatum::Search(_)) => return Err(ProtocolError::Rejected),
+            Response::Done {
+                tag: completed,
+                status: Status::Ok,
+                ..
+            } if completed == &tag && saw_search && !awaiting_literal => return Ok(ids),
+            Response::Done { .. }
+            | Response::Data {
+                status: Status::Bye,
+                ..
+            } => return Err(ProtocolError::Rejected),
+            // Unsolicited mailbox status updates do not change the search result.
+            _ => (),
+        }
+    }
+}
 struct Xoauth {
     response: Option<String>,
 }
@@ -318,14 +374,18 @@ impl ImapClient {
         if !valid(folder, 1024) || !(1..=50).contains(&limit) || offset > 1_000_000 {
             return Err(ProtocolError::InvalidInput);
         }
-        let search = match query {
-            Some(q) => format!("TEXT {}", quoted(q)?),
-            None => "ALL".into(),
+        let (search, literal) = match query {
+            Some(q) if !q.is_ascii() => {
+                quoted(q)?; // Validate length/control characters before credentials.
+                (format!("CHARSET UTF-8 TEXT {{{}}}", q.len()), Some(q))
+            }
+            Some(q) => (format!("TEXT {}", quoted(q)?), None),
+            None => ("ALL".into(), None),
         };
         let state = Arc::new(State::default());
         self.operation(async{
    let mut s=self.session(state.clone()).await?;let mailbox=s.examine(folder).await.map_err(|_|ProtocolError::Rejected)?;let validity=mailbox.uid_validity.ok_or(ProtocolError::Rejected)?;
-   let mut ids:Vec<u32>=s.uid_search(search).await.map_err(|_|ProtocolError::Rejected)?.into_iter().collect();ids.sort_unstable();let more=ids.len()>offset.saturating_add(limit);let wanted:Vec<u32>=ids.into_iter().skip(offset).take(limit).collect();let mut messages=Vec::new();
+   let mut ids:Vec<u32>=checked_uid_search(&mut s,&search,literal).await?.into_iter().collect();ids.sort_unstable();let more=ids.len()>offset.saturating_add(limit);let wanted:Vec<u32>=ids.into_iter().skip(offset).take(limit).collect();let mut messages=Vec::new();
    if !wanted.is_empty(){let set=wanted.iter().map(u32::to_string).collect::<Vec<_>>().join(",");let mut stream=s.uid_fetch(set,"(UID RFC822.SIZE FLAGS BODY.PEEK[HEADER.FIELDS (FROM TO CC SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES)])").await.map_err(|_|ProtocolError::Rejected)?;
     while let Some(fetch)=stream.try_next().await.map_err(|_|ProtocolError::Rejected)?{let uid=fetch.uid.ok_or(ProtocolError::Rejected)?;if !wanted.contains(&uid){continue;}
 if messages.len()>=limit{return Err(ProtocolError::Limit);}let headers=fetch.header().ok_or(ProtocolError::Rejected)?;if headers.len()>MAX_HEADER{return Err(ProtocolError::Limit);}messages.push(RemoteMessage{uid,headers:headers.to_vec(),size:fetch.size.ok_or(ProtocolError::Rejected)?,flags:fetch.flags().map(|flag|match flag { async_imap::types::Flag::Custom(s)=>s.into_owned(),async_imap::types::Flag::MayCreate=>"\\*".into(),other=>format!("\\{other:?}") }).collect()});}
@@ -384,7 +444,7 @@ if messages.len()>=limit{return Err(ProtocolError::Limit);}let headers=fetch.hea
         folder: &str,
         message_id: &str,
     ) -> Result<Vec<RemoteKey>, ProtocolError> {
-        if !valid(folder, 1024) {
+        if !valid(folder, 1024) || !message_id.is_ascii() {
             return Err(ProtocolError::InvalidInput);
         }
         let query = format!("HEADER Message-ID {}", quoted(message_id)?);
@@ -397,10 +457,7 @@ if messages.len()>=limit{return Err(ProtocolError::Limit);}let headers=fetch.hea
                     .await
                     .map_err(|_| ProtocolError::Rejected)?;
                 let uid_validity = mailbox.uid_validity.ok_or(ProtocolError::Rejected)?;
-                let ids = s
-                    .uid_search(query)
-                    .await
-                    .map_err(|_| ProtocolError::Rejected)?;
+                let ids = checked_uid_search(&mut s, &query, None).await?;
                 if ids.len() > 1024 {
                     return Err(ProtocolError::Limit);
                 }

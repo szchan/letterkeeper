@@ -317,7 +317,7 @@ fn remote_human_workspace_shares_controlled_tls_mail_and_drafts() {
     let config: AccountConfig = serde_json::from_value(serde_json::json!({
         "id":"benchmark", "email":"person@example.test", "username":"person@example.test",
         "imap":{"host":"localhost","port":server.port},
-        "smtp":{"host":"localhost","port":9465}, "allowed_folders":["INBOX"],
+        "smtp":{"host":"localhost","port":9465}, "allowed_folders":["INBOX","Drafts"],
         "permissions":{"read":true,"draft":true,"send":false},
         "drafts_folder":"Drafts","sent_folder":"Sent","sent_copy":"server_managed",
         "authentication":{"type":"password"},"extra_ca_pem":ca,
@@ -467,7 +467,10 @@ fn workspace_four_sizes_editing_q_and_terminal_restore() {
         let mut command = Command::new(std::env::current_exe().unwrap());
         command
             .args(["--exact", "workspace_pty_child", "--nocapture"])
-            .env("LETTERKEEPER_WORKSPACE_TEST_STATE", dir.path())
+            .env(
+                "LETTERKEEPER_WORKSPACE_TEST_STATE",
+                dir.path().join("private"),
+            )
             .env("TERM", "xterm-256color")
             .stdin(slave.try_clone().unwrap())
             .stdout(slave.try_clone().unwrap())
@@ -546,7 +549,8 @@ fn pty_approval_requires_full_digest_and_f9_sends_once() {
     for accept in [true, false] {
         let dir = tempfile::tempdir().unwrap();
         let (endpoint, captures) = smtp_once(accept);
-        let host = AppHost::open(dir.path(), vec![], false, Some(endpoint)).unwrap();
+        let state = dir.path().join("private");
+        let host = AppHost::open(&state, vec![], false, Some(endpoint)).unwrap();
         let draft = host
             .create(DraftInput {
                 account: "local-demo".into(),
@@ -587,7 +591,7 @@ fn pty_approval_requires_full_digest_and_f9_sends_once() {
         let mut command = Command::new(std::env::current_exe().unwrap());
         command
             .args(["--exact", "workspace_smtp_pty_child", "--nocapture"])
-            .env("LETTERKEEPER_WORKSPACE_SMTP_STATE", dir.path())
+            .env("LETTERKEEPER_WORKSPACE_SMTP_STATE", &state)
             .env("LETTERKEEPER_WORKSPACE_SMTP_ENDPOINT", endpoint.to_string())
             .env("TERM", "xterm-256color")
             .stdin(slave.try_clone().unwrap())

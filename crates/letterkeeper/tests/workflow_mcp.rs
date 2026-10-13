@@ -21,7 +21,8 @@ fn edited_input(mut input: DraftInput) -> DraftInput {
 #[tokio::test]
 async fn mcp_draft_is_human_editable_and_approval_never_sends() {
     let dir = tempfile::tempdir().unwrap();
-    let host = Arc::new(AppHost::open(dir.path(), vec![], false, None).unwrap());
+    let state = dir.path().join("private");
+    let host = Arc::new(AppHost::open(&state, vec![], false, None).unwrap());
     let agent = McpAdapter::new(host.clone());
     let created = agent
         .call(
@@ -69,7 +70,8 @@ async fn mcp_draft_is_human_editable_and_approval_never_sends() {
 #[tokio::test]
 async fn another_store_revision_invalidates_reviewed_digest() {
     let dir = tempfile::tempdir().unwrap();
-    let host = AppHost::open(dir.path(), vec![], false, None).unwrap();
+    let state = dir.path().join("private");
+    let host = AppHost::open(&state, vec![], false, None).unwrap();
     let original = host
         .create(DraftInput {
             account: "local-demo".into(),
@@ -85,7 +87,7 @@ async fn another_store_revision_invalidates_reviewed_digest() {
         })
         .unwrap();
     let review = host.review(original.id).unwrap();
-    let other = AppHost::open(dir.path(), vec![], false, None).unwrap();
+    let other = AppHost::open(&state, vec![], false, None).unwrap();
     other
         .save(original.id, original.revision, edited_input(original.input))
         .unwrap();
@@ -100,7 +102,7 @@ async fn another_store_revision_invalidates_reviewed_digest() {
 #[test]
 fn attachment_review_hashes_exact_bytes_and_large_body() {
     let dir = tempfile::tempdir().unwrap();
-    let host = AppHost::open(dir.path(), vec![], false, None).unwrap();
+    let host = AppHost::open(&dir.path().join("private"), vec![], false, None).unwrap();
     let original = host
         .create(DraftInput {
             account: "local-demo".into(),

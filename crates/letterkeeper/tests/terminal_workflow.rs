@@ -5,7 +5,7 @@ use letterkeeper::remote::RemoteHost;
 use letterkeeper_accounts::{AccountConfig, AccountError, CredentialStore, Secret, SecretKind};
 use letterkeeper_adapters::{
     DraftInput as AgentDraft, Host, HostError, MessageSummary, run_tui_workspace,
-    workspace::{HumanWorkspace, WorkspaceCapabilities},
+    workspace::HumanWorkspace,
 };
 use letterkeeper_content::SafeDocument;
 use letterkeeper_core::DraftInput;
@@ -172,16 +172,18 @@ impl Host for BenchmarkHost {
         Err(HostError("unsupported".into()))
     }
 }
-struct BenchmarkWorkspace;
-impl HumanWorkspace for BenchmarkWorkspace {
-    fn capabilities(&self) -> WorkspaceCapabilities {
-        WorkspaceCapabilities {
-            account: "benchmark".into(),
-            from: "sender@example.test".into(),
-            read: true,
-            draft: false,
-            send: false,
-        }
+fn benchmark_draft(account: &str, from: &str, body_bytes: usize) -> DraftInput {
+    DraftInput {
+        account: account.into(),
+        from: from.into(),
+        to: vec!["recipient@example.test".into()],
+        cc: vec![],
+        bcc: vec![],
+        subject: "Benchmark editor".into(),
+        body: "x".repeat(body_bytes.min(1024 * 1024)),
+        attachments: vec![],
+        in_reply_to: None,
+        references: vec![],
     }
 }
 #[test]
@@ -207,7 +209,16 @@ fn workspace_benchmark_child() {
         messages,
         body_bytes,
     });
-    let human: Arc<dyn HumanWorkspace> = Arc::new(BenchmarkWorkspace);
+    let dir = tempfile::tempdir().unwrap();
+    let human = Arc::new(AppHost::open(&dir.path().join("private"), vec![], false, None).unwrap());
+    human
+        .create(benchmark_draft(
+            "local-demo",
+            "sender@example.test",
+            body_bytes,
+        ))
+        .unwrap();
+    let human: Arc<dyn HumanWorkspace> = human;
     run_tui_workspace(host, human).unwrap();
 }
 
@@ -241,8 +252,8 @@ fn workspace_tls_benchmark_child() {
         "id":"benchmark", "email":"person@example.test", "username":"person@example.test",
         "imap":{"host":"localhost","port":server.port},
         "smtp":{"host":"localhost","port":9465},
-        "allowed_folders":["INBOX"],
-        "permissions":{"read":true,"draft":false,"send":false},
+        "allowed_folders":["INBOX","Drafts"],
+        "permissions":{"read":true,"draft":true,"send":false},
         "drafts_folder":"Drafts","sent_folder":"Sent","sent_copy":"server_managed",
         "authentication":{"type":"password"},"extra_ca_pem":ca,
     }))
@@ -260,6 +271,12 @@ fn workspace_tls_benchmark_child() {
         )
         .unwrap(),
     );
+    host.create(benchmark_draft(
+        "benchmark",
+        "person@example.test",
+        raw_bytes,
+    ))
+    .unwrap();
     let browser: Arc<dyn Host> = host.clone();
     let human: Arc<dyn HumanWorkspace> = host;
     run_tui_workspace(browser, human).unwrap();

@@ -105,6 +105,26 @@ def run(binary, count, body_bytes, mode):
         drain(master)
         os.write(master, b"\r")
         read_ms = await_marker(master, b"xxxx" if mode == "tls_imap" else b"mail-0", timeout=90)
+        drain(master)
+        os.write(master, b"\x1b")
+        await_marker(master, b"Synthetic subject", timeout=15)
+        drain(master)
+        os.write(master, b"d")
+        await_marker(master, b"Benchmark editor", timeout=15)
+        drain(master)
+        os.write(master, b"\r")
+        await_marker(master, b"Ctrl+S", timeout=15)
+        for _ in range(4):
+            drain(master)
+            os.write(master, b"\t")
+            await_marker(master, b"Body", timeout=15)
+        editor_samples = []
+        for char in b"ABCDEFGHIJKLMNOPQRST":
+            drain(master)
+            before = time.perf_counter()
+            os.write(master, bytes([char]))
+            await_marker(master, bytes([char]), timeout=15)
+            editor_samples.append((time.perf_counter() - before) * 1000)
         peak_rss, peak_pss, _ = usage(proc.pid)
         idle_start = time.perf_counter()
         cpu_start = usage(proc.pid)[2]
@@ -115,16 +135,21 @@ def run(binary, count, body_bytes, mode):
         cpu_end = usage(proc.pid)[2]
         idle_elapsed = time.perf_counter() - idle_start
         hz = os.sysconf("SC_CLK_TCK")
-        os.write(master, b"q")
+        os.write(master, b"\x11")  # Ctrl+Q, then discard the unsaved benchmark edit.
+        await_marker(master, "未保存".encode(), timeout=15)
+        os.write(master, b"d")
         proc.wait(timeout=5)
         assert proc.returncode == 0
         ordered = sorted(samples)
+        editor_ordered = sorted(editor_samples)
         return {"mode": mode, "mailbox_count": count, "fixture_bytes": body_bytes,
                 "startup_warm_ms": round(startup, 2), "help_input_p95_ms": round(ordered[18], 2),
+                "editor_body_bytes": min(body_bytes, 1024 * 1024),
+                "editor_redraw_p95_ms": round(editor_ordered[18], 2),
                 "read_render_ms": round(read_ms, 2), "tree_peak_rss_kib_sampled": peak_rss,
                 "tree_peak_pss_kib_sampled": peak_pss,
                 "idle_cpu_percent_one_core": round(100 * (cpu_end - cpu_start) / hz / idle_elapsed, 3),
-                "input_budget_100ms_met": ordered[18] <= 100,
+                "input_budget_100ms_met": ordered[18] <= 100 and editor_ordered[18] <= 100,
                 "idle_cpu_budget_1pct_met": 100 * (cpu_end - cpu_start) / hz / idle_elapsed <= 1}
     finally:
         if proc.poll() is None:

@@ -23,6 +23,8 @@ fn submission() -> Submission {
             subject: "中文测试".into(),
             body: "A synthetic message.\n.leading dot".into(),
             attachments: vec![],
+            in_reply_to: None,
+            references: vec![],
         },
     }
 }

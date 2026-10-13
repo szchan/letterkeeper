@@ -122,6 +122,8 @@ impl Host for AppHost {
             subject: input.subject,
             body: input.body,
             attachments: vec![],
+            in_reply_to: None,
+            references: vec![],
         };
         validate_demo(&input).map_err(host_error)?;
         let draft = self

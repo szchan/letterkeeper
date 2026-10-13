@@ -21,6 +21,10 @@ pub struct DraftInput {
     pub subject: String,
     pub body: String,
     pub attachments: Vec<Attachment>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub in_reply_to: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub references: Vec<String>,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Draft {
@@ -51,6 +55,29 @@ pub struct Submission {
     pub message_id: String,
     pub input: DraftInput,
     pub state: SubmissionState,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SyncState {
+    Pending,
+    Confirmed,
+    Failed,
+    Uncertain,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SyncKind {
+    Draft,
+    Sent,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SyncRecord {
+    pub id: i64,
+    pub kind: SyncKind,
+    pub local_id: i64,
+    pub revision: i64,
+    pub account: String,
+    pub folder: String,
+    pub message_id: String,
+    pub state: SyncState,
 }
 #[derive(Clone, Copy, Debug)]
 pub struct Permissions {
@@ -320,6 +347,18 @@ impl Store {
     /// Never call based solely on age or opening a second connection.
     pub fn recover_interrupted(&mut self, id: i64) -> Result<Submission> {
         self.finish_submission(id, SendOutcome::Uncertain)
+    }
+    pub fn claim_draft_sync(&mut self, _id: i64, _folder: &str) -> Result<SyncRecord> {
+        Err(Error::Storage)
+    }
+    pub fn claim_sent_sync(&mut self, _id: i64, _folder: &str) -> Result<SyncRecord> {
+        Err(Error::Storage)
+    }
+    pub fn finish_sync(&mut self, _id: i64, _outcome: SendOutcome) -> Result<SyncRecord> {
+        Err(Error::Storage)
+    }
+    pub fn get_sync(&self, _id: i64) -> Result<SyncRecord> {
+        Err(Error::Storage)
     }
 }
 fn require_editable(conn: &Connection, id: i64) -> Result<()> {

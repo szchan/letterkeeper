@@ -32,6 +32,8 @@ fn input() -> DraftInput {
         subject: "合成邮件".into(),
         body: "纯文本\n正文".into(),
         attachments: vec![],
+            in_reply_to: None,
+            references: vec![],
     }
 }
 #[test]

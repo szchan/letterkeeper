@@ -417,6 +417,14 @@ impl WorkspaceState {
                     .editor
                     .as_ref()
                     .is_some_and(|e| e.generation == response.edit_generation);
+                if matches!(response.job, WorkflowJob::Load(..))
+                    && self.editor.is_some()
+                    && !same_editor
+                {
+                    self.status = "重新加载返回期间有新输入；保留文本，请再次选择冲突处理".into();
+                    self.dialog = Some(WorkspaceDialog::Conflict);
+                    return;
+                }
                 if matches!(
                     response.job,
                     WorkflowJob::Save(..) | WorkflowJob::Create(..)
@@ -506,6 +514,10 @@ impl WorkspaceState {
         }
     }
     fn save(&mut self, as_new: bool) -> bool {
+        if !self.capabilities.draft {
+            self.status = "起草权限被拒绝".into();
+            return false;
+        }
         let Some(e) = self.editor.as_ref() else {
             return false;
         };
@@ -591,6 +603,21 @@ impl WorkspaceState {
             }
         }
         if self.view == WorkspaceView::Editor {
+            if !self.capabilities.draft {
+                if let Event::Key(key) = &event {
+                    if key.code == KeyCode::Tab {
+                        if let Some(e) = &mut self.editor {
+                            e.focus = (e.focus + 1) % 5;
+                        }
+                    } else if key.code == KeyCode::BackTab {
+                        if let Some(e) = &mut self.editor {
+                            e.focus = (e.focus + 4) % 5;
+                        }
+                    }
+                }
+                self.status = "只读草稿；禁止编辑或附件路径操作".into();
+                return;
+            }
             if let Event::Key(key) = &event {
                 match key.code {
                     KeyCode::Tab => {
@@ -989,11 +1016,11 @@ fn execute_workflow(
     }
 }
 enum WorkerRequest {
-    Workflow(u64, u64, WorkflowJob),
+    Workflow(u64, u64, Box<WorkflowJob>),
     Browser(u64, BrowserJob),
 }
 enum WorkerResponse {
-    Workflow(WorkflowResponse),
+    Workflow(Box<WorkflowResponse>),
     Browser(BrowserResponse),
 }
 struct Lane {
@@ -1008,13 +1035,14 @@ impl Lane {
             while let Ok(request) = rx.recv() {
                 let response = match request {
                     WorkerRequest::Workflow(generation, edit_generation, job) => {
+                        let job = *job;
                         let result = execute_workflow(workspace.as_ref(), &job);
-                        WorkerResponse::Workflow(WorkflowResponse {
+                        WorkerResponse::Workflow(Box::new(WorkflowResponse {
                             generation,
                             edit_generation,
                             job,
                             result,
-                        })
+                        }))
                     }
                     WorkerRequest::Browser(generation, job) => {
                         let result = match job {
@@ -1066,11 +1094,13 @@ impl WorkspaceWorker {
             network: Lane::new(host, workspace),
         }
     }
-    pub fn poll(&mut self, state: &mut WorkspaceState) {
+    pub fn poll(&mut self, state: &mut WorkspaceState) -> bool {
+        let mut changed = false;
         for lane in [&self.local, &self.network] {
             if let Ok(response) = lane.responses.try_recv() {
+                changed = true;
                 match response {
-                    WorkerResponse::Workflow(r) => state.complete(r),
+                    WorkerResponse::Workflow(r) => state.complete(*r),
                     WorkerResponse::Browser(r) => {
                         state.network_busy = false;
                         state.browser.complete(r);
@@ -1080,9 +1110,14 @@ impl WorkspaceWorker {
         }
         for (network, lane) in [(false, &self.local), (true, &self.network)] {
             if let Some((generation, edit_generation, job)) = state.take_request(network) {
+                changed = true;
                 if lane
                     .requests
-                    .try_send(WorkerRequest::Workflow(generation, edit_generation, job))
+                    .try_send(WorkerRequest::Workflow(
+                        generation,
+                        edit_generation,
+                        Box::new(job),
+                    ))
                     .is_err()
                 {
                     if network {
@@ -1110,6 +1145,7 @@ impl WorkspaceWorker {
                 state.status = "网络线程不可用".into();
             }
         }
+        changed
     }
 }
 fn block(title: &str, focused: bool) -> Block<'_> {
@@ -1443,11 +1479,16 @@ pub fn run_tui_workspace(
     let _guard = TerminalGuard::enter()?;
     let mut terminal =
         ratatui::Terminal::new(ratatui::backend::CrosstermBackend::new(io::stdout()))?;
+    let mut redraw = true;
     while !state.quit {
-        worker.poll(&mut state);
-        terminal.draw(|frame| render_workspace(frame, &mut state))?;
+        redraw |= worker.poll(&mut state);
+        if redraw {
+            terminal.draw(|frame| render_workspace(frame, &mut state))?;
+            redraw = false;
+        }
         if event::poll(std::time::Duration::from_millis(20))? {
             state.event(event::read()?);
+            redraw = true;
         }
     }
     Ok(())

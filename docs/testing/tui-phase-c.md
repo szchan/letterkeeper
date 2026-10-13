@@ -13,3 +13,5 @@ TDD RED：`cargo test -p letterkeeper-adapters --test phase_c --offline`，新�
 编辑：To/Cc/Bcc/Subject/Body，Tab/Shift+Tab切换，小尺寸仅显示当前字段。q 是普通字符；Ctrl+S 保存；Esc/ Ctrl+Q 对未保存内容要求 s 保存/d 放弃/c 继续。冲突 r 重新加载/n另存/c继续。F2添加路径和类型，F3按编号删除，阅读 x按MIME part及目录导出；文件访问仅 HumanWorkspace。F4显式同步；提交列表 Enter状态/e证据/u恢复/v同步状态。F6完整审阅，PgUp/PgDn/Home/End可达尾部；F8输入整个摘要批准300秒，F9单独发送。无自动发送或不确定结果重试。
 
 终端 guard 在 raw mode 成功后立即安装，alternate screen及 bracketed paste失败也由RAII恢复。Crossterm 0.28.1 Unix `TERMINAL_MODE_PRIOR_RAW_MODE` 保留原Termios，disable_raw_mode恢复整个状态。完整审阅以可逆 `\\` 和 `\u{xxxx}` 转义，不使用有损 inert_text，不截断正文；按显示宽度重排并缓存，仅尺寸变化重排。读取视图继续使用保守正文输出。
+
+追加行为RED：`cargo test -p letterkeeper-adapters --test phase_c --offline`，两个测试失败（重新加载覆盖在途新编辑；只读加载草稿仍可本地修改），提交 `62a2532`。修复后14项GREEN；reload期间新输入保留并返回冲突决策，只读编辑器禁止文本/保存/附件。后台轮询返回是否状态变化，TUI仅初次/事件/响应重绘，空闲不再每20ms绘制。内部通道将大请求/响应box化，保持有界队列。

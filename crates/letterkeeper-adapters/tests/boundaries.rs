@@ -157,7 +157,7 @@ async fn official_sdk_initialize_list_call() {
     let client = ().serve(client_io).await.unwrap();
     let server = server.await.unwrap();
     let tools = client.list_tools(Default::default()).await.unwrap();
-    assert_eq!(tools.tools.len(), 6);
+    assert_eq!(tools.tools.len(), 14);
     assert!(!tools.tools.iter().any(|t| t.name.contains("approve")));
     let response = client
         .call_tool(

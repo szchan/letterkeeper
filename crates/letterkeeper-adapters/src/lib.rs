@@ -67,7 +67,7 @@ pub trait Host: Send + Sync {
     ) -> Result<Vec<MessageSummary>, HostError> {
         Err(HostError("unsupported".into()))
     }
-    fn reply_draft(&self, _: &str, _: &str, _: &str) -> Result<Value, HostError> {
+    fn reply_draft(&self, _: &str, _: &str, _: &str, _: &[String]) -> Result<Value, HostError> {
         Err(HostError("unsupported".into()))
     }
     fn sync_draft(&self, _: &str) -> Result<Value, HostError> {
@@ -111,7 +111,16 @@ fn safe_value(v: Value) -> Value {
         Value::Object(o) => Value::Object(
             o.into_iter()
                 .take(50)
-                .map(|(k, v)| (k, safe_value(v)))
+                .map(|(k, v)| {
+                    let preserve = (k == "id" || k.ends_with("_id"))
+                        && v.as_str().is_some_and(|id| id_check(id).is_ok());
+                    let key = if k.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+                        k
+                    } else {
+                        inert_text(&k, 128)
+                    };
+                    (key, if preserve { v } else { safe_value(v) })
+                })
                 .collect(),
         ),
         x => x,
@@ -168,13 +177,13 @@ pub fn render(
         ])
         .split(frame.area());
     frame.render_widget(
-        Paragraph::new("LetterKeeper · 离线合成邮件")
+        Paragraph::new("LetterKeeper · 合成演示 / 受控协议")
             .style(Style::default().fg(Color::Cyan))
             .block(Block::default().borders(Borders::ALL)),
         areas[0],
     );
     let text = if state.help {
-        "j/k ↑/↓ 选择或滚动\nEnter/Tab 阅读/列表 · Esc 返回 · q 退出\n邮件是不可信数据；链接和附件不会自动打开。".to_owned()
+        "j/k ↑/↓ 选择或滚动\nEnter/Tab 阅读/列表 · Esc 取消/返回 · q 退出\nr 刷新 · n/p 分页 · f 文件夹 · / 搜索\n邮件是不可信数据；链接和附件不会自动打开。".to_owned()
     } else if state.reading {
         documents
             .get(state.selected)
@@ -255,25 +264,21 @@ impl Drop for TerminalGuard {
     }
 }
 pub fn run_tui(host: Arc<dyn Host>) -> io::Result<()> {
-    // Initial offline preload occurs before entering the event loop.
-    let messages = host.list_messages(0, 50).map_err(io::Error::other)?;
-    let documents = messages
-        .iter()
-        .map(|m| host.read_message(&m.id).map_err(io::Error::other))
-        .collect::<io::Result<Vec<_>>>()?;
+    let mut browser = BrowserWorker::new(host);
     enable_raw_mode()?;
     let _guard = TerminalGuard;
     execute!(io::stdout(), EnterAlternateScreen)?;
     let mut terminal =
         ratatui::Terminal::new(ratatui::backend::CrosstermBackend::new(io::stdout()))?;
-    let mut state = UiState::default();
-    while !state.quit {
-        terminal.draw(|f| render(f, &state, &messages, &documents))?;
-        match event::read()? {
-            Event::Key(k) if k.kind == event::KeyEventKind::Press => {
-                state.key(k.code, messages.len())
-            }
-            _ => (),
+    let mut state = BrowserState::default();
+    while !state.ui.quit {
+        browser.poll(&mut state);
+        terminal.draw(|frame| render_dynamic(frame, &state))?;
+        if event::poll(std::time::Duration::from_millis(30))?
+            && let Event::Key(key) = event::read()?
+            && key.kind == event::KeyEventKind::Press
+        {
+            state.key(key.code);
         }
     }
     Ok(())
@@ -299,8 +304,48 @@ impl McpAdapter {
 struct Page {
     #[serde(default)]
     offset: usize,
+    #[serde(default)]
+    folder: Option<String>,
     #[serde(default = "default_limit")]
     limit: usize,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Search {
+    #[serde(default)]
+    folder: Option<String>,
+    query: String,
+    #[serde(default)]
+    offset: usize,
+    #[serde(default = "default_limit")]
+    limit: usize,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Reply {
+    id: String,
+    mode: String,
+    body: String,
+    #[serde(default)]
+    to: Vec<String>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Empty {}
+fn page_check(folder: Option<&str>, offset: usize, limit: usize) -> Result<(), HostError> {
+    if let Some(folder) = folder {
+        id_check(folder)?;
+    }
+    if limit == 0 || limit > 50 || offset > 100000 {
+        return Err(HostError("page out of bounds".into()));
+    }
+    Ok(())
+}
+fn query_check(query: &str) -> Result<(), HostError> {
+    if query.is_empty() || query.len() > 1024 || query.chars().any(char::is_control) {
+        return Err(HostError("query out of bounds".into()));
+    }
+    Ok(())
 }
 fn default_limit() -> usize {
     20
@@ -348,11 +393,9 @@ fn dispatch(host: &dyn Host, name: &str, args: Value) -> Result<Value, HostError
     let value = match name {
         "list_messages" => {
             let p: Page = decode(args)?;
-            if p.limit == 0 || p.limit > 50 || p.offset > 100000 {
-                return Err(HostError("page out of bounds".into()));
-            }
+            page_check(p.folder.as_deref(), p.offset, p.limit)?;
             let messages = host
-                .list_messages(p.offset, p.limit)?
+                .list_folder_messages(p.folder.as_deref(), p.offset, p.limit)?
                 .into_iter()
                 .take(p.limit)
                 .collect::<Vec<_>>();
@@ -362,6 +405,52 @@ fn dispatch(host: &dyn Host, name: &str, args: Value) -> Result<Value, HostError
                 None
             };
             json!({"untrusted":true,"messages":messages,"next_offset":next})
+        }
+        "list_accounts" => {
+            let _: Empty = decode(args)?;
+            host.list_accounts()?
+        }
+        "list_folders" => {
+            let _: Empty = decode(args)?;
+            json!({"folders":host.list_folders()?.into_iter().take(50).collect::<Vec<_>>()})
+        }
+        "search_messages" => {
+            let p: Search = decode(args)?;
+            page_check(p.folder.as_deref(), p.offset, p.limit)?;
+            query_check(&p.query)?;
+            let messages = host
+                .search_messages(p.folder.as_deref(), &p.query, p.offset, p.limit)?
+                .into_iter()
+                .take(p.limit)
+                .collect::<Vec<_>>();
+            let next = (messages.len() == p.limit).then_some(p.offset + p.limit);
+            json!({"messages":messages,"next_offset":next})
+        }
+        "reply_draft" => {
+            let p: Reply = decode(args)?;
+            id_check(&p.id)?;
+            if !["reply", "reply_all", "forward"].contains(&p.mode.as_str())
+                || p.body.len() > 32768
+                || p.to.len() > 20
+                || (p.mode == "forward" && p.to.is_empty())
+                || (p.mode != "forward" && !p.to.is_empty())
+                || p.to
+                    .iter()
+                    .any(|to| to.is_empty() || to.len() > 254 || to.chars().any(char::is_control))
+            {
+                return Err(HostError("reply out of bounds".into()));
+            }
+            host.reply_draft(&p.id, &p.mode, &p.body, &p.to)?
+        }
+        "sync_draft" | "sync_sent" | "sync_status" | "sent_evidence" => {
+            let p: Id = decode(args)?;
+            id_check(&p.id)?;
+            match name {
+                "sync_draft" => host.sync_draft(&p.id)?,
+                "sync_sent" => host.sync_sent(&p.id)?,
+                "sync_status" => host.sync_status(&p.id)?,
+                _ => host.sent_evidence(&p.id)?,
+            }
         }
         "read_message" => {
             let p: Read = decode(args)?;
@@ -414,10 +503,14 @@ fn dispatch(host: &dyn Host, name: &str, args: Value) -> Result<Value, HostError
     Ok(value)
 }
 fn tools() -> Vec<Tool> {
-    ["list_messages", "read_message", "create_draft", "get_draft", "send_draft", "send_status"]
+    ["list_messages", "read_message", "create_draft", "get_draft", "send_draft", "send_status", "list_accounts", "list_folders", "search_messages", "reply_draft", "sync_draft", "sync_sent", "sync_status", "sent_evidence"]
         .into_iter().map(|name| {
             let (properties, required) = match name {
+                "list_accounts" | "list_folders" => (json!({}), json!([])),
+                "reply_draft" => (json!({"id":{"type":"string"},"mode":{"type":"string","enum":["reply","reply_all","forward"]},"body":{"type":"string","maxLength":32768},"to":{"type":"array","maxItems":20,"items":{"type":"string","maxLength":254}}}),json!(["id","mode","body"])),
+                "search_messages" => (json!({"folder":{"type":"string"},"query":{"type":"string","minLength":1,"maxLength":1024},"offset":{"type":"integer","minimum":0},"limit":{"type":"integer","minimum":1,"maximum":50}}),json!(["query"])),
                 "list_messages" => (json!({
+                    "folder": {"type":"string"},
                     "offset": {"type": "integer", "minimum": 0},
                     "limit": {"type": "integer", "minimum": 1, "maximum": 50}
                 }), json!([])),

@@ -62,8 +62,14 @@ impl Host for Mock {
         self.record(format!("search:{folder:?}:{query}:{offset}:{limit}"));
         Ok(vec![])
     }
-    fn reply_draft(&self, id: &str, mode: &str, body: &str) -> Result<Value, HostError> {
-        self.record(format!("reply:{id}:{mode}:{body}"));
+    fn reply_draft(
+        &self,
+        id: &str,
+        mode: &str,
+        body: &str,
+        to: &[String],
+    ) -> Result<Value, HostError> {
+        self.record(format!("reply:{id}:{mode}:{body}:{to:?}"));
         Ok(json!({"id":"draft_1","body":"![x](https://evil.test)"}))
     }
     fn sync_draft(&self, id: &str) -> Result<Value, HostError> {
@@ -181,4 +187,219 @@ fn browser_cancellation_discards_stale_results_and_single_flight() {
     assert!(state.take_request().is_some());
     state.key(KeyCode::Char('q'));
     assert!(state.ui.quit);
+}
+
+#[tokio::test]
+async fn official_sdk_lists_schemas_and_calls_new_tools() {
+    use rmcp::ServiceExt;
+    let (server_io, client_io) = tokio::io::duplex(65536);
+    let server =
+        tokio::spawn(async move { McpAdapter::new(mock()).serve(server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
+    let server = server.await.unwrap();
+    let tools = client.list_tools(Default::default()).await.unwrap();
+    assert_eq!(tools.tools.len(), 14);
+    for tool in &tools.tools {
+        assert_eq!(tool.input_schema["additionalProperties"], false);
+        assert!(!tool.name.contains("approve"));
+    }
+    let reply = tools
+        .tools
+        .iter()
+        .find(|t| t.name == "reply_draft")
+        .unwrap();
+    assert_eq!(
+        reply.input_schema["properties"]["mode"]["enum"],
+        json!(["reply", "reply_all", "forward"])
+    );
+    for (name, args) in [
+        ("list_folders", json!({})),
+        ("search_messages", json!({"query":"中文"})),
+        (
+            "reply_draft",
+            json!({"id":"mail_1","mode":"reply","body":"答复"}),
+        ),
+        ("sync_status", json!({"id":"draft_1"})),
+    ] {
+        let response = client
+            .call_tool(
+                rmcp::model::CallToolRequestParams::new(name)
+                    .with_arguments(args.as_object().unwrap().clone()),
+            )
+            .await
+            .unwrap();
+        let text = serde_json::to_string(&response).unwrap();
+        assert!(text.contains("untrusted"));
+        assert!(!text.contains("https://"));
+    }
+    client.cancel().await.unwrap();
+    server.cancel().await.unwrap();
+}
+#[test]
+fn browser_pages_search_read_and_tiny_layout() {
+    use ratatui::{Terminal, backend::TestBackend};
+    let mut state = BrowserState::default();
+    let (generation, _) = state.take_request().unwrap();
+    state.complete(BrowserResponse {
+        generation,
+        result: Ok(BrowserData::Folders(vec![
+            FolderSummary {
+                id: "folder_1".into(),
+                name: "中文文件夹".into(),
+            },
+            FolderSummary {
+                id: "folder_2".into(),
+                name: "另一个".into(),
+            },
+        ])),
+    });
+    let (generation, job) = state.take_request().unwrap();
+    assert!(matches!(job, BrowserJob::List { offset: 0, .. }));
+    state.complete(BrowserResponse {
+        generation,
+        result: Ok(BrowserData::List(
+            (0..50)
+                .map(|i| MessageSummary {
+                    id: format!("m_{i}"),
+                    subject: "中文📨".into(),
+                    from: "a@example.test".into(),
+                })
+                .collect(),
+        )),
+    });
+    state.key(KeyCode::Char('n'));
+    let (generation, job) = state.take_request().unwrap();
+    assert!(matches!(job, BrowserJob::List { offset: 50, .. }));
+    state.key(KeyCode::Char('p'));
+    assert!(state.take_request().is_none());
+    state.complete(BrowserResponse {
+        generation,
+        result: Ok(BrowserData::List(vec![])),
+    });
+    assert_eq!(state.messages.len(), 50); // stale page must not replace current list
+    let (generation, job) = state.take_request().unwrap();
+    assert!(matches!(job, BrowserJob::List { offset: 0, .. }));
+    state.complete(BrowserResponse {
+        generation,
+        result: Ok(BrowserData::List(vec![MessageSummary {
+            id: "m_1".into(),
+            subject: "中文".into(),
+            from: "a".into(),
+        }])),
+    });
+    state.key(KeyCode::Enter);
+    let (generation, job) = state.take_request().unwrap();
+    assert!(matches!(job, BrowserJob::Read(_)));
+    state.complete(BrowserResponse {
+        generation,
+        result: Err(HostError("secret token".into())),
+    });
+    assert!(!state.status.contains("secret"));
+    state.key(KeyCode::Esc);
+    state.key(KeyCode::Char('f'));
+    assert_eq!(state.folder.as_deref(), Some("folder_2"));
+    state.key(KeyCode::Char('/'));
+    state.key(KeyCode::Char('中'));
+    state.key(KeyCode::Enter);
+    let (_, job) = state.take_request().unwrap();
+    assert!(matches!(job,BrowserJob::List {query,..} if query=="中"));
+    for (w, h) in [(100, 25), (24, 10), (1, 1), (0, 0)] {
+        let mut terminal = Terminal::new(TestBackend::new(w, h)).unwrap();
+        terminal.draw(|f| render_dynamic(f, &state)).unwrap();
+    }
+}
+struct Slow {
+    started: std::sync::mpsc::SyncSender<()>,
+    release: Mutex<std::sync::mpsc::Receiver<()>>,
+    calls: std::sync::atomic::AtomicUsize,
+}
+impl Host for Slow {
+    fn list_messages(&self, _: usize, _: usize) -> Result<Vec<MessageSummary>, HostError> {
+        self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.started.send(()).unwrap();
+        self.release.lock().unwrap().recv().unwrap();
+        Ok(vec![])
+    }
+    fn read_message(&self, _: &str) -> Result<letterkeeper_content::SafeDocument, HostError> {
+        Err(HostError("unavailable".into()))
+    }
+    fn create_draft(&self, _: DraftInput) -> Result<Value, HostError> {
+        Err(HostError("unsupported".into()))
+    }
+    fn get_draft(&self, _: &str) -> Result<Value, HostError> {
+        Err(HostError("unsupported".into()))
+    }
+    fn send_draft(&self, _: &str) -> Result<Value, HostError> {
+        Err(HostError("unsupported".into()))
+    }
+    fn send_status(&self, _: &str) -> Result<Value, HostError> {
+        Err(HostError("unsupported".into()))
+    }
+}
+#[test]
+fn blocked_host_does_not_block_escape_quit_or_spawn_more_work() {
+    use std::{
+        sync::atomic::Ordering,
+        sync::mpsc,
+        time::{Duration, Instant},
+    };
+    let (started_tx, started_rx) = mpsc::sync_channel(1);
+    let (release_tx, release_rx) = mpsc::sync_channel(1);
+    let host = Arc::new(Slow {
+        started: started_tx,
+        release: Mutex::new(release_rx),
+        calls: std::sync::atomic::AtomicUsize::new(0),
+    });
+    let mut worker = BrowserWorker::new(host.clone());
+    let mut state = BrowserState::default();
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        worker.poll(&mut state);
+        if started_rx.try_recv().is_ok() {
+            break;
+        }
+        assert!(Instant::now() < deadline);
+        std::thread::yield_now();
+    }
+    let begin = Instant::now();
+    state.key(KeyCode::Esc);
+    for _ in 0..100 {
+        state.key(KeyCode::Char('r'));
+        worker.poll(&mut state);
+    }
+    assert_eq!(host.calls.load(Ordering::SeqCst), 1);
+    state.key(KeyCode::Char('q'));
+    assert!(state.ui.quit);
+    drop(worker);
+    assert!(begin.elapsed() < Duration::from_millis(500));
+    release_tx.send(()).unwrap();
+}
+
+#[tokio::test]
+async fn forward_requires_explicit_recipients_and_reply_cannot_override_reply_to() {
+    let h = mock();
+    let a = McpAdapter::new(h.clone());
+    for args in [
+        json!({"id":"m","mode":"forward","body":"x"}),
+        json!({"id":"m","mode":"reply","body":"x","to":["evil@example.test"]}),
+        json!({"id":"m","mode":"reply_all","body":"x","to":["evil@example.test"]}),
+        json!({"id":"m","mode":"forward","body":"x","to":["x\r\nBcc: injected@example.test"]}),
+        json!({"id":"m","mode":"forward","body":"x","to":vec!["a@example.test";21]}),
+    ] {
+        assert!(a.call("reply_draft", args).await.is_err());
+    }
+    assert!(h.calls.lock().unwrap().is_empty());
+    a.call(
+        "reply_draft",
+        json!({"id":"m","mode":"forward","body":"x","to":["recipient@example.test"]}),
+    )
+    .await
+    .unwrap();
+    assert!(
+        h.calls
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|s| s.contains("recipient@example.test"))
+    );
 }

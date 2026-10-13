@@ -20,7 +20,7 @@ Bounds: 15 s whole operation including connection/TLS/authentication; 8 MiB sess
 
 Dependencies: async-imap 0.12.0, tokio-rustls 0.26.6, rustls 0.23.45, lettre 0.11.23, rcgen 0.14.10; licenses and choice rationale in ADR 0002. Maintained upstream APIs and source were reviewed; no vendored protocol or cryptography implementation.
 
-Limitations: implicit TLS only; real providers and STARTTLS unverified. Blocking APIs reject calls from an active Tokio runtime; use spawn_blocking. SEARCH scans bounded server response then returns a page (no cache/snapshot across concurrent mailbox changes). Credentials are in-memory and redacted, not a credential store. This crate transports raw bytes; it does not parse/render mail bodies, authorize sends or automatically reconcile uncertainty.
+Limitations: implicit TLS only; real providers and STARTTLS unverified. Blocking APIs create a fresh scoped thread when Tokio has an entered handle; asynchronous callers use spawn_blocking to keep the executor responsive. SEARCH scans bounded server response then returns a page (no cache/snapshot across concurrent mailbox changes). Credentials are in-memory and redacted, not a credential store. This crate transports raw bytes; it does not parse/render mail bodies, authorize sends or automatically reconcile uncertainty.
 
 ## Recovery/refusal regression RED
 
@@ -39,3 +39,5 @@ Final crate checks after fixture cleanup: `cargo test --offline --locked -p lett
 ## MCP runtime bridge regression RED
 
 Application integration revealed that Tokio `spawn_blocking` threads still have an entered runtime handle. The former `Handle::try_current` rejection prevented legitimate MCP remote calls. A real TLS regression compares ordinary `std::thread` and `tokio::task::spawn_blocking`; the ordinary thread succeeds and spawn_blocking returns InvalidInput. This is an actual behavioral regression, not a test transport failure.
+
+MCP bridge GREEN: scoped fresh-thread execution supports Tokio's entered handle without nested-runtime panic; real TLS IMAP succeeds from both ordinary threads and `spawn_blocking`. `cargo test --offline -p letterkeeper-protocol`: 18/18 passed (16.17 s). Clippy all targets passed. Async hosts still use spawn_blocking because the public API is blocking. `Credentials::drop` now zeroizes username and secret using zeroize 1 (MIT OR Apache-2.0); credentials remain redacted and non-serializable.

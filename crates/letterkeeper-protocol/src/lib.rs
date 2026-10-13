@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use std::fmt;
+use zeroize::Zeroize;
 #[derive(Clone, Debug)]
 pub struct Endpoint {
     pub host: String,
@@ -14,6 +15,12 @@ pub struct Credentials {
     pub username: String,
     pub secret: String,
     pub oauth: bool,
+}
+impl Drop for Credentials {
+    fn drop(&mut self) {
+        self.secret.zeroize();
+        self.username.zeroize();
+    }
 }
 impl fmt::Debug for Credentials {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -93,10 +100,20 @@ fn quoted(value: &str) -> Result<String, ProtocolError> {
         value.replace('\\', "\\\\").replace('"', "\\\"")
     ))
 }
-fn run<T>(future: impl Future<Output = Result<T, ProtocolError>>) -> Result<T, ProtocolError> {
-    // Blocking API must be called through spawn_blocking from asynchronous hosts.
+fn run<T: Send>(
+    future: impl Future<Output = Result<T, ProtocolError>> + Send,
+) -> Result<T, ProtocolError> {
+    // spawn_blocking also inherits Tokio's entered handle. Bridge to a fresh
+    // scoped thread so block_on cannot nest inside an async runtime context.
+    // Async hosts still use spawn_blocking to keep their executor responsive.
     if tokio::runtime::Handle::try_current().is_ok() {
-        return Err(ProtocolError::InvalidInput);
+        return std::thread::scope(|scope| {
+            let thread = std::thread::Builder::new()
+                .name("letterkeeper-protocol".into())
+                .spawn_scoped(scope, move || run(future))
+                .map_err(|_| ProtocolError::Connection)?;
+            thread.join().map_err(|_| ProtocolError::Connection)?
+        });
     }
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -251,9 +268,9 @@ impl ImapClient {
                 .map_err(|_| ProtocolError::Rejected)
         }
     }
-    fn operation<T>(
+    fn operation<T: Send>(
         &self,
-        future: impl Future<Output = Result<T, ProtocolError>>,
+        future: impl Future<Output = Result<T, ProtocolError>> + Send,
         state: &State,
     ) -> Result<T, ProtocolError> {
         let result = run(future);

@@ -259,7 +259,7 @@ fn smtp_certificates_fail_before_auth_and_payload() {
     }
 }
 #[tokio::test]
-async fn blocking_api_inside_runtime_returns_error_instead_of_panicking() {
+async fn blocking_api_inside_runtime_uses_safe_bridge_without_panicking() {
     let c = ImapClient::new(
         Endpoint {
             host: "localhost".into(),
@@ -268,7 +268,7 @@ async fn blocking_api_inside_runtime_returns_error_instead_of_panicking() {
         TlsOptions::default(),
         Server::credentials(),
     );
-    assert_eq!(c.list_folders().unwrap_err(), ProtocolError::InvalidInput);
+    assert_eq!(c.list_folders().unwrap_err(), ProtocolError::Connection);
 }
 #[test]
 fn command_deadline_covers_authentication() {

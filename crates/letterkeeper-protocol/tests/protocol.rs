@@ -352,3 +352,67 @@ async fn tls_operations_work_from_std_thread_and_tokio_spawn_blocking() {
     assert_eq!(blocked.messages[0].uid, 11);
     server.finish();
 }
+
+#[test]
+fn unicode_search_declares_utf8_and_preserves_quotes_backslashes() {
+    let server = Server::start(Scenario::Utf8Search);
+    let page = client(&server)
+        .list_messages("INBOX", 0, 1, Some("中文\"\\查询"))
+        .unwrap();
+    assert_eq!(page.messages[0].uid, 11);
+    let transcript = server.finish();
+    assert_eq!(
+        transcript
+            .iter()
+            .filter(|s| s.contains("UID SEARCH"))
+            .count(),
+        1
+    );
+    assert!(
+        transcript
+            .iter()
+            .any(|s| s.contains("UID SEARCH CHARSET UTF-8 TEXT"))
+    );
+}
+#[test]
+fn unsupported_utf8_charset_returns_fixed_error_without_fallback_or_retry() {
+    let server = Server::start(Scenario::BadCharset);
+    let error = client(&server)
+        .list_messages("INBOX", 0, 1, Some("中文\"\\private-search"))
+        .unwrap_err();
+    assert_eq!(error, ProtocolError::Rejected);
+    assert_eq!(error.to_string(), "protocol operation failed");
+    let transcript = server.finish();
+    assert_eq!(
+        transcript
+            .iter()
+            .filter(|s| s.contains("UID SEARCH"))
+            .count(),
+        1
+    );
+    assert!(
+        transcript
+            .iter()
+            .any(|s| s.contains("UID SEARCH CHARSET UTF-8 TEXT"))
+    );
+    assert!(!transcript.iter().any(|s| s.contains("UID FETCH")));
+    assert!(
+        !transcript
+            .iter()
+            .any(|s| s.contains("search-literal") || s.contains("search-continuation"))
+    );
+}
+
+#[test]
+fn ascii_search_refusal_is_not_a_successful_empty_page() {
+    let server = Server::start(Scenario::BadCharset);
+    assert_eq!(
+        client(&server)
+            .list_messages("INBOX", 0, 1, Some("ascii"))
+            .unwrap_err(),
+        ProtocolError::Rejected
+    );
+    let log = server.finish();
+    assert!(log.iter().any(|s| s.contains("UID SEARCH TEXT \"ascii\"")));
+    assert_eq!(log.iter().filter(|s| s.contains("UID SEARCH")).count(), 1);
+}

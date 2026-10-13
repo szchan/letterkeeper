@@ -11,6 +11,8 @@ pub enum Scenario {
     Imap,
     Mailbox,
     Recovery,
+    Utf8Search,
+    BadCharset,
     MaxBody,
     HugeHeader,
     Stall,
@@ -201,7 +203,18 @@ async fn imap_reply(
     } else if cmd.starts_with("EXAMINE") || cmd.starts_with("SELECT") {
         format!("* 3 EXISTS\r\n* OK [UIDVALIDITY 77] stable\r\n{tag} OK [READ-ONLY] examine\r\n")
     } else if cmd.starts_with("UID SEARCH") {
-        format!("* SEARCH 11 12 13\r\n{tag} OK search\r\n")
+        if matches!(scenario, Scenario::BadCharset) {
+            format!("{tag} NO [BADCHARSET (US-ASCII)] rejected synthetic-secret private-search\r\n")
+        } else if matches!(scenario, Scenario::Utf8Search) {
+            if !cmd.is_ascii() || !cmd.starts_with("UID SEARCH CHARSET UTF-8 TEXT {") {
+                format!("{tag} NO [BADCHARSET (US-ASCII)] charset and literal required\r\n")
+            } else {
+                receive_search_literal(io, cmd, observed).await;
+                format!("* SEARCH 11 12 13\r\n{tag} OK search\r\n")
+            }
+        } else {
+            format!("* SEARCH 11 12 13\r\n{tag} OK search\r\n")
+        }
     } else if cmd.starts_with("UID FETCH") {
         if matches!(scenario, Scenario::Recovery) && cmd.contains("HEADER.FIELDS") {
             let mut reply = String::new();
@@ -384,6 +397,9 @@ async fn mailbox_reply(
                 .count()
         )
     } else if cmd.starts_with("UID SEARCH") {
+        if cmd.starts_with("UID SEARCH CHARSET UTF-8 TEXT {") {
+            receive_search_literal(io, cmd, observed).await;
+        }
         let wanted = cmd
             .strip_prefix("UID SEARCH HEADER Message-ID ")
             .map(|s| s.trim_matches('"'));
@@ -476,4 +492,43 @@ impl Drop for Server {
             let _ = thread.join();
         }
     }
+}
+
+async fn receive_search_literal(
+    io: &mut BufReader<tokio_rustls::server::TlsStream<tokio::net::TcpStream>>,
+    cmd: &str,
+    observed: &Arc<Mutex<Vec<String>>>,
+) {
+    let count = cmd
+        .rsplit_once('{')
+        .unwrap()
+        .1
+        .strip_suffix('}')
+        .unwrap()
+        .parse::<usize>()
+        .unwrap();
+    assert!(count <= 1024);
+    // A synchronizing literal must not arrive before the server continues.
+    if let Ok(Ok(bytes)) =
+        tokio::time::timeout(std::time::Duration::from_millis(30), io.fill_buf()).await
+    {
+        assert!(
+            bytes.is_empty(),
+            "search literal arrived before continuation"
+        );
+    }
+    observed.lock().unwrap().push("search-continuation".into());
+    io.get_mut()
+        .write_all(b"+ ready for search\r\n")
+        .await
+        .unwrap();
+    let mut raw = vec![0; count];
+    io.read_exact(&mut raw).await.unwrap();
+    let mut end = [0; 2];
+    io.read_exact(&mut end).await.unwrap();
+    assert_eq!(&end, b"\r\n");
+    observed.lock().unwrap().push(format!(
+        "search-literal:{}",
+        String::from_utf8(raw).unwrap()
+    ));
 }

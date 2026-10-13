@@ -43,3 +43,9 @@ Application integration revealed that Tokio `spawn_blocking` threads still have 
 MCP bridge GREEN: scoped fresh-thread execution supports Tokio's entered handle without nested-runtime panic; real TLS IMAP succeeds from both ordinary threads and `spawn_blocking`. `cargo test --offline -p letterkeeper-protocol`: 18/18 passed (16.17 s). Clippy all targets passed. Async hosts still use spawn_blocking because the public API is blocking. `Credentials::drop` now zeroizes username and secret using zeroize 1 (MIT OR Apache-2.0); credentials remain redacted and non-serializable.
 
 Direct calls from an entered Tokio runtime were also verified against the controlled TLS service (rather than an arbitrary loopback port); they succeed through the scoped thread bridge. Such calls still block their caller, so application async paths retain spawn_blocking.
+
+## UTF-8 SEARCH regression RED
+
+RFC 3501 [§6.4.4](https://www.rfc-editor.org/rfc/rfc3501.html#section-6.4.4) requires an explicit charset for non-ASCII search text; UTF-8 support is optional. [§4.3](https://www.rfc-editor.org/rfc/rfc3501.html#section-4.3) restricts quoted strings to seven-bit characters and requires the client to await continuation before transmitting a literal. No UTF8=ACCEPT mode is enabled.
+
+Controlled TLS RED tests reject eight-bit quoted queries, require CHARSET UTF-8 with a synchronizing literal, verify the UTF-8 byte count and continuation ordering, and reject BADCHARSET without payload/fallback/retry. The former implementation returns an empty successful page for tagged NO because async-imap 0.12 uid_search's parse_ids filters completion without checking its status. Unicode success and ASCII/Unicode refusal regressions all fail against the old implementation; response parsing will remain in the library, with typed completion validation in the wrapper.

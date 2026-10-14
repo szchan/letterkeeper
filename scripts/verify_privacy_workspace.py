@@ -41,6 +41,7 @@ def receive(proc, fd, marker):
 
 
 def inner(binary):
+    assert set(os.environ) <= {'HOME', 'PATH', 'LANG'}, 'observer_environment_not_cleared'
     queries = []
     dns = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     dns.bind(('127.0.0.1', 53))
@@ -181,6 +182,7 @@ def outer(binary):
         (root/'hosts').write_text('127.0.0.1 localhost\n')
         script = Path(__file__).resolve()
         command = ['/usr/bin/bwrap','--die-with-parent','--new-session','--unshare-user','--uid','0','--gid','0','--unshare-net','--cap-add','CAP_NET_BIND_SERVICE',
+                   '--clearenv','--setenv','HOME','/tmp','--setenv','PATH','/usr/bin','--setenv','LANG','C.UTF-8',
                    '--ro-bind','/usr','/usr','--ro-bind','/lib','/lib','--ro-bind','/lib64','/lib64',
                    '--proc','/proc','--dev','/dev','--tmpfs','/tmp','--ro-bind',str(binary.parent),str(binary.parent),
                    '--ro-bind',str(script),'/verify.py','--ro-bind',str(root/'resolv.conf'),'/etc/resolv.conf',

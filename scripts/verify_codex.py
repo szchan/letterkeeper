@@ -107,9 +107,11 @@ def verify(binary, codex):
             entries.append(name + "={command=" + json.dumps(server["command"]) +
                            ",args=" + json.dumps(server["args"]) + ",enabled=true}")
         config = "mcp_servers={" + ",".join(entries) + "}"
-        # Preserve environment variable meanings; isolate paths using mounts.
-        # No real home, auth.json, installed plugins or persistent config is mounted.
+        # Only a fresh client directory is mounted at HOME/.codex. No auth.json,
+        # installed plugins, persistent config or ambient auth variables enter.
         command = ["/usr/bin/bwrap", "--die-with-parent", "--new-session", "--unshare-net",
+                   "--clearenv", "--setenv", "HOME", str(Path.home()),
+                   "--setenv", "PATH", "/usr/bin", "--setenv", "LANG", "C.UTF-8",
                    "--ro-bind", "/usr", "/usr", "--ro-bind", "/lib", "/lib",
                    "--ro-bind", "/lib64", "/lib64", "--proc", "/proc", "--dev", "/dev",
                    "--tmpfs", "/tmp", "--ro-bind", str(binary.parent), str(binary.parent),

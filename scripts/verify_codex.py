@@ -112,6 +112,7 @@ def verify(binary, codex):
         command = ["/usr/bin/bwrap", "--die-with-parent", "--new-session", "--unshare-net",
                    "--clearenv", "--setenv", "HOME", str(Path.home()),
                    "--setenv", "PATH", "/usr/bin", "--setenv", "LANG", "C.UTF-8",
+                   "--setenv", "PWD", "/tmp",
                    "--ro-bind", "/usr", "/usr", "--ro-bind", "/lib", "/lib",
                    "--ro-bind", "/lib64", "/lib64", "--proc", "/proc", "--dev", "/dev",
                    "--tmpfs", "/tmp", "--ro-bind", str(binary.parent), str(binary.parent),
@@ -125,7 +126,7 @@ def verify(binary, codex):
         # Exercise the actual bwrap prefix, not a mock or a command-string check.
         prefix = command[:command.index("--chdir") + 2]
         subprocess.run(prefix + ["/usr/bin/python3", "-c",
-                                 "import os; assert set(os.environ) <= {'HOME', 'PATH', 'LANG'}, 'client_environment_not_cleared'"],
+                                 "import os; assert set(os.environ) <= {'HOME', 'PATH', 'LANG', 'PWD'} and os.environ.get('PWD') == '/tmp', 'client_environment_not_cleared'"],
                        env={**os.environ, "LETTERKEEPER_SYNTHETIC_AUTH": "synthetic-only"},
                        check=True, stdout=subprocess.DEVNULL)
         client = Client(command)

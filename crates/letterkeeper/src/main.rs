@@ -86,13 +86,27 @@ enum Action {
 }
 #[derive(Subcommand)]
 enum AccountAction {
-    Import { file: PathBuf },
+    /// Interactively review and create configuration; authentication is separate.
+    Add,
+    Import {
+        file: PathBuf,
+    },
     List,
-    Password { id: String },
-    ClientSecret { id: String },
-    Login { id: String },
-    Logout { id: String },
-    Revoke { id: String },
+    Password {
+        id: String,
+    },
+    ClientSecret {
+        id: String,
+    },
+    Login {
+        id: String,
+    },
+    Logout {
+        id: String,
+    },
+    Revoke {
+        id: String,
+    },
 }
 #[derive(Subcommand)]
 enum DraftAction {
@@ -244,6 +258,7 @@ fn validate_input(
 }
 fn account_action(repo: AccountRepository, action: AccountAction) -> Result<(), String> {
     let id = match &action {
+        AccountAction::Add => return Err("interactive_terminal_required".into()),
         AccountAction::Import { file } => {
             let cfg: AccountConfig = serde_json::from_slice(&read_regular(file, 65536)?)
                 .map_err(|_| "invalid_account_json")?;
@@ -263,6 +278,7 @@ fn account_action(repo: AccountRepository, action: AccountAction) -> Result<(), 
     // Ensure private runtime storage, without accessing any credential yet.
     store_for_account(&cfg, &state)?;
     match action {
+        AccountAction::Add => Err("interactive_terminal_required".into()),
         AccountAction::Password { .. } | AccountAction::ClientSecret { .. } => {
             terminal_required()?;
             let kind = if matches!(action, AccountAction::Password { .. }) {
@@ -340,6 +356,27 @@ fn account_action(repo: AccountRepository, action: AccountAction) -> Result<(), 
     }
 }
 fn run(cli: Cli) -> Result<(), String> {
+    if matches!(
+        &cli.command,
+        Action::Account {
+            command: AccountAction::Add
+        }
+    ) {
+        terminal_required()?;
+        let cfg = letterkeeper::onboarding::collect(
+            &mut std::io::stdin().lock(),
+            &mut std::io::stdout().lock(),
+        )?;
+        if let Some(cfg) = cfg {
+            repository(cli.config_dir.as_deref(), cli.data_dir.as_deref())?
+                .save(&cfg)
+                .map_err(|e| e.to_string())?;
+            return print_json(
+                &serde_json::json!({"configuration_saved": true, "authentication": "unverified"}),
+            );
+        }
+        return print_json(&serde_json::json!({"configuration_saved": false, "cancelled":true}));
+    }
     let account = cli
         .account
         .as_deref()

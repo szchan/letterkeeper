@@ -320,6 +320,32 @@ mod tests {
     use std::os::unix::fs::{PermissionsExt, symlink};
 
     #[test]
+    fn secret_service_collection_paths_follow_the_dbus_object_path_contract() {
+        for path in [
+            "/vendor/vault/default_collection",
+            "/org/freedesktop/secrets/collection/account/nested",
+        ] {
+            let bytes = serde_json::to_vec(&serde_json::json!({"type":"o","data":[path]})).unwrap();
+            assert_eq!(collection_path(&bytes).unwrap(), Some(path.into()));
+        }
+        for path in [
+            "relative",
+            "/vendor//vault",
+            "/vendor/../vault",
+            "/vendor/vault/",
+            "/vendor/vault;tcp",
+            "/vendor/邮箱",
+            "/vendor/vault\n",
+        ] {
+            let bytes = serde_json::to_vec(&serde_json::json!({"type":"o","data":[path]})).unwrap();
+            assert_eq!(
+                collection_path(&bytes),
+                Err(CredentialServiceStatus::Unknown)
+            );
+        }
+    }
+
+    #[test]
     fn directory_diagnostic_is_read_only_and_distinguishes_missing_unsafe_ready() {
         let temp = tempfile::tempdir().unwrap();
         std::fs::set_permissions(temp.path(), std::fs::Permissions::from_mode(0o700)).unwrap();

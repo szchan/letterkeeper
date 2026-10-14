@@ -144,7 +144,8 @@ fn safe_field(value: &str, max: usize) -> bool {
     !value.trim().is_empty()
         && value.len() <= max
         && !value.chars().any(|c| {
-            c.is_control() || matches!(c, '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
+            c.is_control()
+                || matches!(c, '\u{061c}' | '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
         })
 }
 

@@ -1,6 +1,6 @@
 # 实现与验收状态
 
-账户接入增量正在 [PR #6](https://github.com/szchan/letterkeeper/pull/6) 集成验收：`doctor` 和 `account add` 已实现并取得分支 RED/GREEN，最终集成门禁尚待通过。新增诊断只读取目录和凭据服务元数据，配置默认只读、确认后原子创建；不表示已登录或真实服务验收完成。详见[本批开发记录](development/2026-10-14-account-onboarding.md)。
+账户接入增量 `doctor` 和 `account add` 已通过 [代码 SHA `84b5dee` 的完整集成 CI](https://github.com/szchan/letterkeeper/actions/runs/38583555164)，[PR #6](https://github.com/szchan/letterkeeper/pull/6) 保留最终 revision 的门禁。诊断只读取目录和凭据服务元数据，配置默认只读、确认后原子创建；不表示已登录或真实服务验收完成。详见[本批开发记录](development/2026-10-14-account-onboarding.md)。
 
 2026-10-14。阶段 C 的代码与**受控 TUI/Agent 人工审批工作流验证**已完成；真实 Gmail/系统凭据库/公开图形前端尚未验收，**没有完成全部 P0**。以下结果仅指合成邮件和受控服务，需求编号未变。源码已公开到 [szchan/letterkeeper](https://github.com/szchan/letterkeeper)，重型构建/测试迁移到 GitHub Actions；[集成分支 `53d0d72` 完整门禁](https://github.com/szchan/letterkeeper/actions/runs/38539664364)及[手动 release/性能样本](https://github.com/szchan/letterkeeper/actions/runs/38537562629)通过。产物不是发行版，真实服务关卡仍保留。
 
@@ -14,7 +14,7 @@
 | MAIL-06、PRIV-06 | 默认 EXAMINE/BODY.PEEK、无自动 MDN；TUI/MCP 默认不 Seen，明确 CLI 修改另行执行 | TUI 自动标记策略配置、真实服务商 Seen 行为矩阵 |
 | MAIL-07、MCP-06、MCP-09 | CLI/TUI 完整审阅与独立发送、版本/内容绑定、单次批准、原子认领、不可变 wire、Accepted/Failed/Uncertain、跨进程发送锁与中断恢复；Sent 查询仅为证据 | 实际服务商恢复体验；同步 Pending/Uncertain 及明确 Failed 暂无同版本恢复/重认领入口；无自动重发 |
 | MAIL-08、MAIL-09 | 配置可保存多个账户，CLI 启动选一个，核心账户作用域隔离 | 统一多账户界面、邮件缓存/本地搜索、删除/移动/归档、Gmail 标签 |
-| DATA-01、DATA-02 | XDG 配置/数据、0600/0700、descriptor 配置原子替换、无默认遥测、固定安全错误；上游 IMAP 敏感 TRACE 编译禁用 | 缓存清理/诊断导出、完整日志和文件系统安全审计 |
+| DATA-01、DATA-02 | XDG 配置/数据、0600/0700、descriptor 配置原子替换与 create-only；doctor 固定安全 JSON、目录/实际 worker/凭据元数据诊断，不初始化或读取秘密；上游 IMAP 敏感 TRACE 编译禁用 | 缓存清理、完整日志和文件系统安全审计；真实凭据服务兼容性 |
 | DATA-03 | 数据库未加密的限制明确记录 | 静态加密设计与实测 |
 | PRIV-01 至 PRIV-04、PRIV-08 | 无资源获取解析器、独立 worker、原文/输出/parts/depth/CPU/RAM/time 界限，HTTP/DNS 正向控制与无新增流量；新 inspect/attachment 入口故障关闭 | 模糊测试、安全审计、其他发行版沙箱与更多攻击语料 |
 | PRIV-07、PRIV-09 | 无自动链接/预览/导航/附件打开，TUI/MCP 去活化显示 | 显式打开资源的完整交互；不提供手动联网正文渲染 |
@@ -23,7 +23,7 @@
 | MCP-08 | 实际Codex app-server接收去活化文本，可达DNS/HTTP的MCP草稿/编辑/审阅正向控制，安全 Host 输出无原始 HTML/活动 URL；正文指令仅作为数据 | 不承诺第三方客户端不重新解释/联网，下游逐一安全展示验证仍待完成 |
 | MCP-10 | 未提供公网/HTTP MCP | 后续认证与访问控制设计 |
 | UX-01、UX-02 | 中文/宽字符、各一个网络/本地后台 worker、有界页面、搜索/刷新/文件夹、取消过期结果、加载/错误、内置编辑/冲突/附件/完整审批/发送查询、真实 PTY + TLS 往返/窗口/恢复 | 持续视觉评审、更细错误与即时连接取消；离线 EML 入口仍预解析 |
-| UX-03 | CLI 结构化结果与基本快捷键 | 主题/布局/辅助使用 |
+| UX-03 | CLI 结构化结果、基本快捷键与 account add 交互配置；默认只读、精确确认、取消无写入、未认证状态及后续命令 | 主题/布局/辅助使用 |
 | PERF-01 至 PERF-03 | 有界请求/页面/worker、无浏览器、阶段 A/B 同负载和阶段 C release 1k/10k TLS/活跃MCP/大正文编辑测量；该样本输入p95≤100ms、空闲单核CPU≤1% | 真实大邮箱/冷缓存/附件负载、更长空闲采样及最终性能预算 |
 
 ## 重要限制
@@ -35,4 +35,4 @@
 - Secret Service 后端已编译，未在本轮读取或写入真实钥匙环。系统凭据锁要求存在且私有的 /run/user/UID，缺失时故障关闭。
 - 无真实邮箱连接、外发邮件、删除或账户状态修改；公开源码与开发分支推送已有授权，未发布发行版。
 
-本轮210项Rust测试、fmt/Clippy、实际PTY及独立客户端/隐私验证通过。详见 [阶段 C 集成](testing/phase-c-integration.md)、[开发记录](development/2026-10-13-phase-c.md)和[真实服务关卡](testing/live-acceptance.md)。阶段B结果仍保留追溯。
+本批 231 项已登记 Rust 测试、fmt/Clippy、实际 PTY、独立客户端与隐私验证通过，含原阶段 C 的 210 项和新增账户接入单元/集成测试；helper 登记不视为额外独立产品验收。详见[账户接入记录](development/2026-10-14-account-onboarding.md)、[阶段 C 集成](testing/phase-c-integration.md)和[真实服务关卡](testing/live-acceptance.md)。阶段 B/C 历史结果仍保留追溯。

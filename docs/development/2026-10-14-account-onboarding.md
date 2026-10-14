@@ -30,4 +30,8 @@
 
 CLI 第二次完整 CI [38581758074](https://github.com/szchan/letterkeeper/actions/runs/38581758074) 的 CLI 测试通过，随后受控诊断夹具未留下调用记录而失败。没有将缺失记录当作正常通过。诊断子代理新增确定性持有写 FD 的夹具回归，证明直接 exec 临时脚本会遇到 ETXTBSY；原始失败没有 errno 信息，不能据此断定其精确起因。修复仅限测试夹具的脚本启动方式，不改变生产 busctl 或时间/输出边界。
 
-集成 PR [#6](https://github.com/szchan/letterkeeper/pull/6) 的新 SHA 完整门禁待运行，任务分支成功不替代集成通过。真实账户、真实凭据条目与默认桌面策略验收仍保留。
+代码集成 SHA `84b5deeb4c2bc7638fc33e96be1210773fe31667` 的[完整 CI 38583555164](https://github.com/szchan/letterkeeper/actions/runs/38583555164) 已通过，workspace、codex-client、ci-gate 均为 success；231 项登记 Rust 测试（app 67、accounts 36、adapters 36、content 38、core 33、protocol 21），其余 11 项 CI 编排和 8 项 Codex readiness Python 测试、fmt/Clippy、实际 PTY、HTTP/DNS 及 Codex 数据路径保留。登记含既有子进程/helper，不将其重复算作独立产品覆盖。子任务通过未替代本次新 SHA 集成验证。
+
+双向格式标记 RED 为 `01f39f96bbe043523f5b469756391ea1f2732c84`：[builder 38582972917](https://github.com/szchan/letterkeeper/actions/runs/38582972917) 断言非法文件夹被接受，[引导 38583026664](https://github.com/szchan/letterkeeper/actions/runs/38583026664) 断言应提前返回安全错误却返回取消，均匹配一项、exit 101。修复后精确 SHA `84b5deeb4c2bc7638fc33e96be1210773fe31667` 的[builder GREEN 38583605713](https://github.com/szchan/letterkeeper/actions/runs/38583605713)和[引导 GREEN 38583605653](https://github.com/szchan/letterkeeper/actions/runs/38583605653) 均匹配一项、exit 0、`test_finished`。未改变合法中文文件夹支持。
+
+集成 PR [#6](https://github.com/szchan/letterkeeper/pull/6) 后续只补各模块的实测证据和状态文档；最终 revision 合并前仍须其最新完整门禁通过。真实账户、真实凭据条目与默认桌面策略验收仍保留。本机未执行 Cargo 构建、检查、测试、Clippy 或性能负载。

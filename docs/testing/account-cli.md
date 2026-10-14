@@ -33,4 +33,4 @@ Rust 集成测试内启动 Python 的真实 controlling PTY：
 
 ## GREEN / 集成
 
-初版实现 SHA `af77ce9aa06b200012ac317d83a11645f4094ef4` 的[TDD GREEN](https://github.com/szchan/letterkeeper/actions/runs/38581028596)通过。初版[完整 CI](https://github.com/szchan/letterkeeper/actions/runs/38580994626)在 fmt 检查因 module export 排序失败；后续修正格式。最终精确确认回归 GREEN / 完整门禁待记录。仅运行 rustfmt 与静态审查；本机未执行 Cargo 编译、check、测试或 Clippy。任务分支通过不替代主代理集成后新 SHA 的完整门禁。
+初版实现 SHA `af77ce9aa06b200012ac317d83a11645f4094ef4` 的[TDD GREEN](https://github.com/szchan/letterkeeper/actions/runs/38581028596)通过。初版[完整 CI](https://github.com/szchan/letterkeeper/actions/runs/38580994626)在 fmt 检查因 module export 排序失败；后续修正格式。精确确认修正 SHA `ef181112fcf1a84b5175fac7121fda356fdfe138` 的[TDD GREEN](https://github.com/szchan/letterkeeper/actions/runs/38581798573)通过；其[完整门禁](https://github.com/szchan/letterkeeper/actions/runs/38581758074)通过 fmt、Clippy、实际 Codex 和应用测试（含 doctor / PTY），但账户 crate 的凭据元数据 shim 测试因缺失合成 calls 文件失败。未跳过失败项；诊断任务负责修复后重跑完整门禁。最终门禁待记录。仅运行 rustfmt 与静态审查；本机未执行 Cargo 编译、check、测试或 Clippy。任务分支通过不替代主代理集成后新 SHA 的完整门禁。

@@ -10,4 +10,6 @@ The existing worker reconstructed `/lib64` as `usr/lib`, which matches the verif
 
 ## GREEN
 
+移除最初过宽的 AppArmor fallback 后，[PR 环境预检](https://github.com/szchan/letterkeeper/actions/runs/38535568409) 与 [GREEN 尝试](https://github.com/szchan/letterkeeper/actions/runs/38535628451) 在进入 Cargo 前因 Ubuntu 的 `RTM_NEWADDR: Operation not permitted` 失败。这些是环境失败，不作为测试断言 RED。针对已观察到的限制，runner 安装脚本仅替换 `/usr/bin/bwrap` 的同名 namespace 例外 profile，保留其他 AppArmor profile 和全局 sysctl，并新增零有效 capabilities 预检。本机和应用不修改系统策略。
+
 Pending exact-test and complete GitHub Actions runs. The existing sandbox suite covers safe Chinese parsing, oversize input, missing isolation, direct worker rejection, and reachable HTTP/DNS plus host-file privacy. The full CI also covers protocol, terminal and public Codex paths. No local Cargo compilation or testing was performed.

@@ -16,7 +16,7 @@
 
 首次 subagent 分支 push 后立即创建 draft PR；后续 PR 更新自动 CI。main push 自动 CI，其他尚无 PR 的分支用 `gh workflow run ci.yml --repo szchan/letterkeeper --ref 分支`。这样正常 PR 分支只跑一次，无 push/PR 重复。普通 CI 取消同一 PR 的过时运行；TDD 专用 workflow 无 concurrency 取消。
 
-`setup-linux.sh` 仅允许 GitHub hosted VM，安装 bubblewrap 等依赖；先实际测试两层 user/network namespace、无用户目录挂载及隔离网络。预检失败即失败，不跳过沙箱，不卸载或改写 AppArmor profile、不修改全局 sysctl。若未来 runner 镜像改变并导致拒绝，先记录真实失败与明确原因，再独立审查最小修复；应用 worker 另由真实 Rust/隐私测试覆盖。机制依据 [Ubuntu 24.04 release notes](https://documentation.ubuntu.com/release-notes/24.04/) 的 user namespace 约束。Ubuntu worker 路径兼容性在远程完整运行之前不作通过声明。
+`setup-linux.sh` 仅允许 GitHub hosted VM，安装 bubblewrap 等依赖。[实际环境 RED](https://github.com/szchan/letterkeeper/actions/runs/38535568409) 显示 Ubuntu 24.04 的 `bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted`。当 runner 启用 AppArmor unprivileged userns 限制时，仅为 `/usr/bin/bwrap` 加载 namespace 例外，替换其同名 `bwrap` profile；不卸载其他 profile、不关闭 AppArmor、不修改全局 sysctl，也不运行本机安装脚本。依据 [Ubuntu 24.04 release notes](https://documentation.ubuntu.com/release-notes/24.04/) 和 [AppArmor 的 bwrap profile](https://gitlab.com/apparmor/apparmor/-/blob/master/profiles/apparmor/profiles/extras/bwrap-userns-restrict)。随后实际测试两层 user/network namespace、无用户目录挂载、零有效 capabilities 及隔离网络；预检失败即失败，不跳过沙箱。此 runner 配置不声称通过默认 Ubuntu 桌面策略；应用 worker 另由真实 Rust/隐私测试覆盖。
 
 ## 固定版本来源
 

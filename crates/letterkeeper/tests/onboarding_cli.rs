@@ -63,7 +63,7 @@ with tempfile.TemporaryDirectory() as tmp:
             code,output=launch(config,data,answers,eof=mode=='eof')
             assert code==0 and b'cancelled' in output
             assert not config.exists() and not data.exists(), 'cancellation created storage'
-    for confirm in ['', 'y', 'YES', 'no']:
+    for confirm in ['', 'y', 'YES', 'no', ' yes', 'yes ']:
         config=root/('confirm'+confirm)/'config';data=root/('confirm'+confirm)/'data'
         answers=password[:-1]+[confirm]
         code,output=launch(config,data,answers)

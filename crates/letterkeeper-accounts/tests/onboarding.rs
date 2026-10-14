@@ -29,6 +29,24 @@ fn input() -> OnboardingInput {
 }
 
 #[test]
+fn onboarding_rejects_bidi_format_marks_in_reviewed_account_fields() {
+    for mark in ['\u{061c}', '\u{200e}', '\u{200f}'] {
+        let mut i = input();
+        i.allowed_folders.push(format!("项目{mark}"));
+        assert!(i.build().is_err(), "bidi format mark accepted in folder");
+        let mut i = input();
+        i.username = Some(format!("synthetic{mark}"));
+        assert!(i.build().is_err(), "bidi format mark accepted in username");
+        let mut i = input();
+        i.drafts_folder = Some(format!("草稿{mark}"));
+        assert!(i.build().is_err());
+        let mut i = input();
+        i.sent_folder = Some(format!("已发送{mark}"));
+        assert!(i.build().is_err());
+    }
+}
+
+#[test]
 fn onboarding_defaults_and_create_only_contract() {
     let c = input()
         .build()

@@ -165,6 +165,18 @@ mod tests {
     use super::*;
     use std::io::Cursor;
     #[test]
+    fn bidi_formatting_marks_are_rejected_before_configuration_review() {
+        for mark in ['\u{061c}', '\u{200e}', '\u{200f}'] {
+            let input = format!("demo{mark}\n");
+            let mut output = Vec::new();
+            assert_eq!(
+                collect(&mut Cursor::new(input), &mut output).unwrap_err(),
+                "invalid_account_input"
+            );
+            assert!(!String::from_utf8(output).unwrap().contains(mark));
+        }
+    }
+    #[test]
     fn truncated_overlong_and_terminal_controls_cannot_confirm() {
         for value in ["demo", "demo\u{202e}\n", "demo\u{1b}[31m\n"] {
             assert!(

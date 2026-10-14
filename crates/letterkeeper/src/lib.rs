@@ -2,8 +2,8 @@
 pub mod app;
 pub mod diagnostics;
 pub mod files;
+pub mod onboarding;
 pub mod remote;
 pub mod sandbox;
 pub mod transport;
 pub mod workflow;
-pub mod onboarding;

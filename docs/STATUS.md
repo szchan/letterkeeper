@@ -1,5 +1,7 @@
 # 实现与验收状态
 
+账户接入增量正在 [PR #6](https://github.com/szchan/letterkeeper/pull/6) 集成验收：`doctor` 和 `account add` 已实现并取得分支 RED/GREEN，最终集成门禁尚待通过。新增诊断只读取目录和凭据服务元数据，配置默认只读、确认后原子创建；不表示已登录或真实服务验收完成。详见[本批开发记录](development/2026-10-14-account-onboarding.md)。
+
 2026-10-14。阶段 C 的代码与**受控 TUI/Agent 人工审批工作流验证**已完成；真实 Gmail/系统凭据库/公开图形前端尚未验收，**没有完成全部 P0**。以下结果仅指合成邮件和受控服务，需求编号未变。源码已公开到 [szchan/letterkeeper](https://github.com/szchan/letterkeeper)，重型构建/测试迁移到 GitHub Actions；[集成分支 `53d0d72` 完整门禁](https://github.com/szchan/letterkeeper/actions/runs/38539664364)及[手动 release/性能样本](https://github.com/szchan/letterkeeper/actions/runs/38537562629)通过。产物不是发行版，真实服务关卡仍保留。
 
 | 需求 | 已实现与验证 | 仍需完成 |

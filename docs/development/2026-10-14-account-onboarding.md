@@ -8,6 +8,7 @@
 | 配置 | feat/account-onboarding / .worktrees/account-onboarding | GPT-6.1-Sol high | 有界校验、默认权限、原子不可覆盖创建 |
 | CLI | feat/account-cli / .worktrees/account-cli | GPT-6.1-Sol medium | 交互引导、doctor 接线、真实 PTY 与拒绝路径 |
 | 集成 | feat/account-integration / .worktrees/account-integration | 主代理 | ADR、接口、审查、文档与最终 PR |
+| 只读复审 | review/account-onboarding / .worktrees/account-review | GPT-6-Luna high | 新增输入、终端审阅、目录与 D-Bus 边界，以及文档一致性 |
 
 开始阶段发现现有 AccountRepository::new 会创建目录，save 会覆盖已有同名配置。因此诊断不能复用该构造入口；交互取消必须在初始化仓库之前完成，新账户需要独立 create-only 操作。
 
@@ -24,5 +25,9 @@
 每个精确 TDD 运行匹配一项，RED exit 101、GREEN exit 0、均为 `test_finished`；不吞掉预期失败。完整 SHA 与命令见各 testing 文档。初版 CLI 的全套 CI 因 export 排序导致 fmt 失败，后续修正，未将该运行当作完整通过。
 
 各子任务 PR：[诊断 #4](https://github.com/szchan/letterkeeper/pull/4)、[CLI #5](https://github.com/szchan/letterkeeper/pull/5)、[配置后端 #7](https://github.com/szchan/letterkeeper/pull/7)。集成仅挑选本批已审查提交，保留测试和实现的提交顺序；不合并其他旧分支。
+
+独立复审发现 U+061C、U+200E/F 尚可进入账户终端审阅，主代理新增 builder 与引导的分别精确回归测试后再修复。复审也指出 STATUS 未同步本批待验收状态，已补充。
+
+CLI 第二次完整 CI [38581758074](https://github.com/szchan/letterkeeper/actions/runs/38581758074) 的 CLI 测试通过，随后受控诊断夹具未留下调用记录而失败。没有将缺失记录当作正常通过。诊断子代理新增确定性持有写 FD 的夹具回归，证明直接 exec 临时脚本会遇到 ETXTBSY；原始失败没有 errno 信息，不能据此断定其精确起因。修复仅限测试夹具的脚本启动方式，不改变生产 busctl 或时间/输出边界。
 
 集成 PR [#6](https://github.com/szchan/letterkeeper/pull/6) 的新 SHA 完整门禁待运行，任务分支成功不替代集成通过。真实账户、真实凭据条目与默认桌面策略验收仍保留。

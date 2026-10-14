@@ -19,5 +19,6 @@ if __name__ == "__main__":
     probe = ["/usr/bin/python3", "-c",
              "import os; from pathlib import Path; "
              "assert not Path('/home/runner').exists(); "
+             "assert int(next(line.split()[1] for line in open('/proc/self/status') if line.startswith('CapEff:')), 16) == 0; "
              "assert open('/proc/net/dev').read().count(':') == 1; print('sandbox_preflight_passed')"]
     subprocess.run(sandbox() + sandbox() + probe, check=True, timeout=30)

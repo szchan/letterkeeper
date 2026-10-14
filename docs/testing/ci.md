@@ -6,17 +6,17 @@
 
 `python3 scripts/test_ci.py`：编排接口 stub 抛出 `NotImplementedError`，7 个测试、17 个测试/子用例错误；这是实现前真实失败，不是 Rust 业务断言失败。
 
-完整托管验证尚未运行；后续追加确切 commit SHA、Actions run URL 与结果。
+首次完整托管验证和后续 RED/GREEN 已实际执行；运行链接见下方和[开发记录](../development/2026-10-14-hosted-ci.md)。
 
 ## GREEN 与运行环境
 
-`python3 scripts/test_ci.py`：9 项通过（子用例覆盖非法 SHA、crate、test、phase）；调用 Cargo 的接口在本地使用替身，仅验证参数数组、准确选择、拒绝零/多个匹配、SHA 不符拒绝执行、编译 RED 与原始失败不转绿。脚本语法用 `bash -n scripts/ci/*.sh` 验证；本机没有执行 Cargo。
+`python3 scripts/test_ci.py`：初次实现 9 项通过，源码产物补充后共 11 项通过（子用例覆盖非法 SHA、crate、test、phase）；调用 Cargo 的接口在本地使用替身，仅验证参数数组、准确选择、拒绝零/多个匹配、SHA 不符拒绝执行、编译 RED 与原始失败不转绿，另覆盖源码归档和摘要清单。脚本语法用 `bash -n scripts/ci/*.sh` 验证；本机没有执行 Cargo。
 
 `.github/workflows/ci.yml` 在完整 `ubuntu-24.04` VM 上运行，无 slim 容器。`workspace` 执行 fmt、Clippy、完整 workspace 测试、构建、真实终端、编辑/审阅/发送工作区及可达 HTTP/DNS 隐私脚本；独立 `codex-client` 安装公开 Codex CLI 并运行现有实际 app-server 脚本，无 auth、无模型回合。`ci-gate` 仅在两个 job 都为 success 时通过；失败、取消或跳过均不通过。权限仅 `contents: read`，checkout 不保留凭据，不使用个人 secret、不上传测试目录。只缓存 Cargo registry/git，不缓存 target。
 
 首次 subagent 分支 push 后立即创建 draft PR；后续 PR 更新自动 CI。main push 自动 CI，其他尚无 PR 的分支用 `gh workflow run ci.yml --repo szchan/letterkeeper --ref 分支`。这样正常 PR 分支只跑一次，无 push/PR 重复。普通 CI 取消同一 PR 的过时运行；TDD 专用 workflow 无 concurrency 取消。
 
-`setup-linux.sh` 仅允许 GitHub hosted VM，安装 bubblewrap 等依赖；先实际测试两层 user/network namespace、无用户目录挂载及隔离网络。预检失败即失败，不跳过沙箱，不卸载或改写 AppArmor profile、不修改全局 sysctl。若未来 runner 镜像改变并导致拒绝，先记录真实失败与明确原因，再独立审查最小修复；应用 worker 另由真实 Rust/隐私测试覆盖。机制依据 [Ubuntu 24.04 release notes](https://documentation.ubuntu.com/release-notes/24.04/) 的 user namespace 约束。Ubuntu worker 路径兼容性在远程完整运行之前不作通过声明。
+`setup-linux.sh` 仅允许 GitHub hosted VM，安装 bubblewrap 等依赖。[实际环境 RED](https://github.com/szchan/letterkeeper/actions/runs/38535568409) 显示 Ubuntu 24.04 的 `bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted`。当 runner 启用 AppArmor unprivileged userns 限制时，仅为 `/usr/bin/bwrap` 加载 namespace 例外，替换其同名 `bwrap` profile；不卸载其他 profile、不关闭 AppArmor、不修改全局 sysctl，也不运行本机安装脚本。依据 [Ubuntu 24.04 release notes](https://documentation.ubuntu.com/release-notes/24.04/) 和 [AppArmor 的 bwrap profile](https://gitlab.com/apparmor/apparmor/-/blob/master/profiles/apparmor/profiles/extras/bwrap-userns-restrict)。随后实际测试两层 user/network namespace、无用户目录挂载、零有效 capabilities 及隔离网络；预检失败即失败，不跳过沙箱。此 runner 配置不声称通过默认 Ubuntu 桌面策略；应用 worker 另由真实 Rust/隐私测试覆盖。
 
 ## 固定版本来源
 
@@ -52,4 +52,12 @@ gh workflow run release.yml --repo szchan/letterkeeper --ref main
 gh run list --repo szchan/letterkeeper --workflow release.yml
 ```
 
-成功后仅上传 `target/ci-release/` 中明确复制的二进制、对应 SHA 的 `git archive` 源码、原始 LICENSE、合成性能 JSON 和 manifest；不 glob 私有目录、credential store 或完整 workspace。Artifact 保留 7 天，无秘密权限。固定 [actions/upload-artifact v4.6.2](https://github.com/actions/upload-artifact/commit/ea165f8d65b6e75b540449e92b4886f43607fa02) SHA `ea165f8d65b6e75b540449e92b4886f43607fa02` 由官方 GitHub API 查询确认。当前只是工作流入口；完整 release/performance run 未完成之前不称为已经验证。
+成功后仅上传 `target/ci-release/` 中明确复制的二进制、对应 SHA 的 `git archive` 源码、原始 LICENSE、合成性能 JSON 和 manifest；不 glob 私有目录、credential store 或完整 workspace。Artifact 保留 7 天，无秘密权限。固定 [actions/upload-artifact v4.6.2](https://github.com/actions/upload-artifact/commit/ea165f8d65b6e75b540449e92b4886f43607fa02) SHA `ea165f8d65b6e75b540449e92b4886f43607fa02` 由官方 GitHub API 查询确认。[源码 `94ee542` 的实际运行](https://github.com/szchan/letterkeeper/actions/runs/38537562629)已通过，数据和校验结果见[托管性能样本](hosted-performance.md)。
+
+## 构建源码产物补充
+
+2026-10-14 本地轻量 RED：`python3 -B scripts/test_ci.py` 共 11 项，新增 2 项因 archive/hash helper stub 的 `NotImplementedError` 失败，既有 9 项通过；没有运行 Cargo。新增验收覆盖 vendor 归档保留原始 notice 字节、排除同目录 `.local`，产物摘要拒绝非 allowlist 文件及符号链接。
+
+GREEN：同一轻量命令 11 项通过。托管 release 脚本增加 `cargo vendor --locked --versioned-dirs`，遵循 [Cargo 官方 vendor 命令说明](https://doc.rust-lang.org/cargo/commands/cargo-vendor.html)。在新临时目录使用显式 workspace manifest、相对 vendor 路径，完整保留上游源码与原始 LICENSE/COPYING/NOTICE 等文件；归档仅含 `vendor/` 与 Cargo 生成的 `.cargo/config.toml`，不复制 Cargo cache、用户目录或相邻私有文件。先用该配置 `cargo metadata --locked --offline` 验证依赖图解析，再生成 `vendor.tar.gz`。
+
+产物明确枚举二进制、project `source.tar.gz`、dependency `vendor.tar.gz`、未改动的 GPL LICENSE、`REBUILD.md`、manifest、SHA256SUMS 及两份合成性能 JSON。manifest 记录准确 project SHA、Cargo.lock SHA-256、全部 payload 摘要；SHA256SUMS 还覆盖 manifest。REBUILD 包含 Rust 1.99.0、Ubuntu 系统依赖与同时解包两份源码后 locked/offline 构建测试步骤。保留第三方原始许可和署名，不作法律认证，也不保证跨机器逐字节可重复构建。[实际 source/vendor 上传及离线解析](https://github.com/szchan/letterkeeper/actions/runs/38537562629)成功，下载后 8 项校验全部匹配。没有在本机执行重建或二进制；独立空缓存重建不是本轮已完成项。

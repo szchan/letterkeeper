@@ -8,6 +8,7 @@ path; it does not certify every graphical frontend or model's behavior.
 """
 import argparse
 import json
+import os
 from pathlib import Path
 import queue
 import shutil
@@ -39,21 +40,26 @@ class Client:
         finally:
             self.incoming.put(None)
 
-    def call(self, method, params):
+    def call(self, method, params, *, timeout=30):
         self.serial += 1
         self.process.stdin.write(json.dumps({"id": self.serial, "method": method,
                                             "params": params}) + "\n")
         self.process.stdin.flush()
-        deadline = time.monotonic() + 30
-        while time.monotonic() < deadline:
-            row = self.incoming.get(timeout=max(.01, deadline - time.monotonic()))
+        deadline = time.monotonic() + timeout
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("codex_client_deadline")
+            try:
+                row = self.incoming.get(timeout=remaining)
+            except queue.Empty:
+                raise TimeoutError("codex_client_deadline") from None
             if row is None or row.get("transport_error"):
                 raise RuntimeError("codex_client_transport_failed")
             if row.get("id") == self.serial:
                 if "error" in row:
                     raise RuntimeError("codex_rpc_rejected")
                 return row["result"]
-        raise TimeoutError("codex_client_deadline")
 
     def tool(self, thread, server, tool, arguments):
         return self.call("mcpServer/tool/call", {"threadId": thread, "server": server,
@@ -71,6 +77,42 @@ class Client:
                 self.process.kill()
                 self.process.wait()
         self.process.stdout.close()
+
+
+def wait_for_mcp_servers(client, thread, expected, *, timeout=30,
+                         monotonic=time.monotonic, sleep=time.sleep):
+    """Read the thread inventory before any synthetic tool call."""
+    deadline = monotonic() + timeout
+    known_statuses = ("notStarted", "starting", "connected", "authenticationRequired",
+                      "failed", "cancelled", "disabled")
+    while True:
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            raise TimeoutError("codex_mcp_readiness_deadline")
+        response = client.call("mcpServerStatus/list",
+                               {"threadId": thread, "detail": "toolsAndAuthOnly"},
+                               timeout=remaining)
+        rows = response.get("data")
+        if (not isinstance(rows, list) or len(rows) != len(expected)
+                or any(not isinstance(row, dict) for row in rows)
+                or {row.get("name") for row in rows} != set(expected)
+                or response.get("nextCursor") is not None):
+            raise RuntimeError("unexpected_server_inventory")
+        statuses = [row.get("runtimeStatus") for row in rows]
+        for status in statuses:
+            if status not in ("notStarted", "starting", "connected"):
+                # Never echo server error details, arbitrary values or names.
+                if status in known_statuses:
+                    safe_status = status
+                else:
+                    safe_status = "unavailable" if status is None else "unknown"
+                raise RuntimeError(f"codex_mcp_readiness_rejected:{safe_status}")
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            raise TimeoutError("codex_mcp_readiness_deadline")
+        if all(status == "connected" for status in statuses):
+            return rows
+        sleep(min(1, remaining))
 
 
 def payload(result):
@@ -106,11 +148,14 @@ def verify(binary, codex):
             entries.append(name + "={command=" + json.dumps(server["command"]) +
                            ",args=" + json.dumps(server["args"]) + ",enabled=true}")
         config = "mcp_servers={" + ",".join(entries) + "}"
-        # Preserve environment variable meanings; isolate paths using mounts.
-        # No real home, auth.json, installed plugins or persistent config is mounted.
+        # Only a fresh client directory is mounted at HOME/.codex. No auth.json,
+        # installed plugins, persistent config or ambient auth variables enter.
         command = ["/usr/bin/bwrap", "--die-with-parent", "--new-session", "--unshare-net",
-                   "--ro-bind", "/usr", "/usr", "--symlink", "usr/lib", "/lib",
-                   "--symlink", "usr/lib", "/lib64", "--proc", "/proc", "--dev", "/dev",
+                   "--clearenv", "--setenv", "HOME", str(Path.home()),
+                   "--setenv", "PATH", "/usr/bin", "--setenv", "LANG", "C.UTF-8",
+                   "--setenv", "PWD", "/tmp",
+                   "--ro-bind", "/usr", "/usr", "--ro-bind", "/lib", "/lib",
+                   "--ro-bind", "/lib64", "/lib64", "--proc", "/proc", "--dev", "/dev",
                    "--tmpfs", "/tmp", "--ro-bind", str(binary.parent), str(binary.parent),
                    "--bind", str(root / "client"), str(Path.home() / ".codex"),
                    "--bind", str(root / "runtime"), "/run/letterkeeper",
@@ -118,6 +163,13 @@ def verify(binary, codex):
                    "-c", config, "-c", "plugins={}", "-c", "hooks={}",
                    "-c", "analytics.enabled=false", "-c", "features.shell_tool=false",
                    "-c", 'web_search="disabled"']
+        # The client sandbox must reject even ambient synthetic auth variables.
+        # Exercise the actual bwrap prefix, not a mock or a command-string check.
+        prefix = command[:command.index("--chdir") + 2]
+        subprocess.run(prefix + ["/usr/bin/python3", "-c",
+                                 "import os; assert set(os.environ) <= {'HOME', 'PATH', 'LANG', 'PWD'} and os.environ.get('PWD') == '/tmp', 'client_environment_not_cleared'"],
+                       env={**os.environ, "LETTERKEEPER_SYNTHETIC_AUTH": "synthetic-only"},
+                       check=True, stdout=subprocess.DEVNULL)
         client = Client(command)
         try:
             client.call("initialize", {"clientInfo": {"name": "letterkeeper-verifier", "version": "0.1.0"},
@@ -130,10 +182,7 @@ def verify(binary, codex):
                                     "experimentalRawEvents": False, "sandbox": "read-only",
                                     "approvalPolicy": "never"})
             thread = response["thread"]["id"]
-            status = client.call("mcpServerStatus/list", {"threadId": thread, "detail": "toolsAndAuthOnly"})
-            assert {s["name"] for s in status["data"]} == set(servers), "unexpected_server_inventory"
-            for server in status["data"]:
-                assert server["runtimeStatus"] == "connected", "server_not_connected"
+            for server in wait_for_mcp_servers(client, thread, servers):
                 assert len(server["tools"]) == 14, "tool_inventory_changed"
                 assert not {"approve", "approve_draft", "read_file", "set_policy"}.intersection(server["tools"])
             readonly, writable = "letterkeeper_readonly", "letterkeeper_draft"

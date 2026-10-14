@@ -82,31 +82,33 @@ impl Sandbox {
             .write_all(MARKER)
             .map_err(|_| "sandbox_setup_failed")?;
         let mut command = Command::new(&self.launcher);
+        command.args([
+            "--unshare-all",
+            "--die-with-parent",
+            "--new-session",
+            "--cap-drop",
+            "ALL",
+            "--ro-bind",
+            "/usr",
+            "/usr",
+            "--proc",
+            "/proc",
+            "--dev",
+            "/dev",
+            "--tmpfs",
+            "/tmp",
+            "--dir",
+            "/app",
+        ]);
+        // Preserve each distribution's loader layout without mounting user data.
+        // Arch and Ubuntu use different /lib64 targets; a guessed symlink can
+        // prevent the isolated worker from starting at all.
+        for directory in ["/lib", "/lib64"] {
+            if Path::new(directory).exists() {
+                command.args(["--ro-bind", directory, directory]);
+            }
+        }
         command
-            .args([
-                "--unshare-all",
-                "--die-with-parent",
-                "--new-session",
-                "--cap-drop",
-                "ALL",
-                "--ro-bind",
-                "/usr",
-                "/usr",
-                "--symlink",
-                "usr/lib",
-                "/lib",
-                "--symlink",
-                "usr/lib",
-                "/lib64",
-                "--proc",
-                "/proc",
-                "--dev",
-                "/dev",
-                "--tmpfs",
-                "/tmp",
-                "--dir",
-                "/app",
-            ])
             .arg("--ro-bind")
             .arg(executable)
             .arg("/app/letterkeeper")

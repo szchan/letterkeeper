@@ -5,6 +5,7 @@ import importlib.util
 from pathlib import Path
 import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
 
@@ -13,6 +14,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("tdd", ROOT / "scripts/ci/tdd.py")
 tdd = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(tdd)
+RELEASE_SPEC = importlib.util.spec_from_file_location("release", ROOT / "scripts/ci/release.py")
+release = importlib.util.module_from_spec(RELEASE_SPEC)
+RELEASE_SPEC.loader.exec_module(release)
 SHA = "a" * 40
 
 
@@ -99,6 +103,44 @@ class EvidenceTests(unittest.TestCase):
     def test_long_selector_is_refused(self):
         with self.assertRaises(ValueError):
             tdd.validate(SHA, "letterkeeper", "x" * 257, "GREEN")
+
+
+class ReleaseSourceTests(unittest.TestCase):
+    def test_vendor_archive_preserves_original_notice_and_excludes_private_sibling(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "vendor/synthetic-1.0").mkdir(parents=True)
+            notice = b"Synthetic upstream notice\nOriginal attribution\n"
+            (root / "vendor/synthetic-1.0/LICENSE").write_bytes(notice)
+            (root / ".cargo").mkdir()
+            config = b'[source.vendored-sources]\ndirectory = "vendor"\n'
+            (root / ".cargo/config.toml").write_bytes(config)
+            (root / ".local").mkdir()
+            (root / ".local/private").write_text("must not enter artifact")
+            archive = root / "vendor.tar.gz"
+            release.archive_vendor(root, archive)
+            with tarfile.open(archive) as packaged:
+                self.assertEqual(packaged.extractfile("vendor/synthetic-1.0/LICENSE").read(), notice)
+                self.assertEqual(packaged.extractfile(".cargo/config.toml").read(), config)
+                self.assertFalse(any(name.startswith(".local") for name in packaged.getnames()))
+
+    def test_output_hashing_requires_allowlist_and_refuses_symlink(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in ("letterkeeper", "LICENSE", "source.tar.gz", "vendor.tar.gz", "REBUILD.md",
+                         "performance-phase-a.json", "performance-phase-c.json"):
+                (root / name).write_bytes(b"abc")
+            hashes = release.artifact_hashes(root)
+            self.assertEqual(hashes["letterkeeper"],
+                             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+            (root / ".local").mkdir()
+            with self.assertRaises(ValueError):
+                release.artifact_hashes(root)
+            (root / ".local").rmdir()
+            (root / "letterkeeper").unlink()
+            (root / "letterkeeper").symlink_to("LICENSE")
+            with self.assertRaises(ValueError):
+                release.artifact_hashes(root)
 
 
 if __name__ == "__main__":

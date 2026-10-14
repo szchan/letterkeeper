@@ -24,11 +24,20 @@ jobs:
           key: cargo-ubuntu24-rust1.99-${{ hashFiles('Cargo.lock') }}
       - name: Release workspace tests, build and synthetic performance workload
         run: python3 scripts/ci/release.py
-      - name: Binary, corresponding source, license and synthetic measurements
+      - name: Binary, project/dependency sources, original notices and synthetic measurements
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: letterkeeper-linux-x86_64-${{ github.sha }}
-          path: target/ci-release/
+          path: |
+            target/ci-release/letterkeeper
+            target/ci-release/LICENSE
+            target/ci-release/source.tar.gz
+            target/ci-release/vendor.tar.gz
+            target/ci-release/REBUILD.md
+            target/ci-release/manifest.json
+            target/ci-release/SHA256SUMS
+            target/ci-release/performance-phase-a.json
+            target/ci-release/performance-phase-c.json
           if-no-files-found: error
           include-hidden-files: false
           retention-days: 7

@@ -4,9 +4,11 @@
 import importlib.util
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 
+sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("tdd", ROOT / "scripts/ci/tdd.py")
 tdd = importlib.util.module_from_spec(SPEC)
@@ -76,6 +78,27 @@ class EvidenceTests(unittest.TestCase):
         self.assertNotEqual(result, 0)
         self.assertEqual(len(calls), 1)
         self.assertIn("checkout_sha_mismatch", evidence)
+
+    def test_compile_red_preserves_failure_without_running_test(self):
+        calls = []
+        def runner(arguments, **kwargs):
+            calls.append(arguments)
+            if arguments[0] == "git":
+                return subprocess.CompletedProcess(arguments, 0, SHA + "\n")
+            return subprocess.CompletedProcess(arguments, 101, "synthetic compile failure\n")
+        with tempfile.TemporaryDirectory() as directory:
+            summary = Path(directory) / "summary"
+            result = tdd.execute(SHA, "letterkeeper", "reject_send", "RED", runner, summary)
+            evidence = summary.read_text()
+        self.assertEqual(result, 101)
+        self.assertEqual(len(calls), 2)
+        self.assertIn("test_inventory_failed", evidence)
+        self.assertIn(SHA, evidence)
+        self.assertIn("101", evidence)
+
+    def test_long_selector_is_refused(self):
+        with self.assertRaises(ValueError):
+            tdd.validate(SHA, "letterkeeper", "x" * 257, "GREEN")
 
 
 if __name__ == "__main__":

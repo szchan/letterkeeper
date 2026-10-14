@@ -3,9 +3,11 @@
 mod config;
 mod credentials;
 mod oauth;
+mod onboarding;
 pub use config::*;
 pub use credentials::*;
 pub use oauth::*;
+pub use onboarding::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum AccountError {
@@ -15,6 +17,8 @@ pub enum AccountError {
     UnsafeStorage,
     #[error("account not found")]
     AccountNotFound,
+    #[error("account already exists; existing configuration was not replaced")]
+    AccountAlreadyExists,
     #[error("credential service unavailable, locked, or ambiguous")]
     CredentialUnavailable,
     #[error("credential missing; log in again")]

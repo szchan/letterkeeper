@@ -8,6 +8,14 @@ import shutil
 import subprocess
 
 
+def archive_vendor(root, destination):
+    raise NotImplementedError
+
+
+def artifact_hashes(output):
+    raise NotImplementedError
+
+
 def run(arguments, **options):
     return subprocess.run(arguments, check=True, **options)
 

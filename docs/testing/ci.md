@@ -53,3 +53,7 @@ gh run list --repo szchan/letterkeeper --workflow release.yml
 ```
 
 成功后仅上传 `target/ci-release/` 中明确复制的二进制、对应 SHA 的 `git archive` 源码、原始 LICENSE、合成性能 JSON 和 manifest；不 glob 私有目录、credential store 或完整 workspace。Artifact 保留 7 天，无秘密权限。固定 [actions/upload-artifact v4.6.2](https://github.com/actions/upload-artifact/commit/ea165f8d65b6e75b540449e92b4886f43607fa02) SHA `ea165f8d65b6e75b540449e92b4886f43607fa02` 由官方 GitHub API 查询确认。当前只是工作流入口；完整 release/performance run 未完成之前不称为已经验证。
+
+## 构建源码产物补充
+
+2026-10-14 本地轻量 RED：`python3 -B scripts/test_ci.py` 共 11 项，新增 2 项因 archive/hash helper stub 的 `NotImplementedError` 失败，既有 9 项通过；没有运行 Cargo。新增验收覆盖 vendor 归档保留原始 notice 字节、排除同目录 `.local`，产物摘要拒绝非 allowlist 文件及符号链接。

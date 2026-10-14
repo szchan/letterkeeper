@@ -25,9 +25,11 @@ CLI `read` JSON 保留链接目标，不能交给会自动预览资源的组件�
 
 2026-10-14 起，用户授权建立公开仓库 [szchan/letterkeeper](https://github.com/szchan/letterkeeper)，并将重型构建和验证迁移到 GitHub Actions。本机保留编辑、Git/worktree、静态检查与结果审查，不执行 Cargo build/check/test/Clippy、release 基准或安装编译；编辑器自动 Cargo check、保存时构建也应在当前项目会话关闭，不能由 Agent 修改无关系统配置。
 
+新公开仓库首次 main 推送用于引入 workflow 并启动初次 CI；初次 CI 与分支保护配置完成前，远程验收保持待验证。随后启用并复核 main 的 PR/`ci-gate` 保护，后续开发通过 PR 集成。
+
 每个子任务使用独立分支/worktree；先推送测试提交，在远程记录精确 SHA 的真实 RED，再实现和推送 GREEN。测试、PTY、HTTP/DNS 隐私观察器、实际 Codex 数据路径和性能测量均在远程受控环境运行，不能删减安全测试以适配 runner。操作入口及环境要求见 [CI 验证](docs/testing/ci.md) 与 [协作流程](docs/WORKFLOW.md)。远程通过之前，阶段 C 的本机历史结果不能视为新环境通过。
 
-以下 Cargo 命令供 **远程 runner** 使用；获取与相应 SHA 对应的远程产物后，可在兼容 Linux 环境运行后续离线命令。不要在本机为演示重新编译。
+以下 Cargo 命令供 **远程 runner** 使用；手动构建 workflow 的对应 commit 产物完成且可下载后，可在兼容 Linux 环境运行后续离线命令。workflow 产物属于该提交的验证构建，不表示发行版已经发布；未生成产物时不能声称已有可下载构建。不要在本机为演示重新编译。
 
 已验证：Arch x86_64、Rust/Cargo 1.99.0、bubblewrap 0.12.0。工作区声明 Rust 1.89（锁定依赖中有 1.89 要求；未单独验收最低版本）、C 编译器和 `/usr/bin/bwrap`。系统须允许用户/网络 namespace，worker 的 `/usr/lib` 布局目前仅在 Arch 验证。Linux 账户认证还需要已解锁的 Secret Service 与私有 `/run/user/UID`。
 

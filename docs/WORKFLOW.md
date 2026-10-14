@@ -27,15 +27,19 @@
 - 新发现 bug 先有可复现回归测试。正向控制也要验证：网络监听器能接收父进程流量；测试子进程保持 stdin 打开，避免 EOF 假通过。
 - 每个逻辑单元覆盖正常、拒绝、边界、状态转换。跨进程持久化、并发争抢、断连及下游适配用集成测试验证。不盲目追求覆盖率；文件位置或测试数量不代替安全性质、协议往返和终端行为。
 
-远程操作示例（先将自己的分支推送；替换为真实 SHA 和精确测试名）：
+远程操作示例（替换任务分支、crate 和精确测试名；PR 说明使用下方合成示例并按实际任务修改）：
 
 ```sh
 git push -u origin test/example
+cat > /tmp/letterkeeper-pr.md <<'BODY'
+添加合成数据的回归测试。RED/GREEN 的 SHA、Actions URL 和结果在运行后补充。
+BODY
 gh pr create --repo szchan/letterkeeper --draft --base main --head test/example \
   --title "test: example" --body-file /tmp/letterkeeper-pr.md
-# workflow 来自 main，commit 是被测任务分支上的提交
+# workflow 来自 main，commit 是当前已推送任务提交的完整 SHA
+task_sha=$(git rev-parse HEAD)
 gh workflow run tdd.yml --repo szchan/letterkeeper --ref main \
-  -f commit=完整40位SHA -f crate=letterkeeper -f test=精确测试名 -f phase=RED
+  -f commit="$task_sha" -f crate=letterkeeper -f test='module::test_name' -f phase=RED
 gh run list --repo szchan/letterkeeper --workflow tdd.yml
 gh run view RUN_ID --repo szchan/letterkeeper --log
 ```

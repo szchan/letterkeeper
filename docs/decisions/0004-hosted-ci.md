@@ -4,9 +4,11 @@
 
 ## 背景与决定
 
-本机重型编译与测试影响日常使用。将 Cargo 构建、check/test/Clippy、release、安装编译、实际 PTY、隐私 HTTP/DNS 观察器、工作区授权闭环、Codex 数据路径及性能测量迁移到 GitHub Actions。本机仅编辑、Git/worktree、静态检查与远程结果审查；当前项目会话关闭编辑器自动 Cargo check/build，不修改无关系统配置。
+本机重型编译与测试影响日常使用。将 Cargo 构建、check/test/Clippy、release、安装编译、实际 PTY、隐私 HTTP/DNS 观察器、工作区授权闭环、Codex 数据路径及性能测量迁移到 GitHub Actions。本机仅编辑、Git/worktree、静态检查与远程结果审查；当前项目会话应关闭编辑器自动 Cargo check/build，本轮未修改编辑器配置或无关系统配置。
 
 每个子代理有独立分支/worktree、限定文件和可审查提交。主代理审查并集成，各任务测试提交先推送，用精确 SHA 的远程 TDD 留下真实 RED，再实现 GREEN。TDD evidence 使用独立 workflow_dispatch，指定完整 SHA、crate、精确测试名和 phase；不自动取消旧 run，不吞失败码。编译失败与断言失败区分记录，环境失败不冒充行为 RED。
+
+新公开仓库首次 main 推送用于 bootstrap workflow 并启动初次 CI。该首次推送时尚未配置保护，主代理随后设置并复核 main 保护，后续变更由 PR 集成；初次 CI 和保护结果未完成时记为待验证，不作为通过证据。
 
 CI 对 main push、所有 PR 与手动 dispatch 执行。任务分支首次推送立即创建 draft PR，后续 push 由 PR 更新自动验证；PR 建立前用手动 dispatch 验证该分支。`ci-gate` 汇总完整工作区与 Codex 数据路径，所有必需任务实际成功才可通过，失败/取消/跳过不能成为 GREEN。主代理集成后的新 SHA 必须重新验证；main 保护要求 PR 和最新 required check，禁止强推/删除。设置完成之前不声称保护生效。
 

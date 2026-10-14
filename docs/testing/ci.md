@@ -6,7 +6,7 @@
 
 `python3 scripts/test_ci.py`：编排接口 stub 抛出 `NotImplementedError`，7 个测试、17 个测试/子用例错误；这是实现前真实失败，不是 Rust 业务断言失败。
 
-完整托管验证尚未运行；后续追加确切 commit SHA、Actions run URL 与结果。
+首次完整托管验证和后续 RED/GREEN 已实际执行；运行链接见下方和[开发记录](../development/2026-10-14-hosted-ci.md)。
 
 ## GREEN 与运行环境
 
@@ -52,7 +52,7 @@ gh workflow run release.yml --repo szchan/letterkeeper --ref main
 gh run list --repo szchan/letterkeeper --workflow release.yml
 ```
 
-成功后仅上传 `target/ci-release/` 中明确复制的二进制、对应 SHA 的 `git archive` 源码、原始 LICENSE、合成性能 JSON 和 manifest；不 glob 私有目录、credential store 或完整 workspace。Artifact 保留 7 天，无秘密权限。固定 [actions/upload-artifact v4.6.2](https://github.com/actions/upload-artifact/commit/ea165f8d65b6e75b540449e92b4886f43607fa02) SHA `ea165f8d65b6e75b540449e92b4886f43607fa02` 由官方 GitHub API 查询确认。当前只是工作流入口；完整 release/performance run 未完成之前不称为已经验证。
+成功后仅上传 `target/ci-release/` 中明确复制的二进制、对应 SHA 的 `git archive` 源码、原始 LICENSE、合成性能 JSON 和 manifest；不 glob 私有目录、credential store 或完整 workspace。Artifact 保留 7 天，无秘密权限。固定 [actions/upload-artifact v4.6.2](https://github.com/actions/upload-artifact/commit/ea165f8d65b6e75b540449e92b4886f43607fa02) SHA `ea165f8d65b6e75b540449e92b4886f43607fa02` 由官方 GitHub API 查询确认。[源码 `94ee542` 的实际运行](https://github.com/szchan/letterkeeper/actions/runs/38537562629)已通过，数据和校验结果见[托管性能样本](hosted-performance.md)。
 
 ## 构建源码产物补充
 

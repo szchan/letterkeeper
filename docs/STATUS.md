@@ -1,6 +1,6 @@
 # 实现与验收状态
 
-2026-10-13。阶段 C 的代码与**受控 TUI/Agent 人工审批工作流验证**已完成；真实 Gmail/系统凭据库/公开图形前端尚未验收，**没有完成全部 P0**。以下结果仅指合成邮件和本机服务，需求编号未变。
+2026-10-14。阶段 C 的代码与**受控 TUI/Agent 人工审批工作流验证**已完成；真实 Gmail/系统凭据库/公开图形前端尚未验收，**没有完成全部 P0**。以下结果仅指合成邮件和受控服务，需求编号未变。源码已公开到 [szchan/letterkeeper](https://github.com/szchan/letterkeeper)，重型构建/测试迁移到 GitHub Actions；[集成分支 `53d0d72` 完整门禁](https://github.com/szchan/letterkeeper/actions/runs/38539664364)及[手动 release/性能样本](https://github.com/szchan/letterkeeper/actions/runs/38537562629)通过。产物不是发行版，真实服务关卡仍保留。
 
 | 需求 | 已实现与验证 | 仍需完成 |
 | --- | --- | --- |
@@ -27,10 +27,10 @@
 ## 重要限制
 
 - 首轮 IMAP 文件夹测试使用 ASCII 的 INBOX/Drafts/Sent；配置采用协议返回的名称，不声称已处理所有非 ASCII mailbox 编码。
-- worker 依赖 Linux bubblewrap 与 Arch 系统路径；库 API 本身不创建沙箱。应用只通过受限 worker 处理原始正文/头部/附件。
+- worker 依赖 Linux bubblewrap、用户/网络 namespace 和实际系统库目录。Arch 与专用配置的 GitHub Ubuntu runner 已验证，其他发行版及默认 Ubuntu 桌面策略仍待验收；库 API 本身不创建沙箱。应用只通过受限 worker 处理原始正文/头部/附件。
 - SQLite 的检查后重新打开仍不是针对同 UID 任意代码的完整 TOCTOU 防护；配置与附件路径使用 descriptor walk，但不能据此声称数据库也完全抵抗此类攻击。
 - CLI 原始安全 JSON 中的链接目标必须作为数据使用。MCP与TUI阅读页的保守文本不能代替完整发送审阅；TUI人工审阅页使用完整、可逆转义的文本。公开图形下游仍需独立验证。
 - Secret Service 后端已编译，未在本轮读取或写入真实钥匙环。系统凭据锁要求存在且私有的 /run/user/UID，缺失时故障关闭。
-- 无真实邮箱连接、外发邮件、删除或账户状态修改；未推送或发布。
+- 无真实邮箱连接、外发邮件、删除或账户状态修改；公开源码与开发分支推送已有授权，未发布发行版。
 
 本轮210项Rust测试、fmt/Clippy、实际PTY及独立客户端/隐私验证通过。详见 [阶段 C 集成](testing/phase-c-integration.md)、[开发记录](development/2026-10-13-phase-c.md)和[真实服务关卡](testing/live-acceptance.md)。阶段B结果仍保留追溯。

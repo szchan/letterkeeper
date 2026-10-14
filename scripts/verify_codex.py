@@ -74,6 +74,17 @@ class Client:
         self.process.stdout.close()
 
 
+def wait_for_mcp_servers(client, thread, expected, *, timeout=30,
+                         monotonic=time.monotonic, sleep=time.sleep):
+    """Read the thread inventory before any synthetic tool call."""
+    status = client.call("mcpServerStatus/list", {"threadId": thread, "detail": "toolsAndAuthOnly"},
+                         timeout=timeout)
+    assert {s["name"] for s in status["data"]} == set(expected), "unexpected_server_inventory"
+    for server in status["data"]:
+        assert server["runtimeStatus"] == "connected", "server_not_connected"
+    return status["data"]
+
+
 def payload(result):
     assert not result.get("isError"), "synthetic_tool_failed"
     blocks = result["content"]
@@ -141,10 +152,7 @@ def verify(binary, codex):
                                     "experimentalRawEvents": False, "sandbox": "read-only",
                                     "approvalPolicy": "never"})
             thread = response["thread"]["id"]
-            status = client.call("mcpServerStatus/list", {"threadId": thread, "detail": "toolsAndAuthOnly"})
-            assert {s["name"] for s in status["data"]} == set(servers), "unexpected_server_inventory"
-            for server in status["data"]:
-                assert server["runtimeStatus"] == "connected", "server_not_connected"
+            for server in wait_for_mcp_servers(client, thread, servers):
                 assert len(server["tools"]) == 14, "tool_inventory_changed"
                 assert not {"approve", "approve_draft", "read_file", "set_policy"}.intersection(server["tools"])
             readonly, writable = "letterkeeper_readonly", "letterkeeper_draft"

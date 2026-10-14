@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: GPL-3.0-only
+name: TDD evidence
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: Exact full lowercase 40-character commit SHA
+        required: true
+        type: string
+      crate:
+        description: Workspace package
+        required: true
+        type: choice
+        options: [letterkeeper, letterkeeper-content, letterkeeper-core, letterkeeper-adapters, letterkeeper-protocol, letterkeeper-accounts]
+      test:
+        description: Exact Rust test name (module::test), one matching test required
+        required: true
+        type: string
+      phase:
+        description: Evidence label only; raw failure remains failed
+        required: true
+        type: choice
+        options: [RED, GREEN]
+permissions:
+  contents: read
+# Deliberately no concurrency cancellation: RED evidence must complete.
+env:
+  CI_TEST_COMMIT: ${{ inputs.commit }}
+  CI_TEST_CRATE: ${{ inputs.crate }}
+  CI_TEST_NAME: ${{ inputs.test }}
+  CI_TEST_PHASE: ${{ inputs.phase }}
+  CARGO_TERM_COLOR: always
+jobs:
+  evidence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Validate dispatch values before target checkout
+        id: validate
+        run: python3 scripts/ci/tdd.py --validate-only
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ steps.validate.outputs.commit }}
+          path: subject
+          persist-credentials: false
+      - run: bash scripts/ci/setup-linux.sh
+      - run: bash ../scripts/ci/toolchain.sh
+        working-directory: subject
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-ubuntu24-rust1.99-${{ hashFiles('subject/Cargo.lock') }}
+      - name: Raw exact-test result and SHA evidence
+        working-directory: subject
+        run: python3 ../scripts/ci/tdd.py

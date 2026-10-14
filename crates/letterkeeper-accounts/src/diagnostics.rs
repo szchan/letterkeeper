@@ -333,7 +333,16 @@ mod tests {
     use std::os::unix::fs::{PermissionsExt, symlink};
 
     pub(super) fn fixture_command(executable: &Path) -> Command {
-        Command::new(executable)
+        if executable.file_name() == Some(std::ffi::OsStr::new("busctl-shim")) {
+            // Read test source through a fixed interpreter rather than executing
+            // a newly written text file. A concurrent inherited writer can make
+            // exec return ETXTBSY even after the creating thread closed its fd.
+            let mut command = Command::new("/usr/bin/python3");
+            command.arg(executable);
+            command
+        } else {
+            Command::new(executable)
+        }
     }
 
     #[test]

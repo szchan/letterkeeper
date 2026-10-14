@@ -79,3 +79,25 @@ shim 验证受控进程及响应边界，不代表真实凭据库兼容性。
 - RED `c8df0a3485fda1c66b2e99a8b4c30f4facf23d73`：[实际失败](https://github.com/szchan/letterkeeper/actions/runs/38581107016)，匹配一项、exit 101、`test_finished`；合法 `/vendor/vault/default_collection` 被旧校验返回 Unknown。
 - GREEN `51b01848ae2379df55b42c466e3f7f953cc8f496`：[实际通过](https://github.com/szchan/letterkeeper/actions/runs/38581540839)，匹配一项、exit 0。受控 shim 另核对合法自定义路径传入后，服务、接口及属性保持固定。
 - 当前集成的新 SHA 完整门禁见[账户接入开发记录](../development/2026-10-14-account-onboarding.md)，精确测试不替代完整 CI。
+
+## 合成进程 fixture 启动回归
+
+CLI 集成 commit `ef181112fcf1a84b5175fac7121fda356fdfe138` 的
+[真实 CI 失败](https://github.com/szchan/letterkeeper/actions/runs/38581758074)
+显示 metadata 正向 fixture 没有生成调用记录，约 80ms 后失败；其他 metadata
+拒绝/超量输出/deadline 测试通过。原日志没有 spawn errno，不能把起因确定为超时
+或 ETXTBSY。
+
+新增确定性 RED commit `8a416dfe5152e3586d9efc9de961ff67155a6ef8`：
+[RED 运行](https://github.com/szchan/letterkeeper/actions/runs/38582820177)，
+精确测试 `diagnostics::tests::metadata_fixture_can_be_read_while_a_script_writer_is_open`，
+匹配 1 项、raw exit 101、`test_finished`。保持合成 shim 的写 descriptor 打开时，
+直接执行该临时文本报告 `ExecutableFileBusy`、errno 26（ETXTBSY），
+返回 Unavailable 且无调用记录。这证明 fixture 的启动方式存在该失败类别，
+但不冒充原始间歇失败的完整 errno 证据。
+
+修复只修改 test 构建中的 shim launcher：固定 `/usr/bin/python3` 读取合成脚本，
+不直接 exec 临时文本；仍使用同一生产 argv/environment/deadline/output runner。
+生产程序保持直接执行固定 `/usr/bin/busctl`，3 秒总预算与所有边界不变。
+fixture 预创建调用日志并严格断言至少有一条记录，没有吞掉缺失日志或放宽正向状态。
+新增 RED/GREEN 和完整 CI 的后续结果待精确 SHA 验证。

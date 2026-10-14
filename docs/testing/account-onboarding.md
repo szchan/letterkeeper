@@ -12,7 +12,9 @@
 
 ## GREEN 与限制
 
-GREEN 精确 SHA、Actions URL 与完整 CI 结果待运行后补充。`create` 使用完整文件写入、file fsync、原子 `RENAME_NOREPLACE` 和目录 fsync；任何既有目标类型均拒绝覆盖，临时文件在失败时清理。发布后的目录 fsync 若失败返回 `AccountPersistenceUncertain`，配置可能已经存在，调用者先重新读取核实，不能盲目重试。
+精确实现 SHA `792433aa9ff179249bbf3f889204a764ddebdad1` 的 [TDD GREEN](https://github.com/szchan/letterkeeper/actions/runs/38580502933) 已成功：恰好匹配一个同名测试，`raw_exit_code=0`、`state=test_finished`，日志确认 checkout 为该 SHA。[同 SHA 完整 CI](https://github.com/szchan/letterkeeper/actions/runs/38580435607) 的 workspace、codex-client 与 ci-gate 均成功，包含全部 5 项新增 onboarding 测试、fmt/Clippy、workspace 回归、实际 PTY、完整编辑/审阅/审批/发送工作区、HTTP/DNS 隐私观察器及实际 Codex app-server 数据路径。任务分支结果不替代主代理集成新 SHA 的完整门禁。
+
+`create` 使用完整文件写入、file fsync、原子 `RENAME_NOREPLACE` 和目录 fsync；任何既有目标类型均拒绝覆盖，临时文件在失败时清理。发布后的目录 fsync 若失败返回 `AccountPersistenceUncertain`，配置可能已经存在，调用者先重新读取核实，不能盲目重试。此特定 fsync 故障分支通过代码审查确认，未注入内核 I/O 故障；不是已完成故障注入验收。
 
 onboarding 接受无歧义 ASCII dot-atom 邮箱地址、DNS 名称或 IP 端点；不支持带引号/国际化邮箱地址，中文文件夹仍支持。Gmail 的默认文件夹可以覆盖；这些默认名和 ServerManaged 选择不表示真实 Gmail 已验收。Generic 的 SentCopyStrategy 必须由用户明确选择，后端没有自动猜测服务商。
 

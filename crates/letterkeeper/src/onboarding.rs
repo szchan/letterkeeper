@@ -37,8 +37,7 @@ impl<R: BufRead, W: Write> Wizard<'_, R, W> {
         }) {
             return Err("invalid_account_input".into());
         }
-        let value = value.trim().to_owned();
-        if value == "/cancel" {
+        if value.trim() == "/cancel" {
             return Ok(None);
         }
         Ok(Some(value))
@@ -70,7 +69,7 @@ pub fn collect(
     macro_rules! line {
         ($prompt:expr) => {
             match wizard.line($prompt)? {
-                Some(value) => value,
+                Some(value) => value.trim().to_owned(),
                 None => return Ok(None),
             }
         };
@@ -155,10 +154,9 @@ pub fn collect(
     .map_err(|_| "output_failed")?;
     serde_json::to_writer_pretty(&mut *wizard.output, &cfg).map_err(|_| "output_failed")?;
     writeln!(wizard.output).map_err(|_| "output_failed")?;
-    if line!("Save this new account configuration? Type yes [default no]") == "yes" {
-        Ok(Some(cfg))
-    } else {
-        Ok(None)
+    match wizard.line("Save this new account configuration? Type yes [default no]")? {
+        Some(value) if value == "yes" => Ok(Some(cfg)),
+        _ => Ok(None),
     }
 }
 

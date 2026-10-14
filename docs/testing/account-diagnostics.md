@@ -34,6 +34,10 @@ DBus 路径组件；`/` 报告 `not_initialized`。不打开 Secret Service sess
 服务 locked、unlocked、missing collection、unavailable、unknown 和 timed_out 分开。
 只有所有环境项成功时 `environment_ready=true`，仍为 `authentication=not_checked`。
 
+当前 collection 路径只兼容 `/org/freedesktop/secrets/collection/单个组件`；
+规范允许其他合法 ObjectPath，因此采用其他路径的合法 provider 会报告 `unknown`，
+不能据此判定 provider 不安全。此保守限制待单独回归扩展，未声称已覆盖全部系统凭据库。
+
 根据 [Secret Service 规范](https://specifications.freedesktop.org/secret-service/latest-single/)，
 ReadAlias 无结果返回 `/`，Locked 是无需会话的集合元数据。
 根据 [systemd busctl call 实现](https://github.com/systemd/systemd/blob/main/src/busctl/busctl.c)，
@@ -51,7 +55,16 @@ RED commit `5d9be0f957c7dda1b25d07a14e0a634185a8a620`：
 `diagnostics::tests::directory_diagnostic_is_read_only_and_distinguishes_missing_unsafe_ready`，
 匹配 1 项、raw exit 101，编译成功；缺失目录断言实际 `Unsafe`、预期 `NotInitialized`。
 
-GREEN 和完整 CI 待运行。本机只执行 rustfmt 和静态检查，没有 Rust build/check/test/Clippy。
+GREEN commit `08df9fbb38b65c82d3cd2ecba3c9ea66e132a4db`：
+[精确测试成功](https://github.com/szchan/letterkeeper/actions/runs/38580912691)，
+同一精确选择器匹配 1 项、raw exit 0、`test_finished`。
+[该 SHA 完整 CI](https://github.com/szchan/letterkeeper/actions/runs/38580870187)
+的 workspace、codex-client 和 ci-gate 全部实际 success；fmt、Clippy、全 workspace
+测试、实际 worker、PTY、发送工作区、HTTP/DNS 观察器及 Codex 数据路径均保留。
+环境为 GitHub-hosted Ubuntu 24.04、受控 namespace 配置、Rust 1.99.0。
+后续集成或代码修订仍需对新的精确 SHA 重新执行完整门禁。
+
+本机只执行 rustfmt 和静态检查，没有 Rust build/check/test/Clippy。
 测试覆盖只读目录、owner/权限/类型、符号链接父目录、missing 与 lexical 边界、
 固定安全输出、实际 sandbox 正常/失败，以及受控 executable shim 的调用 argv、
 清空环境、locked/unlocked/missing/error/malformed/超量输出/统一 deadline。

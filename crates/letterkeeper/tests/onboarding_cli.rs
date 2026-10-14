@@ -56,13 +56,14 @@ with tempfile.TemporaryDirectory() as tmp:
         code,output=launch(config,data,changed,width)
         assert code!=0 and b'account already exists; existing configuration was not replaced' in output
         assert (config/'demo.json').read_bytes()==original,'duplicate wizard overwrote account'
-    for i in range(len(password)):
-        for mode in ['eof','cancel']:
-            config=root/(mode+str(i))/'config'; data=root/(mode+str(i))/'data'
-            answers=password[:i]+(['/cancel'] if mode=='cancel' else [])
-            code,output=launch(config,data,answers,eof=mode=='eof')
-            assert code==0 and b'cancelled' in output
-            assert not config.exists() and not data.exists(), 'cancellation created storage'
+    for provider_answers in [password,gmail]:
+        for i in range(len(provider_answers)):
+            for mode in ['eof','cancel']:
+                config=root/(provider_answers[0]+mode+str(i))/'config'; data=config.parent/'data'
+                answers=provider_answers[:i]+(['/cancel'] if mode=='cancel' else [])
+                code,output=launch(config,data,answers,eof=mode=='eof')
+                assert code==0 and b'cancelled' in output
+                assert not config.exists() and not data.exists(), 'cancellation created storage'
     for confirm in ['', 'y', 'YES', 'no', ' yes', 'yes ']:
         config=root/('confirm'+confirm)/'config';data=root/('confirm'+confirm)/'data'
         answers=password[:-1]+[confirm]

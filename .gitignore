@@ -12,3 +12,7 @@
 # Rust build output and isolated Git workspaces
 **/target/
 /.worktrees/
+
+# Lightweight CI orchestration checks
+**/__pycache__/
+*.pyc

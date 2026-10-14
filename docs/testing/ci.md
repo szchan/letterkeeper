@@ -10,7 +10,7 @@
 
 ## GREEN 与运行环境
 
-`python3 scripts/test_ci.py`：9 项通过（子用例覆盖非法 SHA、crate、test、phase）；调用 Cargo 的接口在本地使用替身，仅验证参数数组、准确选择、拒绝零/多个匹配、SHA 不符拒绝执行、编译 RED 与原始失败不转绿。脚本语法用 `bash -n scripts/ci/*.sh` 验证；本机没有执行 Cargo。
+`python3 scripts/test_ci.py`：初次实现 9 项通过，源码产物补充后共 11 项通过（子用例覆盖非法 SHA、crate、test、phase）；调用 Cargo 的接口在本地使用替身，仅验证参数数组、准确选择、拒绝零/多个匹配、SHA 不符拒绝执行、编译 RED 与原始失败不转绿，另覆盖源码归档和摘要清单。脚本语法用 `bash -n scripts/ci/*.sh` 验证；本机没有执行 Cargo。
 
 `.github/workflows/ci.yml` 在完整 `ubuntu-24.04` VM 上运行，无 slim 容器。`workspace` 执行 fmt、Clippy、完整 workspace 测试、构建、真实终端、编辑/审阅/发送工作区及可达 HTTP/DNS 隐私脚本；独立 `codex-client` 安装公开 Codex CLI 并运行现有实际 app-server 脚本，无 auth、无模型回合。`ci-gate` 仅在两个 job 都为 success 时通过；失败、取消或跳过均不通过。权限仅 `contents: read`，checkout 不保留凭据，不使用个人 secret、不上传测试目录。只缓存 Cargo registry/git，不缓存 target。
 
@@ -60,4 +60,4 @@ gh run list --repo szchan/letterkeeper --workflow release.yml
 
 GREEN：同一轻量命令 11 项通过。托管 release 脚本增加 `cargo vendor --locked --versioned-dirs`，遵循 [Cargo 官方 vendor 命令说明](https://doc.rust-lang.org/cargo/commands/cargo-vendor.html)。在新临时目录使用显式 workspace manifest、相对 vendor 路径，完整保留上游源码与原始 LICENSE/COPYING/NOTICE 等文件；归档仅含 `vendor/` 与 Cargo 生成的 `.cargo/config.toml`，不复制 Cargo cache、用户目录或相邻私有文件。先用该配置 `cargo metadata --locked --offline` 验证依赖图解析，再生成 `vendor.tar.gz`。
 
-产物明确枚举二进制、project `source.tar.gz`、dependency `vendor.tar.gz`、未改动的 GPL LICENSE、`REBUILD.md`、manifest、SHA256SUMS 及两份合成性能 JSON。manifest 记录准确 project SHA、Cargo.lock SHA-256、全部 payload 摘要；SHA256SUMS 还覆盖 manifest。REBUILD 包含 Rust 1.99.0、Ubuntu 系统依赖与同时解包两份源码后 locked/offline 构建测试步骤。保留第三方原始许可和署名，不作法律认证，也不保证跨机器逐字节可重复构建。远程 source/vendor 产物验证结果须在实际运行完成后追加。
+产物明确枚举二进制、project `source.tar.gz`、dependency `vendor.tar.gz`、未改动的 GPL LICENSE、`REBUILD.md`、manifest、SHA256SUMS 及两份合成性能 JSON。manifest 记录准确 project SHA、Cargo.lock SHA-256、全部 payload 摘要；SHA256SUMS 还覆盖 manifest。REBUILD 包含 Rust 1.99.0、Ubuntu 系统依赖与同时解包两份源码后 locked/offline 构建测试步骤。保留第三方原始许可和署名，不作法律认证，也不保证跨机器逐字节可重复构建。[实际 source/vendor 上传及离线解析](https://github.com/szchan/letterkeeper/actions/runs/38537562629)成功，下载后 8 项校验全部匹配。没有在本机执行重建或二进制；独立空缓存重建不是本轮已完成项。

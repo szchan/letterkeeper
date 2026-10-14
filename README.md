@@ -100,7 +100,7 @@ python3 scripts/benchmark.py target/debug/letterkeeper
 
 release 的 1k/10k 合成邮箱、32 KiB/2 MiB 原文与 32 KiB/1 MiB 编辑输入实测见 [阶段 C 性能](docs/testing/performance-phase-c.md)。测量采用从进程启动开始的子进程树采样；输入与空闲 CPU 门槛在该样本上通过，不等于真实服务性能承诺。
 
-远程性能需要记录 runner 环境和新基线，不能直接用 Arch 本机历史样本认定远程回归通过。真实 Gmail/系统凭据库仍是独立、另行授权的验收关卡。
+已记录 [GitHub runner 性能基线](docs/testing/hosted-performance.md)及原始合成 JSON，不能直接用 Arch 本机历史样本认定远程回归通过。真实 Gmail/系统凭据库仍是独立、另行授权的验收关卡。
 
 开发继续使用独立分支/worktree、远程独立编译目录、TDD 和按任务选择模型的子代理，见 [协作流程](docs/WORKFLOW.md)。真实服务操作清单见 [独立验收关卡](docs/testing/live-acceptance.md)。
 

@@ -1,6 +1,6 @@
 # Hosted PTY 缩放与帮助验证
 
-日期：2026-10-14。对应 UX-01、UX-02；实际应用的远程 GREEN 与集成门禁待验证，不替代真实账户验收。
+日期：2026-10-14。对应 UX-01、UX-02；实际应用的任务分支与后续集成 GREEN 已通过，精确版本见下方；不替代真实账户验收或后续新版本门禁。
 
 ## 远程失败证据
 
@@ -18,7 +18,7 @@
 
 本机仅对脚本做 AST 语法检查、`git diff --check` 与轻量 Python 夹具检查：合成子进程成功打开 `/dev/tty`，确认自己是控制终端前台会话/进程组；PTY 缩放自动触发 SIGWINCH；完整的新尺寸帧被接受，缺清屏、错误末行和未完成帧被拒绝。夹具不是 LetterKeeper，不验证应用帮助或批准行为。本机没有执行 Cargo、LetterKeeper 或实际应用 PTY 验收。
 
-GREEN 必须由远程 runner 执行原始 `python3 scripts/verify_terminal.py target/debug/letterkeeper`；主代理集成产生的新 SHA 仍须运行完整 CI。待完成后记录精确 SHA、run URL 和结论；失败时继续修复，不删除帮助、缩放、批准或隐私门禁。
+GREEN 由远程 runner 执行原始 `python3 scripts/verify_terminal.py target/debug/letterkeeper`；主代理集成产生的新 SHA 仍须运行完整 CI。失败时继续修复，不删除帮助、缩放、批准或隐私门禁。
 
 ## 四尺寸工作区夹具的后续 RED
 
@@ -28,4 +28,8 @@ Rust 四尺寸测试已有控制终端；本次增加两处可观察同步：先
 
 只读检查本机 crossterm 0.28.1 的 Unix mio 事件源发现，它会在处理一个 readiness token 得到按键或 resize 时立即返回。这个实现说明同时输入/缩放值得单独验证，但不足以确认所有丢键原因；本次仅修复夹具调度，不声称应用的同时缩放与按键行为已修复。若同步后仍失败，必须继续调查应用事件处理。
 
-本机新增验证仅为 Python 语法与四种目标高度（39/23/11/5）的完整帧接受、缺清屏/未完成帧拒绝夹具检查，以及独立 rustfmt 格式化；未编译或运行 Rust，未启动 LetterKeeper。实际 Rust 测试和两个 Python PTY 验证的 GREEN 仍等待对应新 SHA 的远程完整 CI。
+本机新增验证仅为 Python 语法与四种目标高度（39/23/11/5）的完整帧接受、缺清屏/未完成帧拒绝夹具检查，以及独立 rustfmt 格式化；未编译或运行 Rust，未启动 LetterKeeper。
+
+## 实际 GREEN
+
+任务分支 `472db9e26b48b2178892d0eb8f5c9da4585044b9` 的 [38539119843](https://github.com/szchan/letterkeeper/actions/runs/38539119843) 完整成功，包含真实 Rust 四尺寸工作区和两个 Python PTY 脚本。PR #2 集成后 `53d0d720fc4e2bec5f62b7cd2fd54f79ba1fc9f2` 的 [38539664364](https://github.com/szchan/letterkeeper/actions/runs/38539664364) 再次全部成功。后续改动仍要求各自最新完整 `ci-gate`，这些历史通过不代替新版本。

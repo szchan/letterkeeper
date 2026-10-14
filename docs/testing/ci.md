@@ -57,3 +57,7 @@ gh run list --repo szchan/letterkeeper --workflow release.yml
 ## 构建源码产物补充
 
 2026-10-14 本地轻量 RED：`python3 -B scripts/test_ci.py` 共 11 项，新增 2 项因 archive/hash helper stub 的 `NotImplementedError` 失败，既有 9 项通过；没有运行 Cargo。新增验收覆盖 vendor 归档保留原始 notice 字节、排除同目录 `.local`，产物摘要拒绝非 allowlist 文件及符号链接。
+
+GREEN：同一轻量命令 11 项通过。托管 release 脚本增加 `cargo vendor --locked --versioned-dirs`，遵循 [Cargo 官方 vendor 命令说明](https://doc.rust-lang.org/cargo/commands/cargo-vendor.html)。在新临时目录使用显式 workspace manifest、相对 vendor 路径，完整保留上游源码与原始 LICENSE/COPYING/NOTICE 等文件；归档仅含 `vendor/` 与 Cargo 生成的 `.cargo/config.toml`，不复制 Cargo cache、用户目录或相邻私有文件。先用该配置 `cargo metadata --locked --offline` 验证依赖图解析，再生成 `vendor.tar.gz`。
+
+产物明确枚举二进制、project `source.tar.gz`、dependency `vendor.tar.gz`、未改动的 GPL LICENSE、`REBUILD.md`、manifest、SHA256SUMS 及两份合成性能 JSON。manifest 记录准确 project SHA、Cargo.lock SHA-256、全部 payload 摘要；SHA256SUMS 还覆盖 manifest。REBUILD 包含 Rust 1.99.0、Ubuntu 系统依赖与同时解包两份源码后 locked/offline 构建测试步骤。保留第三方原始许可和署名，不作法律认证，也不保证跨机器逐字节可重复构建。远程 source/vendor 产物验证结果须在实际运行完成后追加。

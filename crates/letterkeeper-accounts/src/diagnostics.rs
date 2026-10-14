@@ -246,7 +246,10 @@ fn bus_call(
     if Instant::now() >= deadline {
         return Err(CredentialServiceStatus::TimedOut);
     }
+    #[cfg(not(test))]
     let mut command = Command::new(executable);
+    #[cfg(test)]
+    let mut command = tests::fixture_command(executable);
     command
         .args([
             "--user",
@@ -266,9 +269,17 @@ fn bus_call(
     if let Some(address) = address {
         command.env("DBUS_SESSION_BUS_ADDRESS", address);
     }
-    let mut child = command
-        .spawn()
-        .map_err(|_| CredentialServiceStatus::Unavailable)?;
+    let mut child = command.spawn().map_err(|error| {
+        #[cfg(test)]
+        eprintln!(
+            "synthetic_fixture_spawn_error kind={:?} errno={:?}",
+            error.kind(),
+            error.raw_os_error()
+        );
+        #[cfg(not(test))]
+        let _ = error;
+        CredentialServiceStatus::Unavailable
+    })?;
     let result = (|| {
         let mut stdout = child
             .stdout
@@ -318,6 +329,10 @@ fn bus_call(
 mod tests {
     use super::*;
     use std::os::unix::fs::{PermissionsExt, symlink};
+
+    pub(super) fn fixture_command(executable: &Path) -> Command {
+        Command::new(executable)
+    }
 
     #[test]
     fn directory_diagnostic_is_read_only_and_distinguishes_missing_unsafe_ready() {
@@ -474,6 +489,12 @@ else:
             serde_json::to_vec(&fixture).unwrap(),
         )
         .unwrap();
+        std::fs::write(temp.path().join("busctl-shim.calls"), b"").unwrap();
+        let _writer = fixture
+            .get("hold_script_open")
+            .and_then(serde_json::Value::as_bool)
+            .filter(|hold| *hold)
+            .map(|_| std::fs::OpenOptions::new().write(true).open(&shim).unwrap());
         let status = inspect_service_with(
             &shim,
             Some("unix:path=/synthetic/session-bus"),
@@ -484,8 +505,22 @@ else:
             .unwrap()
             .lines()
             .map(|line| serde_json::from_str(line).unwrap())
-            .collect();
+            .collect::<Vec<serde_json::Value>>();
+        assert!(
+            !calls.is_empty(),
+            "synthetic metadata shim produced no call records; status={status:?}"
+        );
         (status, calls)
+    }
+
+    #[test]
+    fn metadata_fixture_can_be_read_while_a_script_writer_is_open() {
+        let (status, calls) = run_fixture(
+            serde_json::json!({"hold_script_open": true}),
+            Duration::from_secs(2),
+        );
+        assert_eq!(status, CredentialServiceStatus::Unlocked);
+        assert_eq!(calls.len(), 2);
     }
 
     #[test]

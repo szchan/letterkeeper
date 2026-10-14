@@ -91,4 +91,10 @@ CLI 集成 commit `ef181112fcf1a84b5175fac7121fda356fdfe138` 的
 不直接 exec 临时文本；仍使用同一生产 argv/environment/deadline/output runner。
 生产程序保持直接执行固定 `/usr/bin/busctl`，3 秒总预算与所有边界不变。
 fixture 预创建调用日志并严格断言至少有一条记录，没有吞掉缺失日志或放宽正向状态。
-新增 RED/GREEN 和完整 CI 的后续结果待精确 SHA 验证。
+GREEN commit `c660c7509e194336f53950debe3302ee257959af`：
+[同一精确回归成功](https://github.com/szchan/letterkeeper/actions/runs/38583247921)，
+匹配 1 项、raw exit 0、`test_finished`；持有写 descriptor 时仍产生两次有效 metadata 调用。
+[该 SHA 完整 CI](https://github.com/szchan/letterkeeper/actions/runs/38583200166)
+workspace、codex-client、ci-gate 全部 success，原 metadata 正向测试、
+错误/超量输出/统一 deadline 测试以及新确定性回归均保留并通过。
+CLI/root 的集成 revision 仍须执行各自完整门禁，不能沿用子分支结果。

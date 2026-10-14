@@ -385,8 +385,13 @@ impl Drop for Child {
     }
 }
 fn recv(master: &mut File, marker: &str) -> Vec<u8> {
+    let expected = compact(marker.as_bytes());
+    recv_until(master, marker, |output| {
+        plain(output).windows(expected.len()).any(|w| w == expected)
+    })
+}
+fn recv_until(master: &mut File, marker: &str, ready: impl Fn(&[u8]) -> bool) -> Vec<u8> {
     let mut output = Vec::new();
-    let marker = compact(marker.as_bytes());
     let mut buf = [0u8; 8192];
     let until = Instant::now() + Duration::from_secs(8);
     while Instant::now() < until {
@@ -395,7 +400,7 @@ fn recv(master: &mut File, marker: &str) -> Vec<u8> {
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => (),
             _ => (),
         }
-        if plain(&output).windows(marker.len()).any(|w| w == marker) {
+        if ready(&output) {
             return output;
         }
         assert!(
@@ -408,6 +413,26 @@ fn recv(master: &mut File, marker: &str) -> Vec<u8> {
         "PTY missing marker {marker:?}; captured {} bytes",
         output.len()
     );
+}
+fn recv_resize(master: &mut File, height: u16) {
+    let last_row = format!("\x1b[{height};1H");
+    recv_until(master, "completed resized frame", |output| {
+        // Ratatui clears on resize and flushes HideCursor after the last row.
+        // Synchronize before Esc rather than racing a resize signal and input.
+        let Some(clear) = output.windows(4).position(|w| w == b"\x1b[2J") else {
+            return false;
+        };
+        let after_clear = &output[clear + 4..];
+        let Some(row) = after_clear
+            .windows(last_row.len())
+            .position(|w| w == last_row.as_bytes())
+        else {
+            return false;
+        };
+        after_clear[row + last_row.len()..]
+            .windows(6)
+            .any(|w| w == b"\x1b[?25l")
+    });
 }
 fn compact(data: &[u8]) -> Vec<u8> {
     data.iter()
@@ -511,6 +536,7 @@ fn workspace_four_sizes_editing_q_and_terminal_restore() {
         master.write_all(b"c").unwrap();
         recv(&mut master, "新建");
         master.write_all(b"q").unwrap();
+        recv(&mut master, "q");
         assert!(
             child.0.try_wait().unwrap().is_none(),
             "q must be text inside the editor"
@@ -520,11 +546,8 @@ fn workspace_four_sizes_editing_q_and_terminal_restore() {
             width.saturating_sub(1).max(10),
             height.saturating_sub(1).max(4),
         );
-        // SAFETY: child owns this PTY session and SIGWINCH only requests redraw.
-        assert_eq!(
-            unsafe { libc::kill(child.0.id() as i32, libc::SIGWINCH) },
-            0
-        );
+        // The controlling PTY sends SIGWINCH to its foreground process group.
+        recv_resize(&mut master, height.saturating_sub(1).max(4));
         master.write_all(b"\x1b").unwrap();
         recv(&mut master, "未保存");
         master.write_all(b"d").unwrap();

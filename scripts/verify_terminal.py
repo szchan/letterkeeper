@@ -7,7 +7,6 @@ import os
 import re
 from pathlib import Path
 import select
-import signal
 import struct
 import subprocess
 import sys
@@ -23,12 +22,15 @@ def launch(args, width=80, height=24):
     master, slave = os.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", height, width, 0, 0))
     before = termios.tcgetattr(slave)
-    process = subprocess.Popen([str(BINARY), *map(str, args)], stdin=slave, stdout=slave, stderr=slave,
+    # setsid alone detaches the child from its controlling terminal. Acquire the
+    # supplied PTY before exec, as an interactive shell would; avoid preexec_fn.
+    child = "import fcntl, os, sys, termios; fcntl.ioctl(0, termios.TIOCSCTTY, 0); os.execv(sys.argv[1], sys.argv[1:])"
+    process = subprocess.Popen([sys.executable, "-c", child, str(BINARY), *map(str, args)], stdin=slave, stdout=slave, stderr=slave,
                                env={**os.environ, "TERM": "xterm-256color"}, start_new_session=True)
     return process, master, slave, before
 
 
-def receive(process, master, needle, timeout=10):
+def receive(process, master, needle, timeout=10, *, resized_height=None):
     data = bytearray()
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -40,7 +42,14 @@ def receive(process, master, needle, timeout=10):
             if not chunk:
                 break
             data.extend(chunk)
-            if needle in re.sub(rb"\x1b\[[0-?]*[ -/]*[@-~]", b"", data):
+            # Ratatui clears on resize, writes the new last row, then flushes
+            # with HideCursor. Wait for that completed frame before typing:
+            # a SIGWINCH and key sent together can race in the event reader.
+            frame_complete = resized_height is None or re.search(
+                rb"\x1b\[2J.*?\x1b\[" + str(resized_height).encode()
+                + rb";1H.*?\x1b\[\?25l", data, re.DOTALL
+            ) is not None
+            if frame_complete and needle in re.sub(rb"\x1b\[[0-?]*[ -/]*[@-~]", b"", data):
                 return bytes(data)
         if process.poll() is not None:
             break
@@ -65,7 +74,8 @@ with tempfile.TemporaryDirectory(prefix="letterkeeper-terminal-") as tmp:
         os.write(master, b"\r")
         receive(process, master, "宽字符导航测试".encode())
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 12, 24, 0, 0))
-        os.kill(process.pid, signal.SIGWINCH)
+        # The controlling PTY delivers SIGWINCH to its foreground process group.
+        receive(process, master, b"LetterKeeper", resized_height=12)
         os.write(master, b"?")
         receive(process, master, "帮助".encode())
         os.write(master, b"q")

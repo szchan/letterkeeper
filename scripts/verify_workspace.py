@@ -7,7 +7,6 @@ import os
 from pathlib import Path
 import re
 import select
-import signal
 import struct
 import subprocess
 import sys
@@ -20,7 +19,7 @@ BINARY = Path(sys.argv[1] if len(sys.argv) > 1 else ROOT / "target/debug/letterk
 FIXTURE = ROOT / "tests/fixtures/welcome.eml"
 
 
-def receive(proc, master, marker, timeout=8):
+def receive(proc, master, marker, timeout=8, *, resized_height=None):
     data = bytearray()
     until = time.monotonic() + timeout
     while time.monotonic() < until:
@@ -30,7 +29,11 @@ def receive(proc, master, marker, timeout=8):
             except OSError:
                 break
         plain = re.sub(rb"\x1b\[[0-?]*[ -/]*[@-~]", b"", data)
-        if b"".join(marker.split()) in b"".join(plain.split()):
+        frame_complete = resized_height is None or re.search(
+            rb"\x1b\[2J.*?\x1b\[" + str(resized_height).encode()
+            + rb";1H.*?\x1b\[\?25l", data, re.DOTALL
+        ) is not None
+        if frame_complete and b"".join(marker.split()) in b"".join(plain.split()):
             return bytes(data)
         if proc.poll() is not None:
             break
@@ -59,8 +62,9 @@ def run_size(width, height):
         master, slave = os.openpty()
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", height, width, 0, 0))
         before = termios.tcgetattr(slave)
+        child = "import fcntl, os, sys, termios; fcntl.ioctl(0, termios.TIOCSCTTY, 0); os.execv(sys.argv[1], sys.argv[1:])"
         proc = subprocess.Popen(
-            [str(BINARY), "--state-dir", str(Path(temp) / "private"), "tui", "--mail", str(FIXTURE)],
+            [sys.executable, "-c", child, str(BINARY), "--state-dir", str(Path(temp) / "private"), "tui", "--mail", str(FIXTURE)],
             stdin=slave, stdout=slave, stderr=slave,
             env={**os.environ, "TERM": "xterm-256color"}, start_new_session=True,
         )
@@ -69,9 +73,11 @@ def run_size(width, height):
             os.write(master, b"c")
             receive(proc, master, "新建".encode())
             os.write(master, b"q")
+            receive(proc, master, b"q")
             assert proc.poll() is None, "q exited the editor"
             fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", max(height - 1, 4), max(width - 1, 10), 0, 0))
-            os.kill(proc.pid, signal.SIGWINCH)
+            # The controlling PTY delivers SIGWINCH; await its completed frame.
+            receive(proc, master, b"LetterKeeper", resized_height=max(height - 1, 4))
             os.write(master, b"\x1b")
             receive(proc, master, "未保存".encode())
             os.write(master, b"d")

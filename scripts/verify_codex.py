@@ -8,6 +8,7 @@ path; it does not certify every graphical frontend or model's behavior.
 """
 import argparse
 import json
+import os
 from pathlib import Path
 import queue
 import shutil
@@ -118,6 +119,13 @@ def verify(binary, codex):
                    "-c", config, "-c", "plugins={}", "-c", "hooks={}",
                    "-c", "analytics.enabled=false", "-c", "features.shell_tool=false",
                    "-c", 'web_search="disabled"']
+        # The client sandbox must reject even ambient synthetic auth variables.
+        # Exercise the actual bwrap prefix, not a mock or a command-string check.
+        prefix = command[:command.index("--chdir") + 2]
+        subprocess.run(prefix + ["/usr/bin/python3", "-c",
+                                 "import os; assert set(os.environ) <= {'HOME', 'PATH', 'LANG'}, 'client_environment_not_cleared'"],
+                       env={**os.environ, "LETTERKEEPER_SYNTHETIC_AUTH": "synthetic-only"},
+                       check=True, stdout=subprocess.DEVNULL)
         client = Client(command)
         try:
             client.call("initialize", {"clientInfo": {"name": "letterkeeper-verifier", "version": "0.1.0"},

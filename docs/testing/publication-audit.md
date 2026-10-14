@@ -16,3 +16,9 @@
 扫描覆盖的是审计时 `main` 可达的提交与 blob，不包括其他未合并分支、未来提交、Git LFS 外部对象或托管平台元数据。内容扫描使用常见私钥、令牌、凭据赋值、邮箱、非回环 IPv4 与本机路径模式，并做二进制和历史路径名检查；它可能漏掉编码、拆分、未知格式或语义上敏感但没有特征的内容。邮件/正文内容只按合成 fixture 和测试上下文分类，没有对应用代码做安全审计。
 
 结论仅表示本次公开历史检查没有发现阻止公开的明确材料，不表示仓库或应用经过完整安全、隐私、依赖或法律审计。
+
+## 托管验证 artifact 复核
+
+另对 2026-10-14 的[托管 release/performance run](https://github.com/szchan/letterkeeper/actions/runs/38537562629) 的 allowlist artifact 做了范围复核。该 run 对应源码提交 `94ee542dba450083bc0c59cce50ab690dac9aaf3`，artifact ID `11880208853`，保留期 7 天；它是 CI 验证产物，不是 GitHub Release。artifact 的 manifest 与 SHA256SUMS 列表校验通过，且包含 release 二进制、对应源码归档、依赖 vendor 归档、GPL LICENSE、重建说明、manifest 和两份合成性能 JSON；没有 `.local/`、账户配置、真实邮件、凭据库或测试运行目录。报告仅含合成负载与汇总测量值。
+
+本 workflow 使用合成数据，不登录真实账户或执行真实收发；artifact 不含认证数据或认证日志。依赖 vendor 归档保留上游 LICENSE/COPYING/NOTICE 等原始 notice 文件，源码与二进制摘要见 [托管性能样本](hosted-performance.md)。这一检查记录打包范围和已验证摘要，不构成第三方许可证完整性、兼容性或法律认证；完整依赖许可证核验限制仍见 [依赖清单](../DEPENDENCIES.md)。

@@ -1,0 +1,19 @@
+{
+  "binary_profile": "debug if using the default path; caller selects profile",
+  "fixture_bytes": 1089,
+  "fixture_sha256": "e5bb7a69e48ce29aaa903dd25743a53467879d265a7bc7904008c4c753795c91",
+  "runs": 20,
+  "cache": "warm executable and fixture",
+  "read_with_worker": {
+    "median_ms": 13.31,
+    "p95_ms": 13.6,
+    "sampled_tree_peak_rss_kib": 14504,
+    "sampled_tree_peak_pss_kib": 6265,
+    "total_child_cpu_seconds": 0.085
+  },
+  "mcp_preloaded_awaiting_handshake": {
+    "rss_kib": 8420,
+    "pss_kib": 6278
+  },
+  "limits": "1ms sampling may miss peaks; no real account, search, authenticated MCP workload or cold-cache result"
+}

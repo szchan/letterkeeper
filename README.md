@@ -21,7 +21,13 @@ LetterKeeper 是隐私优先、面向人和 Agent 的开源邮件客户端，目
 
 CLI `read` JSON 保留链接目标，不能交给会自动预览资源的组件。第三方 MCP 客户端的最终展示行为仍需逐一验证。本地 MCP 不代表本地模型处理：交给云端 Agent 的正文仍会传给模型服务商。
 
-## 构建与离线演示
+## 远程构建与离线演示
+
+2026-10-14 起，用户授权建立公开仓库 [szchan/letterkeeper](https://github.com/szchan/letterkeeper)，并将重型构建和验证迁移到 GitHub Actions。本机保留编辑、Git/worktree、静态检查与结果审查，不执行 Cargo build/check/test/Clippy、release 基准或安装编译；编辑器自动 Cargo check、保存时构建也应在当前项目会话关闭，不能由 Agent 修改无关系统配置。
+
+每个子任务使用独立分支/worktree；先推送测试提交，在远程记录精确 SHA 的真实 RED，再实现和推送 GREEN。测试、PTY、HTTP/DNS 隐私观察器、实际 Codex 数据路径和性能测量均在远程受控环境运行，不能删减安全测试以适配 runner。操作入口及环境要求见 [CI 验证](docs/testing/ci.md) 与 [协作流程](docs/WORKFLOW.md)。远程通过之前，阶段 C 的本机历史结果不能视为新环境通过。
+
+以下 Cargo 命令供 **远程 runner** 使用；获取与相应 SHA 对应的远程产物后，可在兼容 Linux 环境运行后续离线命令。不要在本机为演示重新编译。
 
 已验证：Arch x86_64、Rust/Cargo 1.99.0、bubblewrap 0.12.0。工作区声明 Rust 1.89（锁定依赖中有 1.89 要求；未单独验收最低版本）、C 编译器和 `/usr/bin/bwrap`。系统须允许用户/网络 namespace，worker 的 `/usr/lib` 布局目前仅在 Arch 验证。Linux 账户认证还需要已解锁的 Secret Service 与私有 `/run/user/UID`。
 
@@ -74,6 +80,8 @@ TUI：`j/k` 或上下键选择/滚动，`Enter/Tab` 阅读，`r` 刷新，`n/p` 
 
 ## 验证与开发
 
+下面命令在远程受控 runner 执行，完整流程见 [CI 验证](docs/testing/ci.md)。公开 Actions 的日志与产物只使用合成邮件、虚构身份和受控服务；不得上传 `.local/`、用户配置或真实凭据。
+
 ```sh
 cargo test --locked --workspace
 cargo fmt --all -- --check
@@ -90,11 +98,14 @@ python3 scripts/benchmark.py target/debug/letterkeeper
 
 release 的 1k/10k 合成邮箱、32 KiB/2 MiB 原文与 32 KiB/1 MiB 编辑输入实测见 [阶段 C 性能](docs/testing/performance-phase-c.md)。测量采用从进程启动开始的子进程树采样；输入与空闲 CPU 门槛在该样本上通过，不等于真实服务性能承诺。
 
-开发继续使用独立 worktree、独立编译目录、TDD 和按任务选择模型的子代理，见 [协作流程](docs/WORKFLOW.md)。真实服务操作清单见 [独立验收关卡](docs/testing/live-acceptance.md)。
+远程性能需要记录 runner 环境和新基线，不能直接用 Arch 本机历史样本认定远程回归通过。真实 Gmail/系统凭据库仍是独立、另行授权的验收关卡。
+
+开发继续使用独立分支/worktree、远程独立编译目录、TDD 和按任务选择模型的子代理，见 [协作流程](docs/WORKFLOW.md)。真实服务操作清单见 [独立验收关卡](docs/testing/live-acceptance.md)。
 
 ## 文档与许可
 
 - [需求](docs/REQUIREMENTS.md) · [验收状态](docs/STATUS.md) · [Agent 指引](AGENTS.md)
+- [远程 CI 决定](docs/decisions/0004-hosted-ci.md) · [远程 CI 开发记录](docs/development/2026-10-14-hosted-ci.md) · [CI 验证](docs/testing/ci.md)
 - [阶段 A 决定](docs/decisions/0001-phase-a.md) · [阶段 B 决定](docs/decisions/0002-phase-b.md)
 - [阶段 A 记录](docs/development/2026-10-12.md) · [阶段 B 记录](docs/development/2026-10-13.md)
 - [阶段 B 集成](docs/testing/phase-b-integration.md) · [协议](docs/testing/protocol.md) · [账户/OAuth](docs/testing/accounts.md)

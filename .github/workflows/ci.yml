@@ -62,6 +62,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
           key: cargo-ubuntu24-rust1.99-${{ hashFiles('Cargo.lock') }}
+      - name: Bounded Codex MCP readiness orchestration tests
+        run: python3 scripts/test_codex_readiness.py
       - run: cargo build --locked --workspace
       - run: bash scripts/ci/install-codex.sh
       - name: Public Codex app-server, synthetic MCP, no auth or model turn

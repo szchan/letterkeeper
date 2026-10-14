@@ -40,21 +40,26 @@ class Client:
         finally:
             self.incoming.put(None)
 
-    def call(self, method, params):
+    def call(self, method, params, *, timeout=30):
         self.serial += 1
         self.process.stdin.write(json.dumps({"id": self.serial, "method": method,
                                             "params": params}) + "\n")
         self.process.stdin.flush()
-        deadline = time.monotonic() + 30
-        while time.monotonic() < deadline:
-            row = self.incoming.get(timeout=max(.01, deadline - time.monotonic()))
+        deadline = time.monotonic() + timeout
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("codex_client_deadline")
+            try:
+                row = self.incoming.get(timeout=remaining)
+            except queue.Empty:
+                raise TimeoutError("codex_client_deadline") from None
             if row is None or row.get("transport_error"):
                 raise RuntimeError("codex_client_transport_failed")
             if row.get("id") == self.serial:
                 if "error" in row:
                     raise RuntimeError("codex_rpc_rejected")
                 return row["result"]
-        raise TimeoutError("codex_client_deadline")
 
     def tool(self, thread, server, tool, arguments):
         return self.call("mcpServer/tool/call", {"threadId": thread, "server": server,
@@ -72,6 +77,42 @@ class Client:
                 self.process.kill()
                 self.process.wait()
         self.process.stdout.close()
+
+
+def wait_for_mcp_servers(client, thread, expected, *, timeout=30,
+                         monotonic=time.monotonic, sleep=time.sleep):
+    """Read the thread inventory before any synthetic tool call."""
+    deadline = monotonic() + timeout
+    known_statuses = ("notStarted", "starting", "connected", "authenticationRequired",
+                      "failed", "cancelled", "disabled")
+    while True:
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            raise TimeoutError("codex_mcp_readiness_deadline")
+        response = client.call("mcpServerStatus/list",
+                               {"threadId": thread, "detail": "toolsAndAuthOnly"},
+                               timeout=remaining)
+        rows = response.get("data")
+        if (not isinstance(rows, list) or len(rows) != len(expected)
+                or any(not isinstance(row, dict) for row in rows)
+                or {row.get("name") for row in rows} != set(expected)
+                or response.get("nextCursor") is not None):
+            raise RuntimeError("unexpected_server_inventory")
+        statuses = [row.get("runtimeStatus") for row in rows]
+        for status in statuses:
+            if status not in ("notStarted", "starting", "connected"):
+                # Never echo server error details, arbitrary values or names.
+                if status in known_statuses:
+                    safe_status = status
+                else:
+                    safe_status = "unavailable" if status is None else "unknown"
+                raise RuntimeError(f"codex_mcp_readiness_rejected:{safe_status}")
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            raise TimeoutError("codex_mcp_readiness_deadline")
+        if all(status == "connected" for status in statuses):
+            return rows
+        sleep(min(1, remaining))
 
 
 def payload(result):
@@ -141,10 +182,7 @@ def verify(binary, codex):
                                     "experimentalRawEvents": False, "sandbox": "read-only",
                                     "approvalPolicy": "never"})
             thread = response["thread"]["id"]
-            status = client.call("mcpServerStatus/list", {"threadId": thread, "detail": "toolsAndAuthOnly"})
-            assert {s["name"] for s in status["data"]} == set(servers), "unexpected_server_inventory"
-            for server in status["data"]:
-                assert server["runtimeStatus"] == "connected", "server_not_connected"
+            for server in wait_for_mcp_servers(client, thread, servers):
                 assert len(server["tools"]) == 14, "tool_inventory_changed"
                 assert not {"approve", "approve_draft", "read_file", "set_policy"}.intersection(server["tools"])
             readonly, writable = "letterkeeper_readonly", "letterkeeper_draft"

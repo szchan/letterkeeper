@@ -39,6 +39,8 @@ struct Cli {
 }
 #[derive(Subcommand)]
 enum Action {
+    /// Inspect local environment without creating storage or checking account authentication.
+    Doctor,
     /// Parse an explicitly selected EML through the isolated worker.
     Read { file: PathBuf },
     /// Browse an account or explicitly selected synthetic EML files.
@@ -188,9 +190,15 @@ enum MailAction {
         id: i64,
     },
 }
-fn repository(config: Option<&Path>, data: Option<&Path>) -> Result<AccountRepository, String> {
-    let (default_config, default_data) =
-        AccountRepository::default_paths().map_err(|e| e.to_string())?;
+fn repository_paths(
+    config: Option<&Path>,
+    data: Option<&Path>,
+) -> Result<(PathBuf, PathBuf), String> {
+    let defaults = if config.is_none() || data.is_none() {
+        Some(AccountRepository::default_paths().map_err(|e| e.to_string())?)
+    } else {
+        None
+    };
     let absolute = |p: &Path| -> Result<PathBuf, String> {
         if p.is_absolute() {
             Ok(p.into())
@@ -200,12 +208,16 @@ fn repository(config: Option<&Path>, data: Option<&Path>) -> Result<AccountRepos
                 .join(p))
         }
     };
-    AccountRepository::new(
-        absolute(config.unwrap_or(&default_config))?,
-        absolute(data.unwrap_or(&default_data))?,
-    )
-    .map_err(|e| e.to_string())
+    Ok((
+        absolute(config.unwrap_or_else(|| &defaults.as_ref().expect("default paths resolved").0))?,
+        absolute(data.unwrap_or_else(|| &defaults.as_ref().expect("default paths resolved").1))?,
+    ))
 }
+fn repository(config: Option<&Path>, data: Option<&Path>) -> Result<AccountRepository, String> {
+    let (config, data) = repository_paths(config, data)?;
+    AccountRepository::new(config, data).map_err(|e| e.to_string())
+}
+
 fn documents(paths: &[PathBuf]) -> Result<Vec<SafeDocument>, String> {
     if paths.is_empty() || paths.len() > 50 {
         return Err("select_one_to_fifty_messages".into());
@@ -356,6 +368,16 @@ fn account_action(repo: AccountRepository, action: AccountAction) -> Result<(), 
     }
 }
 fn run(cli: Cli) -> Result<(), String> {
+    if matches!(&cli.command, Action::Doctor) {
+        let (config, data) = repository_paths(cli.config_dir.as_deref(), cli.data_dir.as_deref())?;
+        let report = letterkeeper::diagnostics::diagnose(&config, &data);
+        print_json(&report)?;
+        return if report.is_ready() {
+            Ok(())
+        } else {
+            Err("environment_not_ready_use_doctor_advice".into())
+        };
+    }
     if matches!(
         &cli.command,
         Action::Account {
@@ -369,13 +391,29 @@ fn run(cli: Cli) -> Result<(), String> {
         )?;
         if let Some(cfg) = cfg {
             repository(cli.config_dir.as_deref(), cli.data_dir.as_deref())?
-                .save(&cfg)
+                .create(&cfg)
                 .map_err(|e| e.to_string())?;
-            return print_json(
-                &serde_json::json!({"configuration_saved": true, "authentication": "unverified"}),
-            );
+            let mut next = Vec::new();
+            match cfg.authentication {
+                Authentication::Password => {
+                    next.push(format!("letterkeeper account password {}", cfg.id))
+                }
+                Authentication::GmailOAuth {
+                    client_secret_ref, ..
+                } => {
+                    if client_secret_ref {
+                        next.push(format!("letterkeeper account client-secret {}", cfg.id));
+                    }
+                    next.push(format!("letterkeeper account login {}", cfg.id));
+                }
+            }
+            next.push(format!("letterkeeper --account {} tui --read-only", cfg.id));
+            return print_json(&serde_json::json!({
+                "id":cfg.id,"configuration_saved":true,"authentication":"unverified",
+                "next_commands":next,"directory_options":"Repeat your --config-dir and --data-dir options, if supplied."
+            }));
         }
-        return print_json(&serde_json::json!({"configuration_saved": false, "cancelled":true}));
+        return print_json(&serde_json::json!({"configuration_saved":false,"cancelled":true}));
     }
     let account = cli
         .account
@@ -388,6 +426,7 @@ fn run(cli: Cli) -> Result<(), String> {
         })
         .transpose()?;
     match cli.command {
+        Action::Doctor => Err("environment_not_ready_use_doctor_advice".into()),
         Action::Read { file } => print_json(&documents(&[file])?.remove(0)),
         Action::Account { command } => account_action(
             repository(cli.config_dir.as_deref(), cli.data_dir.as_deref())?,

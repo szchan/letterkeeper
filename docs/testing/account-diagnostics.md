@@ -28,15 +28,16 @@ worker 可运行和返回预期安全文本，并非 doctor 单独证明全部 H
 没有继承 HOME、PATH、预加载库变量、token 或其他用户环境。
 
 调用仅为 `ReadAlias(default)` 和固定 `Properties.Get(Collection.Locked)`，
-两次都禁用自动启动和交互授权。Collection 返回路径只允许固定命名空间下单个
-DBus 路径组件；`/` 报告 `not_initialized`。不打开 Secret Service session，
+两次都禁用自动启动和交互授权。Collection 返回路径按有界 D-Bus ObjectPath 语法
+校验；`/` 报告 `not_initialized`。不打开 Secret Service session，
 不搜索、枚举或读取任何 item，不解锁、创建、删除、修改或弹出 prompt。
 服务 locked、unlocked、missing collection、unavailable、unknown 和 timed_out 分开。
 只有所有环境项成功时 `environment_ready=true`，仍为 `authentication=not_checked`。
 
-当前 collection 路径只兼容 `/org/freedesktop/secrets/collection/单个组件`；
-规范允许其他合法 ObjectPath，因此采用其他路径的合法 provider 会报告 `unknown`，
-不能据此判定 provider 不安全。此保守限制待单独回归扩展，未声称已覆盖全部系统凭据库。
+任务分支初版仅兼容 `/org/freedesktop/secrets/collection/单个组件`。集成审查根据
+规范发现这一限制会拒绝合法 provider 的路径，随后通过独立 RED/GREEN 修正：
+允许合法自定义层级，仍固定目标服务、Collection 接口和 Locked 属性；非法路径、
+空组件、控制字符、额外 JSON 字段及非本地总线地址拒绝。未声称已覆盖真实凭据库。
 
 根据 [Secret Service 规范](https://specifications.freedesktop.org/secret-service/latest-single/)，
 ReadAlias 无结果返回 `/`，Locked 是无需会话的集合元数据。
@@ -70,3 +71,11 @@ GREEN commit `08df9fbb38b65c82d3cd2ecba3c9ea66e132a4db`：
 清空环境、locked/unlocked/missing/error/malformed/超量输出/统一 deadline。
 shim 验证受控进程及响应边界，不代表真实凭据库兼容性。
 真实 Gmail 和系统凭据库独立验收未执行，不在公共 CI 中测试真实服务。
+
+## collection 路径兼容性回归
+
+精确测试 `diagnostics::tests::secret_service_collection_paths_follow_the_dbus_object_path_contract`：
+
+- RED `c8df0a3485fda1c66b2e99a8b4c30f4facf23d73`：[实际失败](https://github.com/szchan/letterkeeper/actions/runs/38581107016)，匹配一项、exit 101、`test_finished`；合法 `/vendor/vault/default_collection` 被旧校验返回 Unknown。
+- GREEN `51b01848ae2379df55b42c466e3f7f953cc8f496`：[实际通过](https://github.com/szchan/letterkeeper/actions/runs/38581540839)，匹配一项、exit 0。受控 shim 另核对合法自定义路径传入后，服务、接口及属性保持固定。
+- 当前集成的新 SHA 完整门禁见[账户接入开发记录](../development/2026-10-14-account-onboarding.md)，精确测试不替代完整 CI。

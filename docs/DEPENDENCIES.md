@@ -1,5 +1,7 @@
 # 依赖清单
 
+账户接入诊断（ADR 0005）不增加 Cargo 包。凭据服务元数据检查可选调用系统的 `/usr/bin/busctl`：固定参数、禁自动启动服务、禁交互授权，清理环境并设输出/时间界限；缺失时报告诊断不可用。工具来自 systemd，随发行版提供而不随本项目复制分发；上游维护与许可证以 [systemd 仓库](https://github.com/systemd/systemd)及其原始许可文件为准。本批仅使用其公开 D-Bus 命令接口，不据此声称已验收真实 Secret Service 凭据往返。命令语义参考 [上游手册源码](https://github.com/systemd/systemd/blob/main/man/busctl.xml)，只读检查参考 [Secret Service 规范](https://specifications.freedesktop.org/secret-service/latest-single/)。
+
 本清单记录当前原型工作区 `Cargo.lock` 锁定的 crates.io 依赖。机器可读的完整清单在 [dependencies.json](dependencies.json)，每项只包含名称、版本、上游声明的许可证、官方仓库地址及上游声明的 Rust 版本；未声明的 Rust 版本为 `null`。清单按集成工作区 `Cargo.lock` 经 Cargo metadata 得到，共 **385 个 registry package 条目、362 个不同 crate 名称**（同名多版本分别计数）；包括构建、测试及非 Linux 目标依赖，因此不是仅运行时依赖列表。
 
 版本和元数据来自集成 worktree 的 `cargo metadata --offline --locked --format-version 1` 输出；完整 JSON 仅保留 name/version/license/repository/rust_version 五字段，没有绝对路径或包内容。直接依赖用途及已配置安全边界按 manifest、代码和 ADR 0002/0003 记录交叉核对。没有声称依赖版本是最新或已完成安全审计。仓库地址仅作上游来源线索，不代表已审计代码或维护状态。对所有依赖的漏洞、安全、许可证兼容性均未完成审计或法律审查；发布前仍须核对依赖实际许可证原文、传递依赖和目标平台要求。项目原创源码与文档继续采用 `GPL-3.0-only`，不改变 [LICENSE](../LICENSE)。

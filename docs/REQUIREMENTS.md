@@ -149,6 +149,8 @@ Gmail OAuth client 的注册、个人自用与公开发布流程尚待设计。�
 
 ## 12. 实施记录
 
+- 2026-10-14：用户同意下一批账户接入开发。增加人类 CLI 的环境诊断与交互配置，不改变需求编号、默认发送授权或真实服务验收关卡。设计见 [账户接入决定](decisions/0005-account-onboarding.md)，过程见 [开发记录](development/2026-10-14-account-onboarding.md)；远程验证结果完成后单独记录。
+
 2026-10-12：用户同意 Rust 共享核心、独立正文 worker、TUI/MCP 方案并要求 Git/worktree、成本分级子代理及 TDD。新增 [架构决定](decisions/0001-phase-a.md)、[协作流程](WORKFLOW.md) 和 [验收状态](STATUS.md)。保留所有需求编号、优先级和安全边界，原型功能不替代真实邮箱验收。
 
 2026-10-13：用户授权子代理继续阶段 B TDD，先使用本机受控服务，无需真实凭据。实现记录见 [阶段 B 决定](decisions/0002-phase-b.md)、[集成验证](testing/phase-b-integration.md) 和 [开发记录](development/2026-10-13.md)。需求编号/优先级保持不变；Gmail/系统凭据库代码已有受控验证，真实服务商与公开客户端验收仍待后续授权。

@@ -2,6 +2,7 @@
 //! User-owned account configuration and credentials; no MCP policy mutation surface.
 mod config;
 mod credentials;
+pub mod diagnostics;
 mod oauth;
 mod onboarding;
 pub use config::*;

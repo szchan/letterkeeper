@@ -10,6 +10,8 @@
 
 凭据诊断只查询 Secret Service 的默认 collection 及 Locked 元数据，不搜索条目、不读取凭据、不解锁、不创建 collection，也不认证账户。使用固定 `/usr/bin/busctl`、参数数组和禁服务自动启动的调用；只允许本地 Unix D-Bus 地址，清理环境、限制输出并设置总时限。缺少 busctl 或无法查询时报告不可用/未知，不声称已登录。该可选系统工具不引入 Cargo 依赖；本批不为实现诊断安装或修改用户系统服务。
 
+ReadAlias 返回路径按有界的 D-Bus ObjectPath 语法校验，允许合法服务商自定义层级；目标服务、接口及 Locked 属性固定，路径不能改变调用权限。初版固定 collection 前缀的限制在集成审查中由单独 RED/GREEN 回归修正。参考 [Secret Service 规范](https://specifications.freedesktop.org/secret-service/latest-single/)及 [systemd busctl 手册源码](https://github.com/systemd/systemd/blob/main/man/busctl.xml)。
+
 诊断只输出固定状态和操作建议，不包含真实路径、邮箱、D-Bus 地址或底层原始错误。交互配置审阅属于本机人类界面，输入不能被当作终端控制指令；公开测试全部使用合成身份和临时目录。
 
 主代理负责接口、集成与隐私审查；诊断及配置存储用 GPT-6.1-Sol high，CLI/PTY 用 GPT-6.1-Sol medium。三个任务使用各自 worktree 和分支，按 ADR 0004 在 GitHub hosted runner 执行 RED/GREEN、完整 Rust/PTY/隐私/MCP 门禁。本机不编译。过程和精确验收证据分别记录在 docs/development 与 docs/testing。

@@ -6,6 +6,8 @@ LetterKeeper 是隐私优先、面向人和 Agent 的开源邮件客户端，目
 
 ## 当前状态
 
+账户接入新增 `doctor` 环境诊断和 `account add` 交互配置：默认只读、确认后原子创建、拒绝同名覆盖；配置保存与账户认证分开。诊断不读取凭据，也不初始化账户目录。该批远程验收见 [账户接入记录](docs/development/2026-10-14-account-onboarding.md)。
+
 2026-10-13：已完成阶段 C 的**受控 TUI / Agent 人工审批工作流**。严格 TLS IMAP/SMTP、账户/OAuth、分页搜索、安全阅读、回复/转发、附件与显式 Drafts/Sent 同步继续共用后端；新增内置草稿编辑、完整审阅、人工批准、独立发送及结果查询。
 
 210 项 Rust 测试、fmt/Clippy、实际 PTY、可达 HTTP/DNS 观察器和实际 Codex MCP 数据路径已通过。真实 Gmail、真实系统凭据库、公开图形前端及受限自动发送尚未验收，**不能称为全部 P0 已完成或生产可用**。实际完成项和缺口见 [验收状态](docs/STATUS.md)。本轮没有使用真实邮箱或外发邮件。
@@ -61,6 +63,19 @@ TUI：`j/k` 或上下键选择/滚动，`Enter/Tab` 阅读，`r` 刷新，`n/p` 
 
 ## 账户、CLI 与 MCP
 
+下载包含本批功能的 Actions 构建并解包后，可先诊断再创建配置：
+
+```sh
+./letterkeeper doctor
+./letterkeeper account add
+```
+
+`doctor` 输出固定字段 JSON 和安全建议，检查私有配置/数据目录、固定 `/run/user/UID`、合成邮件的实际沙箱 worker，以及默认凭据 collection 的锁定元数据；可选系统工具为 `/usr/bin/busctl`。不创建目录、不搜索凭据条目、不解锁服务、不连接邮箱。环境未就绪时退出非零，`authentication: not_checked` 始终表示认证未检查；沙箱 ready 只表示 worker 能启动并解析，完整网络隔离另由隐私测试验证。
+
+`account add` 要求输入和输出都是真实终端，支持 `/cancel` 或 EOF 取消。选择密码账户或自己的 Gmail Desktop client ID，填写文件夹并选择权限，默认只读。最终审阅后只有精确输入 `yes` 才保存，空白、`y` 或其他回答均取消且不初始化存储。创建同名账户会拒绝覆盖，`account import` 仍用于显式导入/更新配置。保存结果为 `configuration_saved`、`authentication: unverified`，并提示后续凭据和登录命令；引导本身不收集密码/token/client secret、不创建账户数据库、不启动 OAuth 或网络认证。
+
+引导目前接受 ASCII dot-atom 邮箱地址、DNS/IP 端点及中文文件夹；带引号或国际化邮箱地址不在该入口支持范围。隐式 TLS 默认 IMAP 993 / SMTP 465，不把其他端口自动当作 STARTTLS。Gmail 默认文件夹名可覆盖，实际标签和非 ASCII mailbox 协议兼容性仍待独立验收。显式选择发送权限仍需既有人工批准流程。
+
 [合成配置示例](tests/fixtures/account.example.json)展示配置形状，端口不是已启动的服务。`account import FILE` 导入不含凭据的配置，`account list` 列出本机账户。密码用 `account password ID` 的隐藏终端输入；Gmail 配置使用 `authentication.type=gmail_oauth`、自己的 Desktop client_id 及 client_secret_ref，后者启用时用 `account client-secret ID` 保存秘密。密码、token 和 client secret 均不放在普通配置或命令参数中，凭据库不可用时拒绝认证。
 
 `account login ID` 打印供用户在系统浏览器打开的 OAuth URL，使用 S256 PKCE、state 和临时 loopback 回调；支持续期、`account logout ID` 本地注销及 `account revoke ID` 远程撤销。没有注册/借用其他客户端身份；个人和公开发布的 OAuth client 流程仍需真实验收。
@@ -105,6 +120,8 @@ release 的 1k/10k 合成邮箱、32 KiB/2 MiB 原文与 32 KiB/1 MiB 编辑输�
 开发继续使用独立分支/worktree、远程独立编译目录、TDD 和按任务选择模型的子代理，见 [协作流程](docs/WORKFLOW.md)。真实服务操作清单见 [独立验收关卡](docs/testing/live-acceptance.md)。
 
 ## 文档与许可
+
+- [账户接入决定](docs/decisions/0005-account-onboarding.md) · [开发记录](docs/development/2026-10-14-account-onboarding.md) · [诊断验证](docs/testing/account-diagnostics.md) · [配置后端验证](docs/testing/account-onboarding.md) · [CLI 验证](docs/testing/account-cli.md)
 
 - [需求](docs/REQUIREMENTS.md) · [验收状态](docs/STATUS.md) · [Agent 指引](AGENTS.md)
 - [远程 CI 决定](docs/decisions/0004-hosted-ci.md) · [远程 CI 开发记录](docs/development/2026-10-14-hosted-ci.md) · [CI 验证](docs/testing/ci.md)

@@ -248,6 +248,9 @@ impl AccountRepository {
         }
         Ok(account)
     }
+    pub fn create(&self, _account: &AccountConfig) -> Result<(), AccountError> {
+        Err(AccountError::InvalidConfiguration)
+    }
     pub fn save(&self, account: &AccountConfig) -> Result<(), AccountError> {
         self.verify_dirs()?;
         account.validate()?;

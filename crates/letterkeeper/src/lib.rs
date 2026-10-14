@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 pub mod app;
+pub mod diagnostics;
 pub mod files;
 pub mod remote;
 pub mod sandbox;

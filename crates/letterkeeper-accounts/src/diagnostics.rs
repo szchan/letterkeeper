@@ -154,14 +154,16 @@ fn collection_path(bytes: &[u8]) -> Result<Option<String>, CredentialServiceStat
     if path == "/" {
         return Ok(None);
     }
-    let Some(suffix) = path.strip_prefix("/org/freedesktop/secrets/collection/") else {
+    let Some(suffix) = path.strip_prefix('/') else {
         return Err(CredentialServiceStatus::Unknown);
     };
     if path.len() > 1024
-        || suffix.is_empty()
-        || !suffix
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'_')
+        || suffix.split('/').any(|component| {
+            component.is_empty()
+                || !component
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'_')
+        })
     {
         return Err(CredentialServiceStatus::Unknown);
     }
@@ -440,7 +442,7 @@ mod tests {
             Some("/org/freedesktop/secrets/collection/test")
         );
         for value in [
-            br#"{"type":"o","data":["/outside"]}"#.as_slice(),
+            br#"{"type":"o","data":["relative"]}"#.as_slice(),
             br#"{"type":"o","data":["/org/freedesktop/secrets/collection/test//escape"]}"#,
             br#"{"type":"o","data":["/org/freedesktop/secrets/collection/test/.."]}"#,
             br#"{"type":"s","data":["/"]}"#,
@@ -473,7 +475,8 @@ flags = ['--user', '--auto-start=no', '--allow-interactive-authorization=no', '-
 assert sys.argv[1:7] == flags
 args = sys.argv[7:]
 alias = args == ['call', 'org.freedesktop.secrets', '/org/freedesktop/secrets', 'org.freedesktop.Secret.Service', 'ReadAlias', 's', 'default']
-assert alias or args == ['call', 'org.freedesktop.secrets', '/org/freedesktop/secrets/collection/test', 'org.freedesktop.DBus.Properties', 'Get', 'ss', 'org.freedesktop.Secret.Collection', 'Locked']
+collection = fixture.get('alias', {'data': ['/org/freedesktop/secrets/collection/test']})['data'][0]
+assert alias or args == ['call', 'org.freedesktop.secrets', collection, 'org.freedesktop.DBus.Properties', 'Get', 'ss', 'org.freedesktop.Secret.Collection', 'Locked']
 time.sleep(fixture.get('delay', 0))
 mode = fixture.get('mode')
 if mode == 'error':
@@ -554,11 +557,22 @@ else:
         assert_eq!(status, CredentialServiceStatus::NotInitialized);
         assert_eq!(calls.len(), 1);
         let (status, calls) = run_fixture(
-            json!({"alias": {"type": "o", "data": ["/arbitrary/private"]}}),
+            json!({"alias": {"type": "o", "data": ["/arbitrary//private"]}}),
             Duration::from_secs(2),
         );
         assert_eq!(status, CredentialServiceStatus::Unknown);
         assert_eq!(calls.len(), 1);
+        let custom_path = "/vendor/vault/default_collection/nested";
+        let (status, calls) = run_fixture(
+            json!({"alias": {"type": "o", "data": [custom_path]}}),
+            Duration::from_secs(2),
+        );
+        assert_eq!(status, CredentialServiceStatus::Unlocked);
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[1]["args"][7], "org.freedesktop.secrets");
+        assert_eq!(calls[1]["args"][8], custom_path);
+        assert_eq!(calls[1]["args"][12], "org.freedesktop.Secret.Collection");
+        assert_eq!(calls[1]["args"][13], "Locked");
     }
 
     #[test]

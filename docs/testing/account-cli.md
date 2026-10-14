@@ -27,6 +27,10 @@ Rust 集成测试内启动 Python 的真实 controlling PTY：
 - 显式双目录不依赖 HOME 的 paths helper 边界由静态审查发现后加入 GREEN 回归，未取得单独 RED；以上向导行为 RED 不被描述为已覆盖这一新增边界。
 - 内存输入测试覆盖超长行、未结束行和终端控制字符，不能推进到确认。
 
+## 精确保存确认回归
+
+静态审查发现所有输入统一 trim，会把 ` yes` 或 `yes ` 当成授权保存。新增 PTY 拒绝测试 SHA `9ea4b17d1028ef8d4d4fc6b00434356cd1ae095d` 后，取得[真实回归 RED](https://github.com/szchan/letterkeeper/actions/runs/38581347480)：精确测试匹配一项，原始退出码 101；Python 第 65 行无目录断言失败。随后保留最终输入的原始空格，只接受字节意义上的 `yes`（行结束符除外），普通配置字段仍去除首尾空格。
+
 ## GREEN / 集成
 
-待记录精确 GREEN SHA、TDD run 与完整 CI 门禁。仅运行 rustfmt 与静态审查；本机未执行 Cargo 编译、check、测试或 Clippy。任务分支通过不替代主代理集成后新 SHA 的完整门禁。
+初版实现 SHA `af77ce9aa06b200012ac317d83a11645f4094ef4` 的[TDD GREEN](https://github.com/szchan/letterkeeper/actions/runs/38581028596)通过。初版[完整 CI](https://github.com/szchan/letterkeeper/actions/runs/38580994626)在 fmt 检查因 module export 排序失败；后续修正格式。最终精确确认回归 GREEN / 完整门禁待记录。仅运行 rustfmt 与静态审查；本机未执行 Cargo 编译、check、测试或 Clippy。任务分支通过不替代主代理集成后新 SHA 的完整门禁。

@@ -33,7 +33,8 @@ impl<R: BufRead, W: Write> Wizard<'_, R, W> {
         }
         let value = String::from_utf8(bytes).map_err(|_| "invalid_account_input")?;
         if value.chars().any(|c| {
-            c.is_control() || matches!(c, '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
+            c.is_control()
+                || matches!(c, '\u{061c}' | '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
         }) {
             return Err("invalid_account_input".into());
         }

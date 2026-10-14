@@ -92,12 +92,6 @@ impl Sandbox {
                 "--ro-bind",
                 "/usr",
                 "/usr",
-                "--symlink",
-                "usr/lib",
-                "/lib",
-                "--symlink",
-                "usr/lib",
-                "/lib64",
                 "--proc",
                 "/proc",
                 "--dev",
@@ -106,7 +100,16 @@ impl Sandbox {
                 "/tmp",
                 "--dir",
                 "/app",
-            ])
+            ]);
+        // Preserve each distribution's loader layout without mounting user data.
+        // Arch and Ubuntu use different /lib64 targets; a guessed symlink can
+        // prevent the isolated worker from starting at all.
+        for directory in ["/lib", "/lib64"] {
+            if Path::new(directory).exists() {
+                command.args(["--ro-bind", directory, directory]);
+            }
+        }
+        command
             .arg("--ro-bind")
             .arg(executable)
             .arg("/app/letterkeeper")

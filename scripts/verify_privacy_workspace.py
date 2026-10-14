@@ -181,7 +181,7 @@ def outer(binary):
         (root/'hosts').write_text('127.0.0.1 localhost\n')
         script = Path(__file__).resolve()
         command = ['/usr/bin/bwrap','--die-with-parent','--new-session','--unshare-user','--uid','0','--gid','0','--unshare-net','--cap-add','CAP_NET_BIND_SERVICE',
-                   '--ro-bind','/usr','/usr','--symlink','usr/lib','/lib','--symlink','usr/lib','/lib64',
+                   '--ro-bind','/usr','/usr','--ro-bind','/lib','/lib','--ro-bind','/lib64','/lib64',
                    '--proc','/proc','--dev','/dev','--tmpfs','/tmp','--ro-bind',str(binary.parent),str(binary.parent),
                    '--ro-bind',str(script),'/verify.py','--ro-bind',str(root/'resolv.conf'),'/etc/resolv.conf',
                    '--ro-bind',str(root/'nsswitch.conf'),'/etc/nsswitch.conf','--ro-bind',str(root/'hosts'),'/etc/hosts',

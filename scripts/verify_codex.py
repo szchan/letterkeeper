@@ -109,8 +109,8 @@ def verify(binary, codex):
         # Preserve environment variable meanings; isolate paths using mounts.
         # No real home, auth.json, installed plugins or persistent config is mounted.
         command = ["/usr/bin/bwrap", "--die-with-parent", "--new-session", "--unshare-net",
-                   "--ro-bind", "/usr", "/usr", "--symlink", "usr/lib", "/lib",
-                   "--symlink", "usr/lib", "/lib64", "--proc", "/proc", "--dev", "/dev",
+                   "--ro-bind", "/usr", "/usr", "--ro-bind", "/lib", "/lib",
+                   "--ro-bind", "/lib64", "/lib64", "--proc", "/proc", "--dev", "/dev",
                    "--tmpfs", "/tmp", "--ro-bind", str(binary.parent), str(binary.parent),
                    "--bind", str(root / "client"), str(Path.home() / ".codex"),
                    "--bind", str(root / "runtime"), "/run/letterkeeper",

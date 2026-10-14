@@ -19,6 +19,8 @@ pub enum AccountError {
     AccountNotFound,
     #[error("account already exists; existing configuration was not replaced")]
     AccountAlreadyExists,
+    #[error("account configuration may exist; reload before retrying")]
+    AccountPersistenceUncertain,
     #[error("credential service unavailable, locked, or ambiguous")]
     CredentialUnavailable,
     #[error("credential missing; log in again")]

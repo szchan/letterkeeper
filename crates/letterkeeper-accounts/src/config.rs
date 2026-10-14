@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::AccountError;
-use rustix::fs::{self as fs, AtFlags, FileType, Mode, OFlags};
+use rustix::fs::{self as fs, AtFlags, FileType, Mode, OFlags, RenameFlags};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::File,
@@ -248,8 +248,53 @@ impl AccountRepository {
         }
         Ok(account)
     }
-    pub fn create(&self, _account: &AccountConfig) -> Result<(), AccountError> {
-        Err(AccountError::InvalidConfiguration)
+    /// Publishes a complete private configuration only if its name does not exist.
+    /// Concurrent creators have exactly one winner; no existing inode is replaced.
+    /// A post-publication fsync failure reports uncertainty: reload before retrying.
+    pub fn create(&self, account: &AccountConfig) -> Result<(), AccountError> {
+        self.verify_dirs()?;
+        account.validate()?;
+        let bytes =
+            serde_json::to_vec_pretty(account).map_err(|_| AccountError::InvalidConfiguration)?;
+        if bytes.len() > MAX_CONFIG_BYTES {
+            return Err(AccountError::InvalidConfiguration);
+        }
+        let name = format!("{}.json", account.id);
+        let nonce = oauth2::CsrfToken::new_random();
+        let tmp = format!(".tmp-{}", nonce.secret());
+        let fd = fs::openat(
+            &self.config_fd,
+            &tmp,
+            OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+            Mode::from_raw_mode(0o600),
+        )
+        .map_err(|_| AccountError::UnsafeStorage)?;
+        let result = (|| {
+            check_file(&fd)?;
+            let mut file = File::from(fd);
+            file.write_all(&bytes)
+                .map_err(|_| AccountError::UnsafeStorage)?;
+            file.sync_all().map_err(|_| AccountError::UnsafeStorage)?;
+            fs::renameat_with(
+                &self.config_fd,
+                &tmp,
+                &self.config_fd,
+                &name,
+                RenameFlags::NOREPLACE,
+            )
+            .map_err(|error| {
+                if error == rustix::io::Errno::EXIST {
+                    AccountError::AccountAlreadyExists
+                } else {
+                    AccountError::UnsafeStorage
+                }
+            })?;
+            fs::fsync(&self.config_fd).map_err(|_| AccountError::AccountPersistenceUncertain)
+        })();
+        if result.is_err() {
+            let _ = fs::unlinkat(&self.config_fd, &tmp, AtFlags::empty());
+        }
+        result
     }
     pub fn save(&self, account: &AccountConfig) -> Result<(), AccountError> {
         self.verify_dirs()?;

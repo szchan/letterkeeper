@@ -16,6 +16,7 @@
 
 - RED：`eb4a4c36df9d553099c48e112ffc5cd1cdaa1a41`，[Actions 38539425199](https://github.com/szchan/letterkeeper/actions/runs/38539425199)。`codex-client` 在编译前执行 `python3 scripts/test_codex_readiness.py`，8 项测试运行，16 个断言/子测试失败，退出码 1；包含 pending→connected 的 `server_not_connected` 行为失败。整个 run conclusion 为 failure，未吞失败或跳过安全项。workspace 还包含已知终端 fixture 基线失败，另由父分支修复。
 - 本机只执行轻量 Python stub 测试与 `git diff --check`；未执行 Cargo、实际 Codex app-server 或模型/真实认证网络调用。GREEN 的 8 项 readiness 测试及既有 11 项 CI 编排测试通过。
-- GREEN 精确 SHA 与远程结果：待推送后记录；任务分支通过也不能替代主代理集成 revision 的完整门禁。
+- GREEN：`1d3052e0b3b59a885ddfbb40599796326ce30b0f`，[Actions 38540182549](https://github.com/szchan/letterkeeper/actions/runs/38540182549)。ubuntu-24.04、受控 Codex 0.162.1；8 项 readiness 测试、实际 Codex synthetic read/draft/permissions，以及 workspace / codex-client / ci-gate 均 success。父分支终端 fixture 修复已合入该 SHA。此次实际客户端成功证明当前受控数据路径通过，不反推旧失败的具体状态值。
+- 本页结果补录是后续文档 revision；主代理集成 revision 仍需完整 CI，任务分支 GREEN 不替代集成验收。
 
 测试覆盖即刻就绪、两个异步状态及混合就绪、所有终止状态/null/未知状态、库存缺失/额外/重复/分页、后续 poll 库存变化、超时、RPC 时间计入预算和 RPC 错误不重试。stub 测试不证明实际 Codex startup 行为；实际受控客户端仍须远程完整验证。真实 Gmail、Secret Service 和图形前端不在此验收范围。

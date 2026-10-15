@@ -10,13 +10,14 @@ LetterKeeper 是隐私优先、面向人和 Agent 的开源邮件客户端，目
 
 2026-10-14：已完成阶段 C 的**受控 TUI / Agent 人工审批工作流**及账户接入引导增量。严格 TLS IMAP/SMTP、账户/OAuth、分页搜索、安全阅读、回复/转发、附件与显式 Drafts/Sent 同步继续共用后端；内置草稿编辑、完整审阅、人工批准、独立发送及结果查询保留。
 
-232 项已登记 Rust 测试、fmt/Clippy、实际 PTY、可达 HTTP/DNS 观察器和实际 Codex MCP 数据路径已通过；新增配置兼容性测试的 RED/GREEN 与代码完整 CI 见[验证记录](docs/testing/gmail-config-compat.md)，后续集成 revision 仍须最新门禁通过。2026-10-15 另已完成[本机 GNOME Keyring 往返与真实 Google OAuth 登录/token 保存](docs/testing/live-keyring-2026-10-15.md)，没有读取邮件或外发。真实 Gmail 邮件闭环、续期、完整凭据服务故障关卡、公开图形前端及受限自动发送仍待验收，**不能称为全部 P0 已完成或生产可用**。实际完成项和缺口见 [验收状态](docs/STATUS.md)。
+243 项已登记 Rust 测试、fmt/Clippy、实际 PTY、可达 HTTP/DNS 观察器和实际 Codex MCP 数据路径已通过；新增配置兼容与有界分页的 RED/GREEN 见[配置兼容](docs/testing/gmail-config-compat.md)和[分页回归](docs/testing/imap-bounded-paging.md)，后续集成 revision 仍须最新门禁通过。2026-10-15 已完成[本机 GNOME Keyring 与 Google OAuth](docs/testing/live-keyring-2026-10-15.md)和[真实 Gmail 只读 IMAP 认证、分页、搜索、正文抽样及 Flags 不变检查](docs/testing/live-imap-2026-10-15.md)。本轮没有外发或修改邮件状态。真实续期、SMTP/草稿/Sent 闭环、完整凭据服务故障关卡、公开图形前端及受限自动发送仍待验收，**不能称为全部 P0 已完成或生产可用**。实际完成项和缺口见 [验收状态](docs/STATUS.md)。
 
 ## 实现边界
 
 - 六个 Rust crate 共用正文、账户、协议、草稿授权、TUI/MCP 和应用装配能力。
 - 收取的原文与头部经 bubblewrap worker；无正文网络、无用户目录挂载，限制大小、CPU、内存和时间；失败拒绝处理。阅读与 MCP 输出保守文本；草稿编辑和人工审阅显示完整终端安全文本，不解释 HTML 或加载资源。
 - IMAP 使用 EXAMINE / BODY.PEEK 与 UIDVALIDITY；默认阅读不改变 Seen。账户、文件夹和权限由用户配置，MCP 启动时固定账户，模型无批准、配置、凭据或文件路径工具。
+- IMAP 分页/搜索每批扫描最多 4096 个消息序号、每次列表最多 128 批，收齐页面后停止；64 KiB 行、8 MiB 响应与 15 秒协议操作界限保留。大 offset/稀疏搜索超过预算会报错，邮箱发生变化需刷新，不承诺跨调用快照。
 - 人工 CLI/TUI 完整审阅正文、全部收件人、线程头和附件元数据；TUI 另显示附件字节 SHA-256。输入完整摘要批准，绑定内容和版本，五分钟有效、单次消费；内容变化取消原批准。批准后另行发送。
 - 发送保留精确 MIME 字节；DATA 后断连记录 Uncertain，不盲目重试。Sent 的 ServerManaged/Append 策略明确分开，Append 使用原发送字节且每提交仅认领一次。Accepted 只表示 SMTP 接受，Sent 查询仅提供观察证据。
 - TUI 使用各一个网络/本地后台 worker、有界通道、按需正文和 50 项页面；本地编辑保存不等待网络。只在事件/结果/窗口变化时重绘。MCP 每会话最多 8 个 Host 任务，取消请求也保留正在运行任务的配额。
@@ -79,6 +80,8 @@ TUI：`j/k` 或上下键选择/滚动，`Enter/Tab` 阅读，`r` 刷新，`n/p` 
 [合成配置示例](tests/fixtures/account.example.json)展示配置形状，端口不是已启动的服务。`account import FILE` 导入不含凭据的配置，`account list` 列出本机账户。新建账户优先使用 `account add` 的类型化引导，避免手写配置标签。密码用 `account password ID` 的隐藏终端输入；Gmail 手写配置接受 `authentication.type=gmail_oauth` 或兼容的 `gmail_o_auth`，保存时仍输出 `gmail_o_auth`。填写自己的 Desktop client_id 及 client_secret_ref，后者启用时用 `account client-secret ID` 保存秘密。密码、token 和 client secret 均不放在普通配置或命令参数中，凭据库不可用时拒绝认证。
 
 旧 `64dd635` 下载构建的手写配置仅接受 `gmail_o_auth`；其 `account add` 可正常生成配置，已用于上述本机验收。别名兼容修复需使用包含该变更的新构建。
+
+旧构建的大邮箱列表也可能因全量 SEARCH 响应超过上限而失败；`5fde670` 验证构建已修复并通过真实只读 IMAP 重验，下载来源和二进制校验值见[验收记录](docs/testing/live-imap-2026-10-15.md)。本机新旧构建分别保留。
 
 `account login ID` 打印供用户在系统浏览器打开的 OAuth URL，使用 S256 PKCE、state 和临时 loopback 回调；支持续期、`account logout ID` 本地注销及 `account revoke ID` 远程撤销。使用用户自己的 Desktop client；本机个人 OAuth 登录与保存已通过，真实续期/撤销及公开发布的 OAuth client 流程仍待验收。
 

@@ -675,11 +675,17 @@ fn run(cli: Cli) -> Result<(), String> {
                 )
             }
         }
-        Action::Status { id } => print_json(&submission_view(
-            &scoped_store(account.as_ref(), &cli.state_dir)?
-                .get_submission(id)
-                .map_err(|e| e.to_string())?,
-        )),
+        Action::Status { id } => {
+            let store = scoped_store(account.as_ref(), &cli.state_dir)?;
+            let sub = store.get_submission(id).map_err(|e| e.to_string())?;
+            let mut value = submission_view(&sub);
+            value["diagnostic"] = serde_json::json!(
+                store
+                    .get_submission_diagnostic(id)
+                    .map_err(|e| e.to_string())?
+            );
+            print_json(&value)
+        }
     }
 }
 trait ReadLineLimited: Read {

@@ -37,4 +37,4 @@
 - 已解锁 GNOME Keyring 的本机凭据往返通过，不泛化为全部 provider/故障场景通过。系统凭据锁要求存在且私有的 /run/user/UID，缺失时故障关闭。
 - 已授权的真实 Google OAuth 与本机凭据操作已执行；未连接 IMAP/SMTP 或读取、发送、删除邮件，也未撤销真实授权。公开源码与开发分支推送已有授权，未发布发行版。
 
-本批 231 项已登记 Rust 测试、fmt/Clippy、实际 PTY、独立客户端与隐私验证通过，含原阶段 C 的 210 项和新增账户接入单元/集成测试；helper 登记不视为额外独立产品验收。详见[账户接入记录](development/2026-10-14-account-onboarding.md)、[阶段 C 集成](testing/phase-c-integration.md)和[真实服务关卡](testing/live-acceptance.md)。阶段 B/C 历史结果仍保留追溯。
+当前受控测试为 232 项已登记 Rust 测试：原账户接入基线 231 项，另新增 1 项 Gmail 配置标签兼容回归，精确 RED/GREEN 及完整 CI 见[配置兼容记录](testing/gmail-config-compat.md)。fmt/Clippy、实际 PTY、独立客户端与隐私门禁保留，新集成 revision 必须重新通过；helper 登记不视为额外独立产品验收。另见[账户接入记录](development/2026-10-14-account-onboarding.md)、[阶段 C 集成](testing/phase-c-integration.md)和[真实服务关卡](testing/live-acceptance.md)。阶段 B/C 历史结果仍保留追溯。

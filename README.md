@@ -10,7 +10,7 @@ LetterKeeper 是隐私优先、面向人和 Agent 的开源邮件客户端，目
 
 2026-10-14：已完成阶段 C 的**受控 TUI / Agent 人工审批工作流**及账户接入引导增量。严格 TLS IMAP/SMTP、账户/OAuth、分页搜索、安全阅读、回复/转发、附件与显式 Drafts/Sent 同步继续共用后端；内置草稿编辑、完整审阅、人工批准、独立发送及结果查询保留。
 
-231 项已登记 Rust 测试、fmt/Clippy、实际 PTY、可达 HTTP/DNS 观察器和实际 Codex MCP 数据路径已通过。2026-10-15 另已完成[本机 GNOME Keyring 往返与真实 Google OAuth 登录/token 保存](docs/testing/live-keyring-2026-10-15.md)，没有读取邮件或外发。真实 Gmail 邮件闭环、续期、完整凭据服务故障关卡、公开图形前端及受限自动发送仍待验收，**不能称为全部 P0 已完成或生产可用**。实际完成项和缺口见 [验收状态](docs/STATUS.md)。
+232 项已登记 Rust 测试、fmt/Clippy、实际 PTY、可达 HTTP/DNS 观察器和实际 Codex MCP 数据路径已通过；新增配置兼容性测试的 RED/GREEN 与代码完整 CI 见[验证记录](docs/testing/gmail-config-compat.md)，后续集成 revision 仍须最新门禁通过。2026-10-15 另已完成[本机 GNOME Keyring 往返与真实 Google OAuth 登录/token 保存](docs/testing/live-keyring-2026-10-15.md)，没有读取邮件或外发。真实 Gmail 邮件闭环、续期、完整凭据服务故障关卡、公开图形前端及受限自动发送仍待验收，**不能称为全部 P0 已完成或生产可用**。实际完成项和缺口见 [验收状态](docs/STATUS.md)。
 
 ## 实现边界
 
@@ -77,6 +77,8 @@ TUI：`j/k` 或上下键选择/滚动，`Enter/Tab` 阅读，`r` 刷新，`n/p` 
 引导目前接受 ASCII dot-atom 邮箱地址、DNS/IP 端点及中文文件夹；带引号或国际化邮箱地址不在该入口支持范围。隐式 TLS 默认 IMAP 993 / SMTP 465，不把其他端口自动当作 STARTTLS。Gmail 默认文件夹名可覆盖，实际标签和非 ASCII mailbox 协议兼容性仍待独立验收。显式选择发送权限仍需既有人工批准流程。
 
 [合成配置示例](tests/fixtures/account.example.json)展示配置形状，端口不是已启动的服务。`account import FILE` 导入不含凭据的配置，`account list` 列出本机账户。新建账户优先使用 `account add` 的类型化引导，避免手写配置标签。密码用 `account password ID` 的隐藏终端输入；Gmail 手写配置接受 `authentication.type=gmail_oauth` 或兼容的 `gmail_o_auth`，保存时仍输出 `gmail_o_auth`。填写自己的 Desktop client_id 及 client_secret_ref，后者启用时用 `account client-secret ID` 保存秘密。密码、token 和 client secret 均不放在普通配置或命令参数中，凭据库不可用时拒绝认证。
+
+旧 `64dd635` 下载构建的手写配置仅接受 `gmail_o_auth`；其 `account add` 可正常生成配置，已用于上述本机验收。别名兼容修复需使用包含该变更的新构建。
 
 `account login ID` 打印供用户在系统浏览器打开的 OAuth URL，使用 S256 PKCE、state 和临时 loopback 回调；支持续期、`account logout ID` 本地注销及 `account revoke ID` 远程撤销。没有注册/借用其他客户端身份；个人和公开发布的 OAuth client 流程仍需真实验收。
 

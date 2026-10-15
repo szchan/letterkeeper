@@ -16,3 +16,5 @@
 # Lightweight CI orchestration checks
 **/__pycache__/
 *.pyc
+
+/output/

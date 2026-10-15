@@ -419,7 +419,7 @@ fn recv_until(master: &mut File, marker: &str, ready: impl Fn(&[u8]) -> bool) ->
         String::from_utf8_lossy(&output[output.len().saturating_sub(2048)..])
     );
 }
-fn recv_resize(master: &mut File, height: u16) {
+fn recv_resize(master: &mut File, height: u16) -> Vec<u8> {
     let last_row = format!("\x1b[{height};1H");
     recv_until(master, "completed resized frame", |output| {
         // Ratatui clears on resize and flushes HideCursor after the last row.
@@ -437,7 +437,7 @@ fn recv_resize(master: &mut File, height: u16) {
         after_clear[row + last_row.len()..]
             .windows(6)
             .any(|w| w == b"\x1b[?25l")
-    });
+    })
 }
 fn compact(data: &[u8]) -> Vec<u8> {
     data.iter()
@@ -860,10 +860,27 @@ fn pty_f9_uses_remote_host_tls_and_persists_safe_diagnostics() {
         master.write_all(b"\x1b[20~").unwrap();
         let expected = match mode {
             send_server::ResultMode::Accepted => "Accepted",
-            send_server::ResultMode::Rejected => "SMTP 550",
+            send_server::ResultMode::Rejected => "Failed",
             send_server::ResultMode::Disconnected => "Uncertain",
         };
-        let output = recv(&mut master, expected);
+        let mut output = recv(&mut master, expected);
+        // The diff frame can reuse an existing character (e.g. P from PgUp).
+        // Verify the actual complete screen after a real resize/clear instead.
+        size(&slave, 119, 39);
+        let frame = recv_resize(&mut master, 39);
+        let screen = String::from_utf8_lossy(&plain(&frame)).into_owned();
+        assert!(screen.contains(expected));
+        match mode {
+            send_server::ResultMode::Accepted => assert!(screen.contains("无失败诊断")),
+            send_server::ResultMode::Rejected => {
+                assert!(screen.contains("submission/rejected"));
+                assert!(screen.contains("SMTP550"));
+            }
+            send_server::ResultMode::Disconnected => {
+                assert!(screen.contains("submission/connection"))
+            }
+        }
+        output.extend(frame);
         let text = String::from_utf8_lossy(&output);
         for forbidden in [
             "private-server-detail",

@@ -410,3 +410,108 @@ fn readonly_loaded_draft_cannot_mutate_or_request_path_dialog() {
     s.event(key(KeyCode::F(2)));
     assert!(s.dialog.is_none());
 }
+
+struct DiagnosticUnavailable {
+    sends: std::sync::atomic::AtomicUsize,
+}
+impl HumanWorkspace for DiagnosticUnavailable {
+    fn capabilities(&self) -> WorkspaceCapabilities {
+        caps()
+    }
+    fn send(&self, _: i64) -> WorkflowResult<SubmissionInfo> {
+        self.sends.fetch_add(1, Ordering::SeqCst);
+        Ok(SubmissionInfo {
+            id: 9,
+            draft_id: 1,
+            state: letterkeeper_core::SubmissionState::Accepted,
+            state_recorded: true,
+        })
+    }
+    fn submission_diagnostic(
+        &self,
+        _: i64,
+    ) -> WorkflowResult<Option<letterkeeper_core::SendDiagnostic>> {
+        Err(WorkflowError::Unavailable)
+    }
+}
+impl Host for DiagnosticUnavailable {
+    fn list_messages(&self, _: usize, _: usize) -> Result<Vec<MessageSummary>, HostError> {
+        Ok(vec![])
+    }
+    fn read_message(&self, _: &str) -> Result<SafeDocument, HostError> {
+        Err(HostError("unsupported".into()))
+    }
+    fn create_draft(
+        &self,
+        _: letterkeeper_adapters::DraftInput,
+    ) -> Result<serde_json::Value, HostError> {
+        Err(HostError("unsupported".into()))
+    }
+    fn get_draft(&self, _: &str) -> Result<serde_json::Value, HostError> {
+        Err(HostError("unsupported".into()))
+    }
+    fn send_draft(&self, _: &str) -> Result<serde_json::Value, HostError> {
+        Err(HostError("unsupported".into()))
+    }
+    fn send_status(&self, _: &str) -> Result<serde_json::Value, HostError> {
+        Err(HostError("unsupported".into()))
+    }
+}
+#[test]
+fn failed_diagnostic_lookup_keeps_known_outcome_and_never_retries() {
+    let host = Arc::new(DiagnosticUnavailable {
+        sends: std::sync::atomic::AtomicUsize::new(0),
+    });
+    let mut worker = WorkspaceWorker::new(host.clone(), host.clone());
+    let mut state = saved_state();
+    state.request(WorkflowJob::Send(1));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    loop {
+        worker.poll(&mut state);
+        if !state.submissions.is_empty() {
+            break;
+        }
+        assert!(std::time::Instant::now() < deadline);
+        std::thread::yield_now();
+    }
+    assert_eq!(
+        state.submissions[0].state,
+        letterkeeper_core::SubmissionState::Accepted
+    );
+    assert!(state.status.contains("unknown"));
+    assert!(state.status.contains("durable=true"));
+    for _ in 0..10 {
+        worker.poll(&mut state);
+    }
+    assert_eq!(host.sends.load(Ordering::SeqCst), 1);
+}
+#[test]
+fn diagnostic_display_uses_fixed_codes_and_unrecorded_state_stays_unknown() {
+    use letterkeeper_core::{SendDiagnostic, SendFailureKind, SendStage, SubmissionState};
+    for recorded in [true, false] {
+        let mut state = saved_state();
+        state.complete(response(
+            WorkflowJob::Send(1),
+            Ok(WorkflowData::SubmissionDiagnostic(
+                SubmissionInfo {
+                    id: 7,
+                    draft_id: 1,
+                    state: SubmissionState::Uncertain,
+                    state_recorded: recorded,
+                },
+                Some(SendDiagnostic {
+                    stage: SendStage::Submission,
+                    kind: SendFailureKind::Timeout,
+                    smtp_code: None,
+                }),
+            )),
+        ));
+        assert!(state.status.contains("Uncertain"));
+        assert!(state.status.contains(if recorded {
+            "submission / timeout"
+        } else {
+            "unknown"
+        }));
+        assert!(state.take_request(true).is_none());
+    }
+}

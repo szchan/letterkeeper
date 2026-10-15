@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Trusted human workflow. This capability is never passed to the MCP adapter.
-use letterkeeper_core::{Draft, DraftInput, SubmissionState, SyncState};
+use letterkeeper_core::{Draft, DraftInput, SendDiagnostic, SubmissionState, SyncState};
 use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -145,6 +145,10 @@ pub trait HumanWorkspace: Send + Sync {
     }
     fn submission_status(&self, _id: i64) -> WorkflowResult<SubmissionInfo> {
         Err(WorkflowError::Unsupported)
+    }
+    /// Persisted fixed diagnostics only; absent on older records and offline hosts.
+    fn submission_diagnostic(&self, _id: i64) -> WorkflowResult<Option<SendDiagnostic>> {
+        Ok(None)
     }
     fn sent_evidence(&self, _id: i64) -> WorkflowResult<SentEvidence> {
         Err(WorkflowError::Unsupported)

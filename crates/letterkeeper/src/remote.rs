@@ -18,10 +18,13 @@ use letterkeeper_adapters::{
 };
 use letterkeeper_content::{ComposeKind, DecodedAttachment, InspectedMail, SafeDocument, compose};
 use letterkeeper_core::{
-    AccessPolicy, Draft, DraftInput, Permissions, SendOutcome, Store, Submission, SubmissionState,
-    SyncRecord,
+    AccessPolicy, Draft, DraftInput, Permissions, SendDiagnostic, SendFailureKind, SendOutcome,
+    SendStage, Store, Submission, SubmissionState, SyncRecord,
 };
-use letterkeeper_protocol::{Credentials, Endpoint, ImapClient, TlsOptions, WriteOutcome};
+use letterkeeper_protocol::{
+    Credentials, Endpoint, ImapClient, ProtocolError, SmtpDiagnostic, SmtpFailureKind, SmtpStage,
+    TlsOptions, WriteOutcome,
+};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::{
@@ -50,6 +53,37 @@ fn outcome(value: WriteOutcome) -> SendOutcome {
         WriteOutcome::Accepted => SendOutcome::Accepted,
         WriteOutcome::Failed => SendOutcome::Failed,
         WriteOutcome::Uncertain => SendOutcome::Uncertain,
+    }
+}
+fn diagnostic(value: SmtpDiagnostic) -> SendDiagnostic {
+    SendDiagnostic {
+        stage: match value.stage {
+            SmtpStage::Preparation => SendStage::Preparation,
+            SmtpStage::TlsConfiguration => SendStage::TlsConfiguration,
+            SmtpStage::Connection => SendStage::Connection,
+            SmtpStage::TlsHandshake => SendStage::TlsHandshake,
+            SmtpStage::Greeting => SendStage::Greeting,
+            SmtpStage::Authentication => SendStage::Authentication,
+            SmtpStage::MailFrom => SendStage::MailFrom,
+            SmtpStage::Recipient => SendStage::Recipient,
+            SmtpStage::DataCommand => SendStage::DataCommand,
+            SmtpStage::Submission => SendStage::Submission,
+        },
+        kind: match value.kind {
+            SmtpFailureKind::InvalidInput => SendFailureKind::InvalidInput,
+            SmtpFailureKind::Connection => SendFailureKind::Connection,
+            SmtpFailureKind::Timeout => SendFailureKind::Timeout,
+            SmtpFailureKind::Rejected => SendFailureKind::Rejected,
+            SmtpFailureKind::UnexpectedResponse => SendFailureKind::UnexpectedResponse,
+        },
+        smtp_code: value.smtp_code,
+    }
+}
+fn local_diagnostic(stage: SendStage, kind: SendFailureKind) -> SendDiagnostic {
+    SendDiagnostic {
+        stage,
+        kind,
+        smtp_code: None,
     }
 }
 fn folder_id(account: &str, folder: &str) -> String {
@@ -118,6 +152,29 @@ impl RemoteHost {
             store: Mutex::new(store),
             sandbox,
         })
+    }
+    fn finish_send(
+        &self,
+        sub: &Submission,
+        outcome: SendOutcome,
+        diagnostic: Option<SendDiagnostic>,
+    ) -> Value {
+        // Preserve the known network result only when the state and diagnostic commit together.
+        let done = self.store().and_then(|mut store| {
+            store
+                .finish_submission_with_diagnostic(sub.id, outcome, diagnostic)
+                .map_err(err)
+        });
+        match done {
+            Ok(done) => {
+                let mut value = submission_view(&done);
+                value["diagnostic"] = json!(diagnostic);
+                value
+            }
+            Err(_) => {
+                json!({"id":sub.id,"draft_id":sub.draft_id,"state":"Uncertain","state_recorded":false,"diagnostic":null})
+            }
+        }
     }
     fn store(&self) -> Result<MutexGuard<'_, Store>, HostError> {
         self.store.lock().map_err(|_| err("storage_unavailable"))
@@ -463,15 +520,17 @@ impl HumanWorkspace for RemoteHost {
         }
         let value = Host::send_draft(self, &id.to_string()).map_err(crate::workflow::host_error)?;
         let sub_id = value["id"].as_i64().ok_or(WorkflowError::Unavailable)?;
-        if value["state_recorded"].as_bool() == Some(false) {
-            return Ok(SubmissionInfo {
-                id: sub_id,
-                draft_id: id,
-                state: SubmissionState::Uncertain,
-                state_recorded: false,
-            });
-        }
-        self.submission_status(sub_id)
+        let state = match value["state"].as_str() {
+            Some("Accepted") => SubmissionState::Accepted,
+            Some("Failed") => SubmissionState::Failed,
+            _ => SubmissionState::Uncertain,
+        };
+        Ok(SubmissionInfo {
+            id: sub_id,
+            draft_id: id,
+            state,
+            state_recorded: value["state_recorded"].as_bool() == Some(true),
+        })
     }
     fn list_submissions(&self, offset: usize, limit: usize) -> WorkflowResult<Vec<SubmissionInfo>> {
         if !self.config.permissions.read {
@@ -494,6 +553,15 @@ impl HumanWorkspace for RemoteHost {
             .map_err(|_| WorkflowError::Unavailable)?
             .get_submission(id)
             .map(crate::workflow::submission_info)
+            .map_err(crate::workflow::core_error)
+    }
+    fn submission_diagnostic(&self, id: i64) -> WorkflowResult<Option<SendDiagnostic>> {
+        if !self.config.permissions.read {
+            return Err(WorkflowError::Denied);
+        }
+        self.store()
+            .map_err(|_| WorkflowError::Unavailable)?
+            .get_submission_diagnostic(id)
             .map_err(crate::workflow::core_error)
     }
     fn sent_evidence(&self, id: i64) -> WorkflowResult<SentEvidence> {
@@ -649,36 +717,50 @@ impl Host for RemoteHost {
     fn send_draft(&self, draft_id: &str) -> Result<Value, HostError> {
         self.send_allowed()?;
         let _sender = private_lock(&self.state_dir, "send.lock", Duration::ZERO).map_err(err)?;
-        let (sub, raw) = {
+        let sub = {
             let mut store = self.store()?;
             let draft = store.get_draft(id(draft_id)?).map_err(err)?;
             validate_identity(&self.config, &draft.input).map_err(err)?;
-            let sub = store
+            store
                 .claim_send(draft.id, now().map_err(err)?)
-                .map_err(err)?;
-            let raw = match crate::transport::prepare(&sub) {
-                Ok(message) => message.formatted(),
-                Err(_) => {
-                    let done = store
-                        .finish_submission(sub.id, SendOutcome::Failed)
-                        .map_err(err)?;
-                    return Ok(submission_view(&done));
-                }
-            };
-            if raw.len() > 2 * 1024 * 1024 {
-                let done = store
-                    .finish_submission(sub.id, SendOutcome::Failed)
-                    .map_err(err)?;
-                return Ok(submission_view(&done));
-            }
-            if let Err(e) = store.record_submission_wire(sub.id, &raw) {
-                store
-                    .finish_submission(sub.id, SendOutcome::Failed)
-                    .map_err(err)?;
-                return Err(err(e));
-            }
-            (sub, raw)
+                .map_err(err)?
         };
+        let raw = match crate::transport::prepare(&sub) {
+            Ok(message) => message.formatted(),
+            Err(_) => {
+                return Ok(self.finish_send(
+                    &sub,
+                    SendOutcome::Failed,
+                    Some(local_diagnostic(
+                        SendStage::Preparation,
+                        SendFailureKind::InvalidInput,
+                    )),
+                ));
+            }
+        };
+        if raw.len() > 2 * 1024 * 1024 {
+            return Ok(self.finish_send(
+                &sub,
+                SendOutcome::Failed,
+                Some(local_diagnostic(
+                    SendStage::Preparation,
+                    SendFailureKind::InvalidInput,
+                )),
+            ));
+        }
+        let recorded = self
+            .store()
+            .and_then(|mut store| store.record_submission_wire(sub.id, &raw).map_err(err));
+        if recorded.is_err() {
+            return Ok(self.finish_send(
+                &sub,
+                SendOutcome::Failed,
+                Some(local_diagnostic(
+                    SendStage::Preparation,
+                    SendFailureKind::Unavailable,
+                )),
+            ));
+        }
         let to = sub
             .input
             .to
@@ -687,32 +769,71 @@ impl Host for RemoteHost {
             .chain(&sub.input.bcc)
             .cloned()
             .collect::<Vec<_>>();
-        let result = match (self.tls(), self.credentials()) {
-            (Ok(tls), Ok(credentials)) => outcome(letterkeeper_protocol::send_smtp(
-                &endpoint(&self.config.smtp),
-                &tls,
-                &credentials,
-                &sub.input.from,
-                &to,
-                &raw,
-            )),
-            _ => SendOutcome::Failed,
+        let tls = match self.tls() {
+            Ok(tls) => tls,
+            Err(_) => {
+                return Ok(self.finish_send(
+                    &sub,
+                    SendOutcome::Failed,
+                    Some(local_diagnostic(
+                        SendStage::TlsConfiguration,
+                        SendFailureKind::Unavailable,
+                    )),
+                ));
+            }
         };
-        match self.store()?.finish_submission(sub.id, result) {
-            Ok(done) => Ok(submission_view(&done)),
-            Err(_) => Ok(
-                json!({"id":sub.id,"draft_id":sub.draft_id,"state":"Uncertain","state_recorded":false}),
-            ),
+        if let Err(error) =
+            letterkeeper_protocol::validate_smtp_tls(&endpoint(&self.config.smtp), &tls)
+        {
+            let kind = match error {
+                ProtocolError::InvalidInput => SendFailureKind::InvalidInput,
+                _ => SendFailureKind::Unavailable,
+            };
+            return Ok(self.finish_send(
+                &sub,
+                SendOutcome::Failed,
+                Some(local_diagnostic(SendStage::TlsConfiguration, kind)),
+            ));
         }
+        let credentials = match self.credentials() {
+            Ok(credentials) => credentials,
+            Err(_) => {
+                return Ok(self.finish_send(
+                    &sub,
+                    SendOutcome::Failed,
+                    Some(local_diagnostic(
+                        SendStage::Credentials,
+                        SendFailureKind::Unavailable,
+                    )),
+                ));
+            }
+        };
+        let report = letterkeeper_protocol::send_smtp_report(
+            &endpoint(&self.config.smtp),
+            &tls,
+            &credentials,
+            &sub.input.from,
+            &to,
+            &raw,
+        );
+        Ok(self.finish_send(
+            &sub,
+            outcome(report.outcome),
+            report.diagnostic.map(diagnostic),
+        ))
     }
     fn send_status(&self, submission_id: &str) -> Result<Value, HostError> {
         self.read_allowed()?;
-        Ok(submission_view(
-            &self
-                .store()?
-                .get_submission(id(submission_id)?)
-                .map_err(err)?,
-        ))
+        let store = self.store()?;
+        let submission_id = id(submission_id)?;
+        let sub = store.get_submission(submission_id).map_err(err)?;
+        let mut value = submission_view(&sub);
+        value["diagnostic"] = json!(
+            store
+                .get_submission_diagnostic(submission_id)
+                .map_err(err)?
+        );
+        Ok(value)
     }
     fn sync_draft(&self, draft_id: &str) -> Result<Value, HostError> {
         self.draft_allowed()?;
@@ -798,5 +919,79 @@ impl Host for RemoteHost {
         Ok(
             json!({"submission_id":sub.id,"message_id":sub.message_id,"smtp_state":sub.state,"matches":matches,"evidence_only":true,"not_found_does_not_mean_failed":true,"delivery_confirmed":false}),
         )
+    }
+}
+
+#[cfg(test)]
+mod send_recording_tests {
+    use super::*;
+    struct NoVault;
+    impl CredentialStore for NoVault {
+        fn get(
+            &self,
+            _: &str,
+            _: letterkeeper_accounts::SecretKind,
+        ) -> Result<Option<letterkeeper_accounts::Secret>, letterkeeper_accounts::AccountError>
+        {
+            unreachable!()
+        }
+        fn set(
+            &self,
+            _: &str,
+            _: letterkeeper_accounts::SecretKind,
+            _: &letterkeeper_accounts::Secret,
+        ) -> Result<(), letterkeeper_accounts::AccountError> {
+            unreachable!()
+        }
+        fn delete(
+            &self,
+            _: &str,
+            _: letterkeeper_accounts::SecretKind,
+        ) -> Result<(), letterkeeper_accounts::AccountError> {
+            unreachable!()
+        }
+    }
+    #[test]
+    fn unavailable_state_recording_never_claims_a_persisted_diagnostic() {
+        let config: AccountConfig = serde_json::from_value(json!({"id":"controlled","email":"reader@example.test","username":"person@example.test","imap":{"host":"localhost","port":9993},"smtp":{"host":"localhost","port":9465},"allowed_folders":["INBOX"],"permissions":{"read":true,"draft":true,"send":true},"drafts_folder":"Drafts","sent_folder":"Sent","sent_copy":"server_managed","authentication":{"type":"password"},"extra_ca_pem":null})).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let host = RemoteHost::open(
+            config,
+            &dir.path().join("state"),
+            Arc::new(NoVault),
+            Sandbox {
+                executable: "/nonexistent-worker".into(),
+                launcher: "/usr/bin/bwrap".into(),
+            },
+        )
+        .unwrap();
+        let sub = {
+            let mut store = host.store().unwrap();
+            let input = serde_json::from_value(json!({"account":"controlled","from":"reader@example.test","to":["recipient@example.test"],"cc":[],"bcc":[],"subject":"synthetic","body":"synthetic","attachments":[]})).unwrap();
+            let draft = store.create_draft(input).unwrap();
+            store.approve(draft.id, &draft.digest, i64::MAX).unwrap();
+            store.claim_send(draft.id, 1).unwrap()
+        };
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = host.store.lock().unwrap();
+            panic!("synthetic storage failure");
+        }));
+        for result in [
+            SendOutcome::Accepted,
+            SendOutcome::Failed,
+            SendOutcome::Uncertain,
+        ] {
+            let value = host.finish_send(
+                &sub,
+                result,
+                Some(local_diagnostic(
+                    SendStage::Submission,
+                    SendFailureKind::Connection,
+                )),
+            );
+            assert_eq!(value["state"], "Uncertain");
+            assert_eq!(value["state_recorded"], false);
+            assert!(value.get("diagnostic").unwrap().is_null());
+        }
     }
 }

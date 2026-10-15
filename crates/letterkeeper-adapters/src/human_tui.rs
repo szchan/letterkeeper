@@ -2,7 +2,7 @@
 //! Human-only workbench; no instance of this capability enters MCP.
 use crate::{workspace::*, *};
 use crossterm::event::{KeyEventKind, KeyModifiers};
-use letterkeeper_core::{Draft, DraftInput as CoreInput};
+use letterkeeper_core::{Draft, DraftInput as CoreInput, SendDiagnostic};
 use std::{path::PathBuf, sync::mpsc};
 use tui_textarea::TextArea;
 
@@ -238,6 +238,7 @@ pub enum WorkflowData {
     Approved(ApprovalInfo),
     Submissions(Vec<SubmissionInfo>),
     Submission(SubmissionInfo),
+    SubmissionDiagnostic(SubmissionInfo, Option<SendDiagnostic>),
     Evidence(SentEvidence),
     Sync(SyncInfo),
     Exported(String),
@@ -295,6 +296,37 @@ pub struct WorkspaceState {
     after_save: Option<bool>,
 }
 impl WorkspaceState {
+    fn show_submission(&mut self, info: SubmissionInfo, diagnostic: Option<SendDiagnostic>) {
+        if let Some(old) = self.submissions.iter_mut().find(|s| s.id == info.id) {
+            *old = info.clone();
+        } else {
+            self.submissions.insert(0, info.clone());
+            self.submissions.truncate(50);
+        }
+        let detail = if info.state_recorded {
+            diagnostic
+                .map(|d| {
+                    // Serde names are fixed enum codes, never server strings.
+                    let stage = serde_json::to_value(d.stage).expect("enum serializes");
+                    let kind = serde_json::to_value(d.kind).expect("enum serializes");
+                    format!(
+                        "{} / {}{}",
+                        stage.as_str().unwrap_or("unknown"),
+                        kind.as_str().unwrap_or("unknown"),
+                        d.smtp_code
+                            .map(|code| format!(" / {code}"))
+                            .unwrap_or_default()
+                    )
+                })
+                .unwrap_or_else(|| "unknown（无诊断记录）".into())
+        } else {
+            "unknown（状态未落盘）".into()
+        };
+        self.status = format!(
+            "提交 {} {:?} · durable={} · 诊断: {}\n不自动重试 · s 查看记录",
+            info.id, info.state, info.state_recorded, detail
+        );
+    }
     pub fn new(capabilities: WorkspaceCapabilities) -> Self {
         Self {
             browser: BrowserState::default(),
@@ -486,17 +518,9 @@ impl WorkspaceState {
                 self.selected = 0;
                 self.status = "提交状态 · Accepted 仅 SMTP 接受；Uncertain 禁止自动重试".into();
             }
-            Ok(WorkflowData::Submission(info)) => {
-                if let Some(old) = self.submissions.iter_mut().find(|s| s.id == info.id) {
-                    *old = info.clone();
-                } else {
-                    self.submissions.insert(0, info.clone());
-                    self.submissions.truncate(50);
-                }
-                self.status = format!(
-                    "提交 {} {:?} · durable={} · 不自动重试 · s 查看记录",
-                    info.id, info.state, info.state_recorded
-                );
+            Ok(WorkflowData::Submission(info)) => self.show_submission(info, None),
+            Ok(WorkflowData::SubmissionDiagnostic(info, diagnostic)) => {
+                self.show_submission(info, diagnostic)
             }
             Ok(WorkflowData::Evidence(info)) => {
                 self.status = format!(
@@ -965,6 +989,15 @@ impl WorkspaceState {
     }
 }
 
+fn submission_result(workspace: &dyn HumanWorkspace, info: SubmissionInfo) -> WorkflowData {
+    // A failed diagnostic query cannot erase a known SMTP result or trigger a send.
+    let diagnostic = if info.state_recorded {
+        workspace.submission_diagnostic(info.id).ok().flatten()
+    } else {
+        None
+    };
+    WorkflowData::SubmissionDiagnostic(info, diagnostic)
+}
 fn execute_workflow(
     workspace: &dyn HumanWorkspace,
     job: &WorkflowJob,
@@ -987,7 +1020,9 @@ fn execute_workflow(
         Approve(id, digest, typed) => workspace
             .approve(*id, digest, typed)
             .map(WorkflowData::Approved),
-        Send(id) => workspace.send(*id).map(WorkflowData::Submission),
+        Send(id) => workspace
+            .send(*id)
+            .map(|info| submission_result(workspace, info)),
         Reply(id, mode, to) => workspace
             .reply(id, *mode, "", to)
             .map(|d| WorkflowData::Draft(Box::new(d))),
@@ -1005,11 +1040,11 @@ fn execute_workflow(
             .map(WorkflowData::Submissions),
         Status(id) => workspace
             .submission_status(*id)
-            .map(WorkflowData::Submission),
+            .map(|info| submission_result(workspace, info)),
         Evidence(id) => workspace.sent_evidence(*id).map(WorkflowData::Evidence),
         Recover(id) => workspace
             .recover_submission(*id)
-            .map(WorkflowData::Submission),
+            .map(|info| submission_result(workspace, info)),
         SyncDraft(id) => workspace.sync_draft(*id).map(WorkflowData::Sync),
         SyncSent(id) => workspace.sync_sent(*id).map(WorkflowData::Sync),
         SyncStatus(id) => workspace.sync_status(*id).map(WorkflowData::Sync),

@@ -48,6 +48,9 @@ pub enum PageMode {
     FetchRejected,
     FetchWrongTag,
     FetchDrift,
+    CrossWindowOverlap,
+    ReverseOrder,
+    MultipleSearch,
 }
 pub fn page_uid(sequence: u32) -> u32 {
     1_000_000_000 + sequence * 3
@@ -611,6 +614,8 @@ async fn paged_reply(
             PageMode::Duplicate => ids = vec![page_uid(start), page_uid(start)],
             PageMode::Zero => ids = vec![0],
             PageMode::TooMany => ids = (1..=4097).map(page_uid).collect(),
+            PageMode::CrossWindowOverlap if start > 1 => ids = vec![page_uid(1)],
+            PageMode::ReverseOrder => ids.reverse(),
             _ => (),
         }
         let change = match mode {
@@ -622,7 +627,7 @@ async fn paged_reply(
         if matches!(mode, PageMode::HugeLine) {
             ids = (1..=20_000).map(page_uid).collect();
         }
-        let search = if matches!(mode, PageMode::MissingSearch) {
+        let mut search = if matches!(mode, PageMode::MissingSearch) {
             String::new()
         } else {
             format!(
@@ -630,6 +635,9 @@ async fn paged_reply(
                 ids.iter().map(|id| format!(" {id}")).collect::<String>()
             )
         };
+        if matches!(mode, PageMode::MultipleSearch) {
+            search.push_str("* SEARCH\r\n");
+        }
         let completed = if matches!(mode, PageMode::WrongTag) {
             "WRONG"
         } else {

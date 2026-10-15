@@ -249,7 +249,7 @@ impl Store {
                     CREATE TABLE submissions(id INTEGER PRIMARY KEY AUTOINCREMENT, draft_id INTEGER NOT NULL REFERENCES drafts(id), revision INTEGER NOT NULL, digest TEXT NOT NULL, message_id TEXT NOT NULL UNIQUE, content TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('submitting','accepted','failed','uncertain')));
                     CREATE INDEX submission_draft ON submissions(draft_id); PRAGMA user_version=1;")?;
             }
-            1 | 2 | 3 => {}
+            1..=3 => {}
             _ => return Err(Error::SchemaVersion),
         }
         if version < 2 {
@@ -443,14 +443,13 @@ impl Store {
         if sub.state != SubmissionState::Submitting {
             return Err(Error::InvalidState);
         }
-        if let Some(detail) = diagnostic {
-            if outcome == SendOutcome::Accepted
+        if diagnostic.is_some_and(|detail| {
+            outcome == SendOutcome::Accepted
                 || detail
                     .smtp_code
                     .is_some_and(|code| !(100..=599).contains(&code))
-            {
-                return Err(Error::InvalidInput);
-            }
+        }) {
+            return Err(Error::InvalidInput);
         }
         let (state, label) = match outcome {
             SendOutcome::Accepted => (SubmissionState::Accepted, "accepted"),

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Shared scoped remote backend. Network operations never hold SQLite locks.
 use crate::{
-    app::{draft_view, now, submission_view},
+    app::{draft_view, now, submission_status_view, submission_view},
     files::private_lock,
     sandbox::Sandbox,
 };
@@ -827,14 +827,9 @@ impl Host for RemoteHost {
         let store = self.store()?;
         let submission_id = id(submission_id)?;
         let sub = store.get_submission(submission_id).map_err(err)?;
-        let mut value = submission_view(&sub);
-        value["diagnostic"] = json!(
-            store
-                .get_submission_diagnostic(submission_id)
-                .map_err(err)?
-        );
-        Ok(value)
+        Ok(submission_status_view(&store, &sub))
     }
+
     fn sync_draft(&self, draft_id: &str) -> Result<Value, HostError> {
         self.draft_allowed()?;
         let draft_id = id(draft_id)?;

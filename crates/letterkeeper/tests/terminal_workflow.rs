@@ -414,8 +414,9 @@ fn recv_until(master: &mut File, marker: &str, ready: impl Fn(&[u8]) -> bool) ->
         std::thread::sleep(Duration::from_millis(10));
     }
     panic!(
-        "PTY missing marker {marker:?}; captured {} bytes",
-        output.len()
+        "PTY missing marker {marker:?}; captured {} bytes; synthetic tail {:?}",
+        output.len(),
+        String::from_utf8_lossy(&output[output.len().saturating_sub(2048)..])
     );
 }
 fn recv_resize(master: &mut File, height: u16) {

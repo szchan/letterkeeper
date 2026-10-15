@@ -20,3 +20,9 @@ CLI `send` / `status` 的 `diagnostic` 为 `{stage,kind,smtp_code}` 或 `null`�
 该 TLS 账户路径使用 PLAIN 合成凭据，不放宽 Gmail 固定生产端点验证。XOAUTH2 由协议层独立受控测试覆盖，不能声称本地模拟完成 Gmail 账户全链。
 
 GREEN 与完整 CI：等待核心/协议依赖提交后运行，当前未验收。所有 Cargo 构建、测试与 Clippy 均留在 GitHub Actions；本机仅编辑、rustfmt、Git 和静态审查。既有四尺寸 PTY、正文隔离 HTTP/DNS 与 Codex 路径门禁必须保留；任务分支通过不替代集成 revision 的完整门禁。
+
+第二项独立 RED：`f34f376852112efe0bcbf52adbcc780067804b08`，[Actions 38730779434](https://github.com/szchan/letterkeeper/actions/runs/38730779434)，精确 `diagnostic_query_failure_keeps_known_host_and_cli_status`，matched=1、exit=101，真实行为断言失败：已读到 Accepted，但诊断表不可用使 Host status 返回 Err。测试仅在临时合成数据库用 Python sqlite3 删除诊断表，保留提交表。
+
+修复后 Host/CLI/offline status 共用安全投影：只有账户/提交读取成功后才查询可选诊断；诊断查询失败保留原 state、`state_recorded=true`、`diagnostic=null`、`diagnostic_query_succeeded=false`，不输出 SQL 错误。正常查询包括旧记录 None 标记为 true。TUI 区分 Accepted 无失败诊断与查询不可用 unknown，诊断状态拆三短行，40/80 列覆盖完整固定阶段、种类与 SMTP 数值码。
+
+早期真实 PTY run 38730311907 的测试账户遗漏可写 Drafts/Sent scope，被现有生产配置校验拒绝；2121e26 仅修正合成配置，不放宽生产策略。随后 38730684425 的拒绝显示 marker 未捕获，保留失败并继续检查终端差分帧。未据此宣称 PTY 通过。

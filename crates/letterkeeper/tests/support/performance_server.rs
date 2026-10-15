@@ -58,12 +58,16 @@ impl Server {
                         } else if command.starts_with("EXAMINE") {
                             format!("* {count} EXISTS\r\n* OK [UIDVALIDITY 77] stable\r\n{tag} OK [READ-ONLY] examine\r\n")
                         } else if command.starts_with("UID SEARCH") {
-                            if command.contains("CHARSET UTF-8 TEXT {") {
+                            if command.contains("CHARSET UTF-8 ") && command.contains(" TEXT {") {
                                 if io.get_mut().write_all(b"+ ready\r\n").await.is_err() { break }
                                 let mut literal = String::new();
                                 if io.read_line(&mut literal).await.is_err() { break }
                             }
-                            let ids = (1..=count).map(|n| n.to_string()).collect::<Vec<_>>().join(" ");
+                            let (start, end) = command.split_whitespace().find_map(|word| {
+                                let (start, end) = word.split_once(':')?;
+                                Some((start.parse::<usize>().ok()?, end.parse::<usize>().ok()?))
+                            }).unwrap_or((1, count));
+                            let ids = (start..=end.min(count)).map(|n| n.to_string()).collect::<Vec<_>>().join(" ");
                             format!("* SEARCH {ids}\r\n{tag} OK search\r\n")
                         } else if command.starts_with("UID FETCH") {
                             let set = command.split_whitespace().nth(2).unwrap_or("");

@@ -1,13 +1,15 @@
 # 实现与验收状态
 
+2026-10-15 增量：已获明确授权并完成本机已解锁 GNOME Keyring 的生产凭据往返、跨进程锁和本次合成条目清理，以及真实 Google OAuth 浏览器同意、代码交换和 token 本机保存/独立读回。未执行任何邮件读取、发送或状态修改；续期和其余真实服务关卡仍保留。范围、构建和环境见[本机验收](testing/live-keyring-2026-10-15.md)。
+
 账户接入增量 `doctor` 和 `account add` 已通过 [代码 SHA `84b5dee` 的完整集成 CI](https://github.com/szchan/letterkeeper/actions/runs/38583555164)，[PR #6](https://github.com/szchan/letterkeeper/pull/6) 保留最终 revision 的门禁。诊断只读取目录和凭据服务元数据，配置默认只读、确认后原子创建；不表示已登录或真实服务验收完成。详见[本批开发记录](development/2026-10-14-account-onboarding.md)。
 
-2026-10-14。阶段 C 的代码与**受控 TUI/Agent 人工审批工作流验证**已完成；真实 Gmail/系统凭据库/公开图形前端尚未验收，**没有完成全部 P0**。以下结果仅指合成邮件和受控服务，需求编号未变。源码已公开到 [szchan/letterkeeper](https://github.com/szchan/letterkeeper)，重型构建/测试迁移到 GitHub Actions；[集成分支 `53d0d72` 完整门禁](https://github.com/szchan/letterkeeper/actions/runs/38539664364)及[手动 release/性能样本](https://github.com/szchan/letterkeeper/actions/runs/38537562629)通过。产物不是发行版，真实服务关卡仍保留。
+2026-10-14 受控基线：阶段 C 的代码与**受控 TUI/Agent 人工审批工作流验证**已完成，**没有完成全部 P0**。下表保留受控结果和缺口；10-15 已授权真实增量单独标明，需求编号未变。源码已公开到 [szchan/letterkeeper](https://github.com/szchan/letterkeeper)，重型构建/测试迁移到 GitHub Actions；[集成分支 `53d0d72` 完整门禁](https://github.com/szchan/letterkeeper/actions/runs/38539664364)及[手动 release/性能样本](https://github.com/szchan/letterkeeper/actions/runs/38537562629)通过。产物不是发行版，真实服务关卡仍保留。
 
 | 需求 | 已实现与验证 | 仍需完成 |
 | --- | --- | --- |
 | MAIL-01、AUTH-02 | 隐式 TLS IMAP/SMTP、证书与主机名校验、密码/XOAUTH2 接口；错误证书在发送凭据前拒绝 | STARTTLS、真实服务商兼容性、更多失败诊断 |
-| AUTH-01、AUTH-03、AUTH-04 | Gmail 固定端点、PKCE/state/loopback、代码交换/刷新/撤销、Secret Service Dh 后端、UID/账户共享刷新锁；OAuth 使用受控服务和注入 vault 验证 | 真实系统凭据库往返、真实 Gmail 登录/续期/撤销、个人 Desktop client 注册与公开发行流程 |
+| AUTH-01、AUTH-03、AUTH-04 | Gmail 固定端点、PKCE/state/loopback、代码交换/刷新/撤销、Secret Service DH 后端、UID/账户共享刷新锁；10-15 本机真实凭据往返、协调/合成清理及个人 Desktop client 的 Google OAuth 登录/token 保存通过 | 真实续期/撤销、IMAP 邮件闭环、其他凭据服务及真实锁定/失联拒绝；公开发行 OAuth 流程 |
 | MAIL-02、MAIL-03 | 文件夹、分页/服务器搜索（UTF-8 同步 literal、明确拒绝）、UIDVALIDITY/PEEK、中文 MIME、回复/全部回复/显式转发、线程头与授权绑定 | 更多字符集和畸形语料、非 ASCII mailbox 编码/服务商扩展、完整线程视图与常用标记；目前仅 CLI 显式 Seen |
 | MAIL-04、PRIV-05 | 附件元数据、隔离 MIME 解码、CLI/TUI 显式保存/导入及移除草稿附件、完整字节摘要审阅、512 KiB 单附件界限、路径/符号链接/覆盖拒绝；附件字节绑定批准 | CID 安全显示、更大附件/整封消息的限额设计；MCP 不提供文件路径工具 |
 | MAIL-05 | 显式服务器草稿版本快照；ServerManaged 不 APPEND；Append 单次认领并使用原 SMTP 字节；受控服务验证重启与重复拒绝 | Gmail 自动 Sent/标签真实语义、远程草稿更新/清理及冲突；旧草稿不自动删除 |
@@ -32,7 +34,7 @@
 - worker 依赖 Linux bubblewrap、用户/网络 namespace 和实际系统库目录。Arch 与专用配置的 GitHub Ubuntu runner 已验证，其他发行版及默认 Ubuntu 桌面策略仍待验收；库 API 本身不创建沙箱。应用只通过受限 worker 处理原始正文/头部/附件。
 - SQLite 的检查后重新打开仍不是针对同 UID 任意代码的完整 TOCTOU 防护；配置与附件路径使用 descriptor walk，但不能据此声称数据库也完全抵抗此类攻击。
 - CLI 原始安全 JSON 中的链接目标必须作为数据使用。MCP与TUI阅读页的保守文本不能代替完整发送审阅；TUI人工审阅页使用完整、可逆转义的文本。公开图形下游仍需独立验证。
-- Secret Service 后端已编译，未在本轮读取或写入真实钥匙环。系统凭据锁要求存在且私有的 /run/user/UID，缺失时故障关闭。
-- 无真实邮箱连接、外发邮件、删除或账户状态修改；公开源码与开发分支推送已有授权，未发布发行版。
+- 已解锁 GNOME Keyring 的本机凭据往返通过，不泛化为全部 provider/故障场景通过。系统凭据锁要求存在且私有的 /run/user/UID，缺失时故障关闭。
+- 已授权的真实 Google OAuth 与本机凭据操作已执行；未连接 IMAP/SMTP 或读取、发送、删除邮件，也未撤销真实授权。公开源码与开发分支推送已有授权，未发布发行版。
 
 本批 231 项已登记 Rust 测试、fmt/Clippy、实际 PTY、独立客户端与隐私验证通过，含原阶段 C 的 210 项和新增账户接入单元/集成测试；helper 登记不视为额外独立产品验收。详见[账户接入记录](development/2026-10-14-account-onboarding.md)、[阶段 C 集成](testing/phase-c-integration.md)和[真实服务关卡](testing/live-acceptance.md)。阶段 B/C 历史结果仍保留追溯。

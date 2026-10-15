@@ -73,6 +73,98 @@ pub enum WriteOutcome {
     Failed,
     Uncertain,
 }
+/// Bounded diagnostic metadata. Never contains server text or mail identities.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SmtpStage {
+    Preparation,
+    TlsConfiguration,
+    Connection,
+    TlsHandshake,
+    Greeting,
+    Authentication,
+    MailFrom,
+    Recipient,
+    DataCommand,
+    Submission,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SmtpFailureKind {
+    InvalidInput,
+    Connection,
+    Timeout,
+    Rejected,
+    UnexpectedResponse,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SmtpDiagnostic {
+    pub stage: SmtpStage,
+    pub kind: SmtpFailureKind,
+    pub smtp_code: Option<u16>,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SmtpReport {
+    pub outcome: WriteOutcome,
+    pub diagnostic: Option<SmtpDiagnostic>,
+}
+// Only fixed enum discriminants are stored. The scoped runtime bridge joins
+// before reading this value, and never holds a lock across network awaits.
+struct SmtpProgress(std::sync::atomic::AtomicUsize);
+impl SmtpProgress {
+    fn new() -> Self {
+        Self(std::sync::atomic::AtomicUsize::new(
+            SmtpStage::Preparation as usize,
+        ))
+    }
+    fn set(&self, stage: SmtpStage) {
+        self.0.store(stage as usize, Ordering::Relaxed);
+    }
+    fn stage(&self) -> SmtpStage {
+        const STAGES: [SmtpStage; 10] = [
+            SmtpStage::Preparation,
+            SmtpStage::TlsConfiguration,
+            SmtpStage::Connection,
+            SmtpStage::TlsHandshake,
+            SmtpStage::Greeting,
+            SmtpStage::Authentication,
+            SmtpStage::MailFrom,
+            SmtpStage::Recipient,
+            SmtpStage::DataCommand,
+            SmtpStage::Submission,
+        ];
+        STAGES[self.0.load(Ordering::Relaxed)]
+    }
+    fn diagnostic(&self, kind: SmtpFailureKind, smtp_code: Option<u16>) -> SmtpDiagnostic {
+        SmtpDiagnostic {
+            stage: self.stage(),
+            kind,
+            smtp_code: smtp_code.filter(|code| (100..600).contains(code)),
+        }
+    }
+    fn protocol_error(&self, error: ProtocolError) -> SmtpDiagnostic {
+        self.diagnostic(
+            match error {
+                ProtocolError::InvalidInput => SmtpFailureKind::InvalidInput,
+                ProtocolError::Timeout => SmtpFailureKind::Timeout,
+                ProtocolError::Connection => SmtpFailureKind::Connection,
+                _ => SmtpFailureKind::UnexpectedResponse,
+            },
+            None,
+        )
+    }
+    fn smtp_error(&self, error: lettre::transport::smtp::Error) -> SmtpDiagnostic {
+        let kind = if error.is_timeout() {
+            SmtpFailureKind::Timeout
+        } else if error.is_transient() || error.is_permanent() {
+            SmtpFailureKind::Rejected
+        } else if error.is_response() || error.is_client() {
+            SmtpFailureKind::UnexpectedResponse
+        } else {
+            SmtpFailureKind::Connection
+        };
+        // status() is a typed Code; never inspect Display/source/server text.
+        self.diagnostic(kind, error.status().map(u16::from))
+    }
+}
 pub struct ImapClient {
     endpoint: Endpoint,
     tls: TlsOptions,
@@ -160,6 +252,17 @@ async fn connect(
     state: Arc<State>,
     imap: bool,
 ) -> Result<Wire, ProtocolError> {
+    connect_with_progress(endpoint, tls, state, imap, None).await
+}
+/// Validate SMTP endpoint and trust configuration without DNS, connection or authentication.
+/// Uses the same default roots, extra CA bounds and strict TLS policy as connect.
+pub fn validate_smtp_tls(endpoint: &Endpoint, tls: &TlsOptions) -> Result<(), ProtocolError> {
+    tls_configuration(endpoint, tls).map(|_| ())
+}
+fn tls_configuration(
+    endpoint: &Endpoint,
+    tls: &TlsOptions,
+) -> Result<(rustls::pki_types::ServerName<'static>, rustls::ClientConfig), ProtocolError> {
     if !valid(&endpoint.host, 253) || endpoint.port == 0 {
         return Err(ProtocolError::InvalidInput);
     }
@@ -189,9 +292,28 @@ async fn connect(
     .map_err(|_| ProtocolError::Connection)?
     .with_root_certificates(roots)
     .with_no_client_auth();
+    Ok((name, config))
+}
+async fn connect_with_progress(
+    endpoint: &Endpoint,
+    tls: &TlsOptions,
+    state: Arc<State>,
+    imap: bool,
+    progress: Option<&SmtpProgress>,
+) -> Result<Wire, ProtocolError> {
+    if let Some(progress) = progress {
+        progress.set(SmtpStage::TlsConfiguration);
+    }
+    let (name, config) = tls_configuration(endpoint, tls)?;
+    if let Some(progress) = progress {
+        progress.set(SmtpStage::Connection);
+    }
     let tcp = tokio::net::TcpStream::connect((endpoint.host.as_str(), endpoint.port))
         .await
         .map_err(|_| ProtocolError::Connection)?;
+    if let Some(progress) = progress {
+        progress.set(SmtpStage::TlsHandshake);
+    }
     let stream = tokio_rustls::TlsConnector::from(Arc::new(config))
         .connect(name, tcp)
         .await
@@ -763,20 +885,27 @@ impl ImapClient {
         }
     }
 }
-/// One strict implicit-TLS attempt. Callers must enforce authorization before invoking.
-pub fn send_smtp(
+/// One strict implicit-TLS attempt with fixed, non-sensitive diagnostic metadata.
+/// Greeting includes EHLO; Submission includes content transfer and final reply.
+/// Callers must enforce authorization before invoking. No retries are performed.
+pub fn send_smtp_report(
     endpoint: &Endpoint,
     tls: &TlsOptions,
     credentials: &Credentials,
     from: &str,
     to: &[String],
     raw: &[u8],
-) -> WriteOutcome {
+) -> SmtpReport {
     use lettre::transport::smtp::{
         authentication::{Credentials as SmtpCredentials, Mechanism},
         client::AsyncSmtpConnection,
         commands::{Data, Mail, Rcpt},
         extension::{ClientId, Extension, MailBodyParameter, MailParameter},
+    };
+    let progress = SmtpProgress::new();
+    let invalid = || SmtpReport {
+        outcome: WriteOutcome::Failed,
+        diagnostic: Some(progress.diagnostic(SmtpFailureKind::InvalidInput, None)),
     };
     if !credentials_valid(credentials)
         || raw.is_empty()
@@ -785,29 +914,34 @@ pub fn send_smtp(
         || to.len() > 100
         || !valid(from, 320)
         || to.iter().any(|s| !valid(s, 320))
+        || !valid(&endpoint.host, 253)
+        || endpoint.port == 0
     {
-        return WriteOutcome::Failed;
+        return invalid();
     }
     let Ok(sender) = from.parse::<lettre::Address>() else {
-        return WriteOutcome::Failed;
+        return invalid();
     };
     let Ok(recipients) = to
         .iter()
         .map(|s| s.parse::<lettre::Address>())
         .collect::<Result<Vec<_>, _>>()
     else {
-        return WriteOutcome::Failed;
+        return invalid();
     };
     let state = Arc::new(State::default());
-    let submitting = std::sync::atomic::AtomicBool::new(false);
-    let result = run(async {
-        let wire = connect(endpoint, tls, state.clone(), false).await?;
+    let operation = async {
+        let wire = connect_with_progress(endpoint, tls, state, false, Some(&progress))
+            .await
+            .map_err(|error| progress.protocol_error(error))?;
+        progress.set(SmtpStage::Greeting);
         let mut s = AsyncSmtpConnection::connect_with_transport(
             Box::new(wire),
             &ClientId::Domain("letterkeeper.invalid".into()),
         )
         .await
-        .map_err(|_| ProtocolError::Connection)?;
+        .map_err(|error| progress.smtp_error(error))?;
+        progress.set(SmtpStage::Authentication);
         let response = s
             .auth(
                 &[if credentials.oauth {
@@ -818,46 +952,95 @@ pub fn send_smtp(
                 &SmtpCredentials::new(credentials.username.clone(), credentials.secret.clone()),
             )
             .await
-            .map_err(|_| ProtocolError::Rejected)?;
+            .map_err(|error| progress.smtp_error(error))?;
         if !response.has_code(235) {
-            return Err(ProtocolError::Rejected);
+            return Err(progress.diagnostic(
+                SmtpFailureKind::UnexpectedResponse,
+                Some(response.code().into()),
+            ));
         }
+        progress.set(SmtpStage::MailFrom);
         let mut options = Vec::new();
         if !raw.is_ascii() {
             if !s.server_info().supports_feature(Extension::EightBitMime) {
-                return Err(ProtocolError::Rejected);
+                return Err(progress.diagnostic(SmtpFailureKind::Rejected, None));
             }
             options.push(MailParameter::Body(MailBodyParameter::EightBitMime));
         }
         if !from.is_ascii() || to.iter().any(|s| !s.is_ascii()) {
             if !s.server_info().supports_feature(Extension::SmtpUtfEight) {
-                return Err(ProtocolError::Rejected);
+                return Err(progress.diagnostic(SmtpFailureKind::Rejected, None));
             }
             options.push(MailParameter::SmtpUtfEight);
         }
         s.command(Mail::new(Some(sender), options))
             .await
-            .map_err(|_| ProtocolError::Rejected)?;
+            .map_err(|error| progress.smtp_error(error))?;
+        progress.set(SmtpStage::Recipient);
         for recipient in recipients {
             s.command(Rcpt::new(recipient, vec![]))
                 .await
-                .map_err(|_| ProtocolError::Rejected)?;
+                .map_err(|error| progress.smtp_error(error))?;
         }
-        let response = s.command(Data).await.map_err(|_| ProtocolError::Rejected)?;
+        progress.set(SmtpStage::DataCommand);
+        let response = s
+            .command(Data)
+            .await
+            .map_err(|error| progress.smtp_error(error))?;
         if !response.has_code(354) {
-            return Err(ProtocolError::Rejected);
+            return Err(progress.diagnostic(
+                SmtpFailureKind::UnexpectedResponse,
+                Some(response.code().into()),
+            ));
         }
-        submitting.store(true, Ordering::Relaxed);
-        match s.message(raw).await {
-            Ok(response) if response.has_code(250) => Ok(WriteOutcome::Accepted),
-            Ok(_) => Ok(WriteOutcome::Uncertain),
-            Err(error) if error.is_permanent() || error.is_transient() => Ok(WriteOutcome::Failed),
-            Err(_) => Ok(WriteOutcome::Uncertain),
+        // Preserve the existing conservative boundary: once 354 is received,
+        // all non-rejection failures are Uncertain, even during content writes.
+        progress.set(SmtpStage::Submission);
+        let response = s
+            .message(raw)
+            .await
+            .map_err(|error| progress.smtp_error(error))?;
+        if response.has_code(250) {
+            Ok(WriteOutcome::Accepted)
+        } else {
+            Err(progress.diagnostic(
+                SmtpFailureKind::UnexpectedResponse,
+                Some(response.code().into()),
+            ))
         }
-    });
+    };
+    // Keep the same runtime bridge and single deadline as IMAP. The inner
+    // Result preserves typed SMTP failures; the outer Result captures timeout
+    // or runtime failure while the atomic progress remains available.
+    let result = match run(async { Ok(operation.await) }) {
+        Ok(result) => result,
+        Err(error) => Err(progress.protocol_error(error)),
+    };
     match result {
-        Ok(outcome) => outcome,
-        Err(_) if submitting.load(Ordering::Relaxed) => WriteOutcome::Uncertain,
-        Err(_) => WriteOutcome::Failed,
+        Ok(outcome) => SmtpReport {
+            outcome,
+            diagnostic: None,
+        },
+        Err(diagnostic) => SmtpReport {
+            outcome: if diagnostic.stage == SmtpStage::Submission
+                && diagnostic.kind != SmtpFailureKind::Rejected
+            {
+                WriteOutcome::Uncertain
+            } else {
+                WriteOutcome::Failed
+            },
+            diagnostic: Some(diagnostic),
+        },
     }
+}
+/// Compatibility API: the same strict single attempt and three-state outcome.
+pub fn send_smtp(
+    endpoint: &Endpoint,
+    tls: &TlsOptions,
+    credentials: &Credentials,
+    from: &str,
+    to: &[String],
+    raw: &[u8],
+) -> WriteOutcome {
+    send_smtp_report(endpoint, tls, credentials, from, to, raw).outcome
 }

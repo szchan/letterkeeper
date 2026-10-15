@@ -56,6 +56,51 @@ pub enum SendOutcome {
     Failed,
     Uncertain,
 }
+/// Fixed, non-sensitive point at which a send attempt failed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SendStage {
+    Preparation,
+    TlsConfiguration,
+    Credentials,
+    Connection,
+    TlsHandshake,
+    Greeting,
+    Authentication,
+    MailFrom,
+    Recipient,
+    DataCommand,
+    Submission,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SendFailureKind {
+    InvalidInput,
+    Connection,
+    Timeout,
+    Rejected,
+    UnexpectedResponse,
+    Unavailable,
+}
+/// No server-provided strings, addresses or credentials may be stored here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SendDiagnostic {
+    pub stage: SendStage,
+    pub kind: SendFailureKind,
+    #[serde(deserialize_with = "deserialize_smtp_code")]
+    pub smtp_code: Option<u16>,
+}
+fn deserialize_smtp_code<'de, D>(deserializer: D) -> std::result::Result<Option<u16>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let code = Option::<u16>::deserialize(deserializer)?;
+    if code.is_some_and(|code| !(100..=599).contains(&code)) {
+        return Err(serde::de::Error::custom("SMTP code outside allowed range"));
+    }
+    Ok(code)
+}
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Submission {
     pub id: i64,
@@ -204,12 +249,20 @@ impl Store {
                     CREATE TABLE submissions(id INTEGER PRIMARY KEY AUTOINCREMENT, draft_id INTEGER NOT NULL REFERENCES drafts(id), revision INTEGER NOT NULL, digest TEXT NOT NULL, message_id TEXT NOT NULL UNIQUE, content TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('submitting','accepted','failed','uncertain')));
                     CREATE INDEX submission_draft ON submissions(draft_id); PRAGMA user_version=1;")?;
             }
-            1 | 2 => {}
+            1..=3 => {}
             _ => return Err(Error::SchemaVersion),
         }
         if version < 2 {
             tx.execute_batch("CREATE TABLE sync_records(id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL CHECK(kind IN ('draft','sent')), local_id INTEGER NOT NULL, revision INTEGER NOT NULL, folder TEXT NOT NULL, message_id TEXT NOT NULL, digest TEXT NOT NULL, content TEXT NOT NULL, state TEXT NOT NULL CHECK(state IN ('pending','confirmed','failed','uncertain')), UNIQUE(kind,local_id,revision));
                 CREATE TABLE submission_wire(submission_id INTEGER PRIMARY KEY REFERENCES submissions(id), wire BLOB NOT NULL); PRAGMA user_version=2;")?;
+        }
+        if version < 3 {
+            tx.execute_batch("CREATE TABLE submission_diagnostics(
+                submission_id INTEGER PRIMARY KEY REFERENCES submissions(id),
+                stage TEXT NOT NULL CHECK(stage IN ('preparation','tls_configuration','credentials','connection','tls_handshake','greeting','authentication','mail_from','recipient','data_command','submission')),
+                kind TEXT NOT NULL CHECK(kind IN ('invalid_input','connection','timeout','rejected','unexpected_response','unavailable')),
+                smtp_code INTEGER CHECK(smtp_code IS NULL OR (typeof(smtp_code)='integer' AND smtp_code BETWEEN 100 AND 599))
+            ); PRAGMA user_version=3;")?;
         }
         tx.commit()?;
         Ok(Self {
@@ -372,6 +425,16 @@ impl Store {
         })
     }
     pub fn finish_submission(&mut self, id: i64, outcome: SendOutcome) -> Result<Submission> {
+        self.finish_submission_with_diagnostic(id, outcome, None)
+    }
+    /// Atomically persists a terminal outcome and optional non-sensitive diagnostic.
+    /// An accepted submission cannot carry a failure diagnostic.
+    pub fn finish_submission_with_diagnostic(
+        &mut self,
+        id: i64,
+        outcome: SendOutcome,
+        diagnostic: Option<SendDiagnostic>,
+    ) -> Result<Submission> {
         let tx = self
             .conn
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -380,18 +443,80 @@ impl Store {
         if sub.state != SubmissionState::Submitting {
             return Err(Error::InvalidState);
         }
+        if diagnostic.is_some_and(|detail| {
+            outcome == SendOutcome::Accepted
+                || detail
+                    .smtp_code
+                    .is_some_and(|code| !(100..=599).contains(&code))
+        }) {
+            return Err(Error::InvalidInput);
+        }
         let (state, label) = match outcome {
             SendOutcome::Accepted => (SubmissionState::Accepted, "accepted"),
             SendOutcome::Failed => (SubmissionState::Failed, "failed"),
             SendOutcome::Uncertain => (SubmissionState::Uncertain, "uncertain"),
         };
-        tx.execute(
+        let changed = tx.execute(
             "UPDATE submissions SET state=?1 WHERE id=?2 AND state='submitting'",
             params![label, id],
         )?;
+        if changed != 1 {
+            return Err(Error::InvalidState);
+        }
+        if let Some(detail) = diagnostic {
+            // Both enums have a closed snake_case string representation.
+            let stage = serde_json::to_value(detail.stage)?;
+            let kind = serde_json::to_value(detail.kind)?;
+            tx.execute(
+                "INSERT INTO submission_diagnostics(submission_id,stage,kind,smtp_code) VALUES(?1,?2,?3,?4)",
+                params![id, stage.as_str().ok_or(Error::Storage)?, kind.as_str().ok_or(Error::Storage)?, detail.smtp_code],
+            )?;
+        }
         tx.commit()?;
         sub.state = state;
         Ok(sub)
+    }
+    /// Returns diagnostics only after checking this submission's account scope.
+    /// Missing and out-of-scope IDs share a denial so existence is not disclosed.
+    pub fn get_submission_diagnostic(&self, id: i64) -> Result<Option<SendDiagnostic>> {
+        if !self.policy.permissions.read {
+            return Err(Error::Denied);
+        }
+        let account: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT json_extract(content,'$.account') FROM submissions WHERE id=?1",
+                [id],
+                |r| r.get(0),
+            )
+            .optional()?;
+        self.policy
+            .check(account.as_deref().ok_or(Error::Denied)?, Operation::Read)?;
+        let row = self
+            .conn
+            .query_row(
+                "SELECT stage,kind,smtp_code FROM submission_diagnostics WHERE submission_id=?1",
+                [id],
+                |r| {
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, String>(1)?,
+                        r.get::<_, Option<u16>>(2)?,
+                    ))
+                },
+            )
+            .optional()?;
+        row.map(|(stage, kind, smtp_code)| {
+            if smtp_code.is_some_and(|code| !(100..=599).contains(&code)) {
+                return Err(Error::Storage);
+            }
+            Ok(SendDiagnostic {
+                stage: serde_json::from_value(serde_json::Value::String(stage))?,
+                kind: serde_json::from_value(serde_json::Value::String(kind))?,
+                smtp_code,
+            })
+        })
+        .transpose()
     }
     pub fn get_submission(&self, id: i64) -> Result<Submission> {
         let sub = load_submission(&self.conn, id)?;

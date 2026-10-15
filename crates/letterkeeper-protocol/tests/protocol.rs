@@ -156,6 +156,46 @@ fn smtp_outcomes_and_bcc_envelope() {
 }
 
 #[test]
+fn smtp_report_preserves_auth_rejection_stage_without_server_text() {
+    let server = Server::start(Scenario::SmtpAuthReject);
+    let mut credentials = Server::credentials();
+    credentials.oauth = true;
+    let report = send_smtp_report(
+        &server.endpoint,
+        &server.tls,
+        &credentials,
+        "person@example.test",
+        &["recipient@example.test".into()],
+        b"From: person@example.test\r\n\r\nsynthetic",
+    );
+    let transcript = server.finish();
+    assert!(
+        transcript
+            .iter()
+            .any(|line| line.starts_with("AUTH XOAUTH2"))
+    );
+    assert!(!transcript.iter().any(|line| line.starts_with("MAIL")));
+    assert_eq!(report.outcome, WriteOutcome::Failed);
+    assert_eq!(
+        report.diagnostic,
+        Some(SmtpDiagnostic {
+            stage: SmtpStage::Authentication,
+            kind: SmtpFailureKind::Rejected,
+            smtp_code: Some(535),
+        }),
+        "SMTP AUTH refusal must retain its fixed stage, kind and numeric code",
+    );
+    let displayed = format!("{report:?}");
+    for sensitive in [
+        "synthetic-private-response",
+        "person@example.test",
+        "synthetic-secret",
+    ] {
+        assert!(!displayed.contains(sensitive));
+    }
+}
+
+#[test]
 fn recovery_confirms_exact_message_id_candidates() {
     let server = Server::start(Scenario::Recovery);
     assert_eq!(
@@ -675,4 +715,413 @@ fn bounded_search_sorts_arbitrary_wire_order_before_paging() {
     );
     assert!(page.more);
     server.finish();
+}
+
+fn smtp_report(server: &Server) -> SmtpReport {
+    send_smtp_report(
+        &server.endpoint,
+        &server.tls,
+        &Server::credentials(),
+        "person@example.test",
+        &["recipient@example.test".into()],
+        b"From: person@example.test\r\n\r\nsynthetic-private-body",
+    )
+}
+fn assert_smtp_report_redacted(report: SmtpReport) {
+    let debug = format!("{report:?}");
+    for sensitive in [
+        "person@example.test",
+        "recipient@example.test",
+        "synthetic-secret",
+        "synthetic-private-response",
+        "synthetic-private-body",
+    ] {
+        assert!(!debug.contains(sensitive));
+    }
+    if let Some(code) = report.diagnostic.and_then(|d| d.smtp_code) {
+        assert!((100..600).contains(&code));
+    }
+}
+#[test]
+fn smtp_reports_success_and_each_explicit_refusal_without_retry() {
+    let server = Server::start(Scenario::Smtp);
+    assert_eq!(
+        smtp_report(&server),
+        SmtpReport {
+            outcome: WriteOutcome::Accepted,
+            diagnostic: None,
+        }
+    );
+    assert_eq!(
+        server
+            .finish()
+            .iter()
+            .filter(|s| s.starts_with("DATA"))
+            .count(),
+        1
+    );
+    for (stage, code) in [
+        (SmtpStage::Greeting, 421),
+        (SmtpStage::Authentication, 535),
+        (SmtpStage::MailFrom, 550),
+        (SmtpStage::Recipient, 450),
+        (SmtpStage::DataCommand, 554),
+        (SmtpStage::Submission, 550),
+        (SmtpStage::Submission, 451),
+    ] {
+        let server = Server::start(Scenario::SmtpReply { stage, code });
+        let report = smtp_report(&server);
+        let transcript = server.finish();
+        assert_eq!(
+            report,
+            SmtpReport {
+                outcome: WriteOutcome::Failed,
+                diagnostic: Some(SmtpDiagnostic {
+                    stage,
+                    kind: SmtpFailureKind::Rejected,
+                    smtp_code: Some(code),
+                }),
+            }
+        );
+        assert_smtp_report_redacted(report);
+        assert_eq!(
+            transcript.iter().filter(|s| s.starts_with("EHLO")).count(),
+            1
+        );
+        assert!(transcript.iter().filter(|s| s.starts_with("MAIL")).count() <= 1);
+        if matches!(stage, SmtpStage::Greeting | SmtpStage::Authentication) {
+            assert!(!transcript.iter().any(|s| s.starts_with("MAIL")));
+        }
+        if stage != SmtpStage::Submission {
+            assert!(
+                !transcript
+                    .iter()
+                    .any(|s| s.contains("synthetic-private-body"))
+            );
+        }
+    }
+}
+#[test]
+fn smtp_unexpected_and_malformed_responses_are_bounded_diagnostics() {
+    for (stage, code, outcome, smtp_code) in [
+        (
+            SmtpStage::Authentication,
+            250,
+            WriteOutcome::Failed,
+            Some(250),
+        ),
+        (SmtpStage::Authentication, 666, WriteOutcome::Failed, None),
+        (SmtpStage::DataCommand, 250, WriteOutcome::Failed, Some(250)),
+        (
+            SmtpStage::Submission,
+            354,
+            WriteOutcome::Uncertain,
+            Some(354),
+        ),
+    ] {
+        let server = Server::start(Scenario::SmtpReply { stage, code });
+        let report = smtp_report(&server);
+        server.finish();
+        assert_eq!(
+            report,
+            SmtpReport {
+                outcome,
+                diagnostic: Some(SmtpDiagnostic {
+                    stage,
+                    kind: SmtpFailureKind::UnexpectedResponse,
+                    smtp_code,
+                }),
+            }
+        );
+        assert_smtp_report_redacted(report);
+    }
+}
+#[test]
+fn smtp_disconnect_after_data_remains_uncertain_with_submission_stage() {
+    let server = Server::start(Scenario::SmtpDisconnect);
+    let report = smtp_report(&server);
+    assert_eq!(report.outcome, WriteOutcome::Uncertain);
+    let diagnostic = report.diagnostic.unwrap();
+    assert_eq!(diagnostic.stage, SmtpStage::Submission);
+    assert_eq!(diagnostic.smtp_code, None);
+    // An abrupt TLS close may be a transport error or an incomplete SMTP
+    // response. Both retain the conservative post-DATA uncertainty boundary.
+    assert!(matches!(
+        diagnostic.kind,
+        SmtpFailureKind::Connection | SmtpFailureKind::UnexpectedResponse
+    ));
+    assert_eq!(
+        server
+            .finish()
+            .iter()
+            .filter(|s| s.starts_with("DATA"))
+            .count(),
+        1
+    );
+    assert_smtp_report_redacted(report);
+}
+#[test]
+fn smtp_report_certificates_fail_at_handshake_before_authentication() {
+    for wrong_name in [false, true] {
+        let mut server = Server::with_name(
+            Scenario::Smtp,
+            if wrong_name {
+                "wrong.test"
+            } else {
+                "localhost"
+            },
+        );
+        if !wrong_name {
+            server.tls = TlsOptions::default();
+        }
+        assert_eq!(
+            smtp_report(&server),
+            SmtpReport {
+                outcome: WriteOutcome::Failed,
+                diagnostic: Some(SmtpDiagnostic {
+                    stage: SmtpStage::TlsHandshake,
+                    kind: SmtpFailureKind::Connection,
+                    smtp_code: None,
+                }),
+            }
+        );
+        assert!(server.finish().is_empty());
+    }
+}
+#[test]
+fn smtp_local_preparation_and_tls_validation_never_connect() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let endpoint = Endpoint {
+        host: "localhost".into(),
+        port: listener.local_addr().unwrap().port(),
+    };
+    let credentials = Server::credentials();
+    for (from, to, raw) in [
+        (
+            "invalid",
+            vec!["recipient@example.test".into()],
+            b"synthetic".as_slice(),
+        ),
+        ("person@example.test", vec![], b"synthetic".as_slice()),
+        (
+            "person@example.test",
+            vec!["recipient@example.test".into()],
+            b"".as_slice(),
+        ),
+    ] {
+        let report = send_smtp_report(
+            &endpoint,
+            &TlsOptions::default(),
+            &credentials,
+            from,
+            &to,
+            raw,
+        );
+        assert_eq!(
+            report.diagnostic,
+            Some(SmtpDiagnostic {
+                stage: SmtpStage::Preparation,
+                kind: SmtpFailureKind::InvalidInput,
+                smtp_code: None,
+            })
+        );
+        assert_eq!(report.outcome, WriteOutcome::Failed);
+    }
+    for credentials in [
+        Credentials {
+            username: "person@example.test".into(),
+            secret: String::new(),
+            oauth: true,
+        },
+        Credentials {
+            username: "person\r\nAUTH".into(),
+            secret: "synthetic-secret".into(),
+            oauth: false,
+        },
+    ] {
+        assert_eq!(
+            send_smtp_report(
+                &endpoint,
+                &TlsOptions::default(),
+                &credentials,
+                "person@example.test",
+                &["recipient@example.test".into()],
+                b"synthetic"
+            ),
+            SmtpReport {
+                outcome: WriteOutcome::Failed,
+                diagnostic: Some(SmtpDiagnostic {
+                    stage: SmtpStage::Preparation,
+                    kind: SmtpFailureKind::InvalidInput,
+                    smtp_code: None,
+                }),
+            },
+        );
+    }
+    let invalid_tls = TlsOptions {
+        roots_pem: Some(b"not a certificate".to_vec()),
+    };
+    assert_eq!(
+        send_smtp_report(
+            &endpoint,
+            &invalid_tls,
+            &credentials,
+            "person@example.test",
+            &["recipient@example.test".into()],
+            b"synthetic"
+        ),
+        SmtpReport {
+            outcome: WriteOutcome::Failed,
+            diagnostic: Some(SmtpDiagnostic {
+                stage: SmtpStage::TlsConfiguration,
+                kind: SmtpFailureKind::InvalidInput,
+                smtp_code: None,
+            }),
+        }
+    );
+    assert_eq!(
+        listener.accept().unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
+}
+#[test]
+fn smtp_tls_validation_rejects_invalid_configuration_without_network() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let endpoint = Endpoint {
+        host: "localhost".into(),
+        port: listener.local_addr().unwrap().port(),
+    };
+    assert_eq!(validate_smtp_tls(&endpoint, &TlsOptions::default()), Ok(()));
+    let certificate = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    assert_eq!(
+        validate_smtp_tls(
+            &endpoint,
+            &TlsOptions {
+                roots_pem: Some(certificate.cert.pem().into_bytes()),
+            }
+        ),
+        Ok(()),
+    );
+    for pem in [
+        b"not a certificate".to_vec(),
+        vec![b'x'; 65537],
+        b"-----BEGIN CERTIFICATE-----\ninvalid\n-----END CERTIFICATE-----".to_vec(),
+    ] {
+        assert_eq!(
+            validate_smtp_tls(
+                &endpoint,
+                &TlsOptions {
+                    roots_pem: Some(pem)
+                }
+            ),
+            Err(ProtocolError::InvalidInput)
+        );
+    }
+    for (host, port) in [
+        ("", 465),
+        ("host\r\nAUTH", 465),
+        ("invalid host name", 465),
+        ("localhost", 0),
+    ] {
+        assert_eq!(
+            validate_smtp_tls(
+                &Endpoint {
+                    host: host.into(),
+                    port
+                },
+                &TlsOptions::default()
+            ),
+            Err(ProtocolError::InvalidInput)
+        );
+    }
+    assert_eq!(
+        listener.accept().unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
+}
+#[test]
+fn smtp_report_distinguishes_connection_refusal_from_tls_configuration() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let endpoint = Endpoint {
+        host: "localhost".into(),
+        port: listener.local_addr().unwrap().port(),
+    };
+    drop(listener);
+    let report = send_smtp_report(
+        &endpoint,
+        &TlsOptions::default(),
+        &Server::credentials(),
+        "person@example.test",
+        &["recipient@example.test".into()],
+        b"synthetic",
+    );
+    assert_eq!(
+        report,
+        SmtpReport {
+            outcome: WriteOutcome::Failed,
+            diagnostic: Some(SmtpDiagnostic {
+                stage: SmtpStage::Connection,
+                kind: SmtpFailureKind::Connection,
+                smtp_code: None,
+            }),
+        }
+    );
+}
+#[test]
+fn smtp_deadline_retains_phase_and_submission_uncertainty() {
+    for (stage, outcome) in [
+        (SmtpStage::TlsHandshake, WriteOutcome::Failed),
+        (SmtpStage::Authentication, WriteOutcome::Failed),
+        (SmtpStage::Submission, WriteOutcome::Uncertain),
+    ] {
+        let server = Server::start(Scenario::SmtpStall(stage));
+        let started = std::time::Instant::now();
+        let report = smtp_report(&server);
+        assert!(started.elapsed() >= std::time::Duration::from_secs(14));
+        assert!(started.elapsed() < std::time::Duration::from_secs(16));
+        assert_eq!(
+            report,
+            SmtpReport {
+                outcome,
+                diagnostic: Some(SmtpDiagnostic {
+                    stage,
+                    kind: SmtpFailureKind::Timeout,
+                    smtp_code: None,
+                }),
+            }
+        );
+        let transcript = server.finish();
+        if stage == SmtpStage::TlsHandshake {
+            assert!(transcript.is_empty());
+        }
+        assert!(transcript.iter().filter(|s| s.starts_with("DATA")).count() <= 1);
+    }
+}
+#[tokio::test]
+async fn smtp_reports_work_from_std_thread_runtime_and_spawn_blocking() {
+    let server = Server::start(Scenario::Smtp);
+    let report = std::thread::spawn(move || {
+        let report = smtp_report(&server);
+        server.finish();
+        report
+    })
+    .join()
+    .unwrap();
+    assert_eq!(report.outcome, WriteOutcome::Accepted);
+    assert_eq!(report.diagnostic, None);
+    let server = Server::start(Scenario::Smtp);
+    assert_eq!(smtp_report(&server).outcome, WriteOutcome::Accepted);
+    server.finish();
+    let server = Server::start(Scenario::Smtp);
+    let report = tokio::task::spawn_blocking(move || {
+        let report = smtp_report(&server);
+        server.finish();
+        report
+    })
+    .await
+    .unwrap();
+    assert_eq!(report.outcome, WriteOutcome::Accepted);
+    assert_eq!(report.diagnostic, None);
 }

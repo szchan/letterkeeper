@@ -1,5 +1,7 @@
 # 实现与验收状态
 
+发送诊断增量已通过受控集成验证：固定阶段/种类/SMTP 数值码与终态原子保存，CLI/TUI 查询共用，旧记录不推测原因；保留人工批准和三态发送语义。核心、协议与应用的远程 RED/GREEN 及[完整集成门禁](https://github.com/szchan/letterkeeper/actions/runs/38732704692) 已通过，不能据此宣布真实故障已定位。见[诊断验收](testing/send-diagnostics.md)与[ADR 0006](decisions/0006-send-diagnostics.md)。
+
 2026-10-15 增量：已获明确授权并完成本机已解锁 GNOME Keyring 的生产凭据往返、跨进程锁和本次合成条目清理，以及真实 Google OAuth 浏览器同意、代码交换和 token 本机保存/独立读回。随后用户明确授权账户全部邮件的只读 IMAP 验收：严格 TLS/XOAUTH2、文件夹、INBOX/All Mail 分页、ASCII/中文搜索、正文抽样及前后 Flags/UIDVALIDITY 比较通过。旧构建发现的大邮箱列表问题已经远程 TDD 修复，并使用新构建真实重验。该只读阶段没有发送或修改邮件状态。随后真实令牌自然到期后的续期、并发认证及服务器草稿写入通过；首次 CLI SMTP 尝试持久化 Failed，独立观察到握手超时；用户修复网络并通过新的 TUI 人工批准后，CLI 单次发送持久化 Accepted，Sent/本人 Inbox 核对通过。用户确认 Gmail 网页上发送对应的草稿已消失、另一份仍在，不将其记为草稿刷新故障。Hyprland 听写快捷键截获 F9，真实客户端 F9 仍未验收。详细证据见[续期/写入记录](testing/live-write-2026-10-15.md)。范围、构建和环境见[钥匙环/OAuth](testing/live-keyring-2026-10-15.md)及[只读 IMAP](testing/live-imap-2026-10-15.md)。
 
 账户接入增量 `doctor` 和 `account add` 已通过 [代码 SHA `84b5dee` 的完整集成 CI](https://github.com/szchan/letterkeeper/actions/runs/38583555164)，[PR #6](https://github.com/szchan/letterkeeper/pull/6) 保留最终 revision 的门禁。诊断只读取目录和凭据服务元数据，配置默认只读、确认后原子创建；不表示已登录或真实服务验收完成。详见[本批开发记录](development/2026-10-14-account-onboarding.md)。
@@ -37,4 +39,4 @@
 - 已解锁 GNOME Keyring 的本机凭据往返通过，不泛化为全部 provider/故障场景通过。系统凭据锁要求存在且私有的 /run/user/UID，缺失时故障关闭。
 - 已授权的真实 Google OAuth、本机凭据、只读 IMAP、续期、单个测试草稿写入和本人 SMTP 投递已执行；首次 Failed 保留，网络修复后经新的人工批准，CLI 单次发送 Accepted 并核对 Sent/Inbox。未执行客户端删除操作；用户确认发送草稿已消失，另一份仍在。没有移动、显式修改既有邮件标记或撤销真实授权；SMTP 不自动重试。详情见[续期/写入记录](testing/live-write-2026-10-15.md)。只读验收是抽样而非完整下载；搜索每批 4096 个消息序号、每次最多 128 批，超预算明确报错。公开源码与开发分支推送已有授权，未发布发行版。
 
-当前受控测试为 243 项已登记 Rust 测试：原账户接入基线 231 项、1 项 Gmail 配置标签兼容回归和 11 项有界分页/完成状态协议回归；精确 RED/GREEN 及完整 CI 见[配置兼容](testing/gmail-config-compat.md)和[分页回归](testing/imap-bounded-paging.md)。fmt/Clippy、实际 PTY、独立客户端与隐私门禁保留，新集成 revision 必须重新通过；helper 登记不视为额外独立产品验收。另见[账户接入记录](development/2026-10-14-account-onboarding.md)、[阶段 C 集成](testing/phase-c-integration.md)和[真实服务关卡](testing/live-acceptance.md)。阶段 B/C 历史结果仍保留追溯。
+当前受控测试为 272 项已登记 Rust 测试：原账户接入基线 231 项、1 项 Gmail 配置标签兼容回归、11 项有界分页/完成状态协议回归与 29 项安全发送诊断增量；发送诊断结果见[集成记录](testing/send-diagnostics.md)，精确 RED/GREEN 及完整 CI 见[配置兼容](testing/gmail-config-compat.md)和[分页回归](testing/imap-bounded-paging.md)。fmt/Clippy、实际 PTY、独立客户端与隐私门禁保留，新集成 revision 必须重新通过；helper 登记不视为额外独立产品验收。另见[账户接入记录](development/2026-10-14-account-onboarding.md)、[阶段 C 集成](testing/phase-c-integration.md)和[真实服务关卡](testing/live-acceptance.md)。阶段 B/C 历史结果仍保留追溯。

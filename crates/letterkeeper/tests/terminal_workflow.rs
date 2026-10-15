@@ -12,6 +12,10 @@ use letterkeeper_core::DraftInput;
 use serde_json::Value;
 #[path = "support/performance_server.rs"]
 mod performance_server;
+#[path = "../../letterkeeper-protocol/tests/support.rs"]
+mod protocol_support;
+#[path = "support/send_server.rs"]
+mod send_server;
 use std::{
     fs::File,
     io::{BufRead, BufReader, Read, Write},
@@ -410,11 +414,12 @@ fn recv_until(master: &mut File, marker: &str, ready: impl Fn(&[u8]) -> bool) ->
         std::thread::sleep(Duration::from_millis(10));
     }
     panic!(
-        "PTY missing marker {marker:?}; captured {} bytes",
-        output.len()
+        "PTY missing marker {marker:?}; captured {} bytes; synthetic tail {:?}",
+        output.len(),
+        String::from_utf8_lossy(&output[output.len().saturating_sub(2048)..])
     );
 }
-fn recv_resize(master: &mut File, height: u16) {
+fn recv_resize(master: &mut File, height: u16) -> Vec<u8> {
     let last_row = format!("\x1b[{height};1H");
     recv_until(master, "completed resized frame", |output| {
         // Ratatui clears on resize and flushes HideCursor after the last row.
@@ -432,7 +437,7 @@ fn recv_resize(master: &mut File, height: u16) {
         after_clear[row + last_row.len()..]
             .windows(6)
             .any(|w| w == b"\x1b[?25l")
-    });
+    })
 }
 fn compact(data: &[u8]) -> Vec<u8> {
     data.iter()
@@ -710,5 +715,222 @@ fn pty_approval_requires_full_digest_and_f9_sends_once() {
             dns.recv_from(&mut [0; 512]).unwrap_err().kind(),
             std::io::ErrorKind::WouldBlock
         );
+    }
+}
+
+#[test]
+fn workspace_remote_send_child() {
+    let Some(path) = std::env::var_os("LETTERKEEPER_REMOTE_SEND_CONFIG") else {
+        return;
+    };
+    let config: AccountConfig = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    let state = std::path::Path::new(&path).parent().unwrap().join("state");
+    let host = Arc::new(
+        RemoteHost::open(
+            config,
+            &state,
+            Arc::new(SyntheticVault),
+            letterkeeper::sandbox::Sandbox {
+                executable: env!("CARGO_BIN_EXE_letterkeeper").into(),
+                launcher: "/usr/bin/bwrap".into(),
+            },
+        )
+        .unwrap(),
+    );
+    let browser: Arc<dyn Host> = host.clone();
+    let human: Arc<dyn HumanWorkspace> = host;
+    run_tui_workspace(browser, human).unwrap();
+}
+
+#[test]
+fn pty_f9_uses_remote_host_tls_and_persists_safe_diagnostics() {
+    for mode in [
+        send_server::ResultMode::Accepted,
+        send_server::ResultMode::Rejected,
+        send_server::ResultMode::Disconnected,
+    ] {
+        let imap = protocol_support::Server::start_shared();
+        let smtp = send_server::Server::start(mode);
+        let dir = tempfile::tempdir().unwrap();
+        let ca = dir.path().join("ca.pem");
+        let mut roots = smtp.pem.clone();
+        roots.extend(imap.tls.roots_pem.as_ref().unwrap());
+        std::fs::write(&ca, roots).unwrap();
+        let config: AccountConfig = serde_json::from_value(serde_json::json!({
+            "id":"controlled", "email":"reader@example.test", "username":"person@example.test",
+            "imap":{"host":"localhost","port":imap.endpoint.port},
+            "smtp":{"host":"localhost","port":smtp.port}, "allowed_folders":["INBOX","Drafts","Sent"],
+            "permissions":{"read":true,"draft":true,"send":true},
+            "drafts_folder":"Drafts","sent_folder":"Sent","sent_copy":"server_managed",
+            "authentication":{"type":"password"},"extra_ca_pem":ca,
+        }))
+        .unwrap();
+        let config_path = dir.path().join("config.json");
+        std::fs::write(&config_path, serde_json::to_vec(&config).unwrap()).unwrap();
+        let state = dir.path().join("state");
+        let host = RemoteHost::open(
+            config.clone(),
+            &state,
+            Arc::new(SyntheticVault),
+            letterkeeper::sandbox::Sandbox {
+                executable: env!("CARGO_BIN_EXE_letterkeeper").into(),
+                launcher: "/usr/bin/bwrap".into(),
+            },
+        )
+        .unwrap();
+        let draft = host
+            .create(DraftInput {
+                account: "controlled".into(),
+                from: "reader@example.test".into(),
+                to: vec!["recipient@example.test".into()],
+                cc: vec![],
+                bcc: vec![],
+                subject: "合成 TLS 发送宽字符".into(),
+                body: "受控中文正文".into(),
+                attachments: vec![],
+                in_reply_to: None,
+                references: vec![],
+            })
+            .unwrap();
+        assert!(host.send(draft.id).is_err(), "approval remains required");
+        assert!(smtp.transcript.lock().unwrap().is_empty());
+        let (mut master_fd, mut slave_fd) = (-1, -1);
+        let winsize = libc::winsize {
+            ws_row: 40,
+            ws_col: 120,
+            ws_xpixel: 0,
+            ws_ypixel: 0,
+        };
+        // SAFETY: initialized size and two valid writable descriptor slots.
+        assert_eq!(
+            unsafe {
+                libc::openpty(
+                    &mut master_fd,
+                    &mut slave_fd,
+                    std::ptr::null_mut(),
+                    std::ptr::null(),
+                    &winsize,
+                )
+            },
+            0
+        );
+        // SAFETY: transfer each newly owned PTY descriptor exactly once.
+        let (mut master, slave) =
+            unsafe { (File::from_raw_fd(master_fd), File::from_raw_fd(slave_fd)) };
+        let mut command = Command::new(std::env::current_exe().unwrap());
+        command
+            .args(["--exact", "workspace_remote_send_child", "--nocapture"])
+            .env("LETTERKEEPER_REMOTE_SEND_CONFIG", &config_path)
+            .env("TERM", "xterm-256color")
+            .stdin(slave.try_clone().unwrap())
+            .stdout(slave.try_clone().unwrap())
+            .stderr(slave.try_clone().unwrap());
+        // SAFETY: only async-signal-safe session/ioctl calls after fork.
+        unsafe {
+            command.pre_exec(|| {
+                if libc::setsid() < 0 || libc::ioctl(0, libc::TIOCSCTTY, 0) < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
+        let mut child = Child(command.spawn().unwrap());
+        // SAFETY: owned live master descriptor; nonblocking affects this endpoint only.
+        assert_ne!(
+            unsafe { libc::fcntl(master.as_raw_fd(), libc::F_SETFL, libc::O_NONBLOCK) },
+            -1
+        );
+        recv(&mut master, "LetterKeeper");
+        master.write_all(b"d").unwrap();
+        recv(&mut master, "合成 TLS 发送宽字符");
+        master.write_all(b"\r").unwrap();
+        recv(&mut master, "Ctrl+S");
+        master.write_all(b"\x1b[17~").unwrap();
+        recv(&mut master, "完整审阅");
+        master.write_all(b"\x1b[19~").unwrap();
+        recv(&mut master, "输入完整摘要");
+        assert!(smtp.transcript.lock().unwrap().is_empty());
+        master.write_all(draft.digest.as_bytes()).unwrap();
+        master.write_all(b"\r").unwrap();
+        recv(&mut master, "批准成功");
+        assert!(
+            smtp.transcript.lock().unwrap().is_empty(),
+            "approval alone must not send"
+        );
+        master.write_all(b"\x1b[20~").unwrap();
+        let expected = match mode {
+            send_server::ResultMode::Accepted => "Accepted",
+            send_server::ResultMode::Rejected => "Failed",
+            send_server::ResultMode::Disconnected => "Uncertain",
+        };
+        let mut output = recv(&mut master, expected);
+        // The diff frame can reuse an existing character (e.g. P from PgUp).
+        // Verify the actual complete screen after a real resize/clear instead.
+        size(&slave, 119, 39);
+        let frame = recv_resize(&mut master, 39);
+        let screen = String::from_utf8_lossy(&plain(&frame)).into_owned();
+        assert!(screen.contains(expected));
+        match mode {
+            send_server::ResultMode::Accepted => assert!(screen.contains("无失败诊断")),
+            send_server::ResultMode::Rejected => {
+                assert!(screen.contains("submission/rejected"));
+                assert!(screen.contains("SMTP550"));
+            }
+            send_server::ResultMode::Disconnected => {
+                assert!(screen.contains("submission/connection"))
+            }
+        }
+        output.extend(frame);
+        let text = String::from_utf8_lossy(&output);
+        for forbidden in [
+            "private-server-detail",
+            "raw-error-address@example.test",
+            "synthetic-secret",
+        ] {
+            assert!(!text.contains(forbidden));
+        }
+        master.write_all(b"q").unwrap();
+        assert!(child.0.wait().unwrap().success());
+        let reopened = RemoteHost::open(
+            config,
+            &state,
+            Arc::new(SyntheticVault),
+            letterkeeper::sandbox::Sandbox {
+                executable: env!("CARGO_BIN_EXE_letterkeeper").into(),
+                launcher: "/usr/bin/bwrap".into(),
+            },
+        )
+        .unwrap();
+        let submissions = reopened.list_submissions(0, 50).unwrap();
+        assert_eq!(submissions.len(), 1);
+        let info = &submissions[0];
+        let status = Host::send_status(&reopened, &info.id.to_string()).unwrap();
+        assert_eq!(status["state"], serde_json::json!(info.state));
+        assert_eq!(
+            status["diagnostic"],
+            serde_json::json!(reopened.submission_diagnostic(info.id).unwrap())
+        );
+        match mode {
+            send_server::ResultMode::Accepted => {
+                assert_eq!(info.state, letterkeeper_core::SubmissionState::Accepted);
+                assert!(status["diagnostic"].is_null());
+            }
+            send_server::ResultMode::Rejected => {
+                assert_eq!(info.state, letterkeeper_core::SubmissionState::Failed);
+                assert_eq!(status["diagnostic"]["smtp_code"], 550);
+            }
+            send_server::ResultMode::Disconnected => {
+                assert_eq!(info.state, letterkeeper_core::SubmissionState::Uncertain)
+            }
+        }
+        assert!(reopened.send(draft.id).is_err());
+        assert_eq!(
+            smtp.finish()
+                .iter()
+                .filter(|line| line.starts_with("DATA"))
+                .count(),
+            1
+        );
+        imap.finish();
     }
 }

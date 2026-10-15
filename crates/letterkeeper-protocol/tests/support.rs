@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![allow(dead_code)]
-use letterkeeper_protocol::{Credentials, Endpoint, TlsOptions};
+use letterkeeper_protocol::{Credentials, Endpoint, SmtpStage, TlsOptions};
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, Ordering},
@@ -24,6 +24,9 @@ pub enum Scenario {
     AppendDisconnect,
     AppendReject,
     Smtp,
+    SmtpAuthReject,
+    SmtpReply { stage: SmtpStage, code: u16 },
+    SmtpStall(SmtpStage),
     SmtpReject,
     SmtpDisconnect,
 }
@@ -113,6 +116,10 @@ impl Server {
                         Err(_) if shared => continue,
                         _ => break,
                     };
+                    if matches!(scenario, Scenario::SmtpStall(SmtpStage::TlsHandshake)) {
+                        tokio::time::sleep(std::time::Duration::from_secs(16)).await;
+                        break;
+                    }
                     let Ok(Ok(tls)) = tokio::time::timeout(
                         std::time::Duration::from_secs(3),
                         acceptor.accept(tcp),
@@ -130,6 +137,9 @@ impl Server {
                     let smtp = matches!(
                         scenario,
                         Scenario::Smtp
+                            | Scenario::SmtpAuthReject
+                            | Scenario::SmtpReply { .. }
+                            | Scenario::SmtpStall(..)
                             | Scenario::SmtpReject
                             | Scenario::SmtpDisconnect
                             | Scenario::SmtpFinalReject
@@ -334,10 +344,36 @@ async fn smtp_reply(
     scenario: Scenario,
     observed: &Arc<Mutex<Vec<String>>>,
 ) -> bool {
+    let stage = if line.starts_with("EHLO") {
+        Some(SmtpStage::Greeting)
+    } else if line.starts_with("AUTH") {
+        Some(SmtpStage::Authentication)
+    } else if line.starts_with("MAIL") {
+        Some(SmtpStage::MailFrom)
+    } else if line.starts_with("RCPT") {
+        Some(SmtpStage::Recipient)
+    } else if line.starts_with("DATA") {
+        Some(SmtpStage::DataCommand)
+    } else {
+        None
+    };
+    if let Some(stage) = stage {
+        if matches!(scenario, Scenario::SmtpStall(failing) if failing == stage) {
+            tokio::time::sleep(std::time::Duration::from_secs(16)).await;
+            return false;
+        }
+        if let Some(reply) = synthetic_smtp_response(scenario, stage) {
+            return io.get_mut().write_all(reply.as_bytes()).await.is_ok();
+        }
+    }
     let reply = if line.starts_with("EHLO") {
         "250-synthetic.test\r\n250-AUTH PLAIN XOAUTH2\r\n250 8BITMIME\r\n"
     } else if line.starts_with("AUTH") {
-        "235 authenticated\r\n"
+        if matches!(scenario, Scenario::SmtpAuthReject) {
+            "535 synthetic-private-response person@example.test synthetic-secret\r\n"
+        } else {
+            "235 authenticated\r\n"
+        }
     } else if line.starts_with("MAIL") {
         "250 sender\r\n"
     } else if line.starts_with("RCPT") {
@@ -360,6 +396,13 @@ async fn smtp_reply(
             body.push_str(&l);
         }
         observed.lock().unwrap().push(body);
+        if matches!(scenario, Scenario::SmtpStall(SmtpStage::Submission)) {
+            tokio::time::sleep(std::time::Duration::from_secs(16)).await;
+            return false;
+        }
+        if let Some(reply) = synthetic_smtp_response(scenario, SmtpStage::Submission) {
+            return io.get_mut().write_all(reply.as_bytes()).await.is_ok();
+        }
         if matches!(scenario, Scenario::SmtpDisconnect) {
             return false;
         }
@@ -375,6 +418,17 @@ async fn smtp_reply(
         panic!("unexpected synthetic SMTP command")
     };
     io.get_mut().write_all(reply.as_bytes()).await.is_ok()
+}
+fn synthetic_smtp_response(scenario: Scenario, stage: SmtpStage) -> Option<String> {
+    match scenario {
+        Scenario::SmtpReply {
+            stage: failing,
+            code,
+        } if stage == failing => Some(format!(
+            "{code} synthetic-private-response person@example.test synthetic-secret\r\n"
+        )),
+        _ => None,
+    }
 }
 
 /// Synthetic mail only. It intentionally contains remote HTML resources so root

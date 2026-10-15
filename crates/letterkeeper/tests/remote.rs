@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
+#[path = "support/send_server.rs"]
+mod send_server;
 #[path = "../../letterkeeper-protocol/tests/support.rs"]
 mod support;
 use letterkeeper::{remote::RemoteHost, sandbox::Sandbox};
@@ -376,4 +378,350 @@ fn server_managed_sent_policy_never_issues_client_append() {
     assert!(h.sync_sent("1").is_err());
     assert_eq!(vault.gets.load(Ordering::SeqCst), 0);
     assert!(imap.finish().is_empty());
+}
+
+#[test]
+fn failed_send_has_safe_persistent_diagnostic() {
+    let imap = support::Server::start_shared();
+    let smtp = support::Server::start(support::Scenario::SmtpReject);
+    let mut cfg = config(&imap, &smtp);
+    let dir = tempfile::tempdir().unwrap();
+    let ca = dir.path().join("ca.pem");
+    std::fs::write(&ca, smtp.tls.roots_pem.as_ref().unwrap()).unwrap();
+    cfg.extra_ca_pem = Some(ca);
+    let state = dir.path().join("state");
+    let vault = Arc::new(Vault::default());
+    let h = RemoteHost::open(cfg.clone(), &state, vault.clone(), sandbox()).unwrap();
+    let draft = h
+        .create_draft(letterkeeper_adapters::DraftInput {
+            to: vec!["private-recipient@example.test".into()],
+            subject: "合成诊断".into(),
+            body: "private synthetic body".into(),
+        })
+        .unwrap();
+    let id = draft["id"].as_i64().unwrap();
+    assert!(h.send_draft(&id.to_string()).is_err());
+    assert_eq!(vault.gets.load(Ordering::SeqCst), 0);
+    let mut store = Store::open(state.join("state.sqlite"))
+        .unwrap()
+        .with_policy(policy());
+    store
+        .approve(id, draft["digest"].as_str().unwrap(), i64::MAX)
+        .unwrap();
+    drop(store);
+    let sent = h.send_draft(&id.to_string()).unwrap();
+    assert_eq!(sent["state"], "Failed");
+    assert_eq!(
+        sent["diagnostic"],
+        json!({"stage":"recipient","kind":"rejected","smtp_code":550})
+    );
+    let submission = sent["id"].as_i64().unwrap();
+    drop(h);
+    let reopened = RemoteHost::open(cfg, &state, vault, sandbox()).unwrap();
+    let status = reopened.send_status(&submission.to_string()).unwrap();
+    assert_eq!(status["diagnostic"], sent["diagnostic"]);
+    for forbidden in [
+        "private-recipient@example.test",
+        "person@example.test",
+        "synthetic-secret",
+        "private synthetic body",
+        "refused",
+    ] {
+        assert!(!sent.to_string().contains(forbidden));
+        assert!(!status.to_string().contains(forbidden));
+    }
+    assert!(smtp.finish().iter().any(|line| line.starts_with("RCPT")));
+}
+
+#[test]
+fn tls_preflight_failure_never_reads_credentials() {
+    for ca_bytes in [None, Some(b"invalid PEM synthetic-secret".as_slice())] {
+        let imap = support::Server::start_shared();
+        let smtp = support::Server::start(support::Scenario::Smtp);
+        let mut cfg = config(&imap, &smtp);
+        let dir = tempfile::tempdir().unwrap();
+        let ca = dir.path().join("bad.pem");
+        if let Some(bytes) = ca_bytes {
+            std::fs::write(&ca, bytes).unwrap();
+        }
+        cfg.extra_ca_pem = Some(ca);
+        let state = dir.path().join("state");
+        let vault = Arc::new(Vault::default());
+        let h = RemoteHost::open(cfg, &state, vault.clone(), sandbox()).unwrap();
+        let draft = h
+            .create_draft(letterkeeper_adapters::DraftInput {
+                to: vec!["to@example.test".into()],
+                subject: "test".into(),
+                body: "test".into(),
+            })
+            .unwrap();
+        let id = draft["id"].as_i64().unwrap();
+        let mut store = Store::open(state.join("state.sqlite"))
+            .unwrap()
+            .with_policy(policy());
+        store
+            .approve(id, draft["digest"].as_str().unwrap(), i64::MAX)
+            .unwrap();
+        drop(store);
+        let sent = h.send_draft(&id.to_string()).unwrap();
+        assert_eq!(sent["state"], "Failed");
+        assert_eq!(sent["diagnostic"]["stage"], "tls_configuration");
+        assert_eq!(
+            sent["diagnostic"]["kind"],
+            if ca_bytes.is_some() {
+                "invalid_input"
+            } else {
+                "unavailable"
+            }
+        );
+        assert_eq!(vault.gets.load(Ordering::SeqCst), 0);
+        assert!(smtp.finish().is_empty());
+    }
+}
+struct UnavailableVault;
+impl CredentialStore for UnavailableVault {
+    fn get(&self, _: &str, _: SecretKind) -> Result<Option<Secret>, AccountError> {
+        Ok(None)
+    }
+    fn set(&self, _: &str, _: SecretKind, _: &Secret) -> Result<(), AccountError> {
+        unreachable!()
+    }
+    fn delete(&self, _: &str, _: SecretKind) -> Result<(), AccountError> {
+        unreachable!()
+    }
+}
+#[test]
+fn unavailable_credentials_are_diagnostic_and_do_not_connect() {
+    let imap = support::Server::start_shared();
+    let smtp = support::Server::start(support::Scenario::Smtp);
+    let cfg = config(&imap, &smtp);
+    let dir = tempfile::tempdir().unwrap();
+    let state = dir.path().join("state");
+    let h = RemoteHost::open(cfg, &state, Arc::new(UnavailableVault), sandbox()).unwrap();
+    let draft = h
+        .create_draft(letterkeeper_adapters::DraftInput {
+            to: vec!["to@example.test".into()],
+            subject: "test".into(),
+            body: "test".into(),
+        })
+        .unwrap();
+    let mut store = Store::open(state.join("state.sqlite"))
+        .unwrap()
+        .with_policy(policy());
+    let id = draft["id"].as_i64().unwrap();
+    store
+        .approve(id, draft["digest"].as_str().unwrap(), i64::MAX)
+        .unwrap();
+    drop(store);
+    let sent = h.send_draft(&id.to_string()).unwrap();
+    assert_eq!(sent["state"], "Failed");
+    assert_eq!(
+        sent["diagnostic"],
+        json!({"stage":"credentials","kind":"unavailable","smtp_code":null})
+    );
+    assert!(smtp.finish().is_empty());
+}
+#[test]
+fn cli_status_matches_remote_diagnostic_without_sensitive_reply_text() {
+    for mode in [
+        send_server::ResultMode::Accepted,
+        send_server::ResultMode::Rejected,
+        send_server::ResultMode::Disconnected,
+    ] {
+        let smtp = send_server::Server::start(mode);
+        let dir = tempfile::tempdir().unwrap();
+        let config_dir = dir.path().join("config");
+        let data_dir = dir.path().join("data");
+        let ca = dir.path().join("ca.pem");
+        std::fs::write(&ca, &smtp.pem).unwrap();
+        let cfg: AccountConfig = serde_json::from_value(json!({"id":"controlled","email":"reader@example.test","username":"person@example.test","imap":{"host":"localhost","port":9993},"smtp":{"host":"localhost","port":smtp.port},"allowed_folders":["INBOX","Drafts","Sent"],"permissions":{"read":true,"draft":true,"send":true},"drafts_folder":"Drafts","sent_folder":"Sent","sent_copy":"server_managed","authentication":{"type":"password"},"extra_ca_pem":ca})).unwrap();
+        AccountRepository::new(config_dir.clone(), data_dir.clone())
+            .unwrap()
+            .save(&cfg)
+            .unwrap();
+        let state = data_dir.join("controlled");
+        let h = RemoteHost::open(cfg, &state, Arc::new(Vault::default()), sandbox()).unwrap();
+        let draft = h
+            .create_draft(letterkeeper_adapters::DraftInput {
+                to: vec!["recipient@example.test".into()],
+                subject: "合成提交".into(),
+                body: "synthetic body".into(),
+            })
+            .unwrap();
+        let id = draft["id"].as_i64().unwrap();
+        let mut store = Store::open(state.join("state.sqlite"))
+            .unwrap()
+            .with_policy(policy());
+        store
+            .approve(id, draft["digest"].as_str().unwrap(), i64::MAX)
+            .unwrap();
+        drop(store);
+        let sent = h.send_draft(&id.to_string()).unwrap();
+        assert!(h.send_draft(&id.to_string()).is_err());
+        let output = std::process::Command::new(env!("CARGO_BIN_EXE_letterkeeper"))
+            .arg("--config-dir")
+            .arg(&config_dir)
+            .arg("--data-dir")
+            .arg(&data_dir)
+            .args(["--account", "controlled", "status"])
+            .arg(sent["id"].to_string())
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        let status: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(status["state"], sent["state"]);
+        assert_eq!(status["diagnostic"], sent["diagnostic"]);
+        match mode {
+            send_server::ResultMode::Accepted => {
+                assert_eq!(sent["state"], "Accepted");
+                assert!(sent.get("diagnostic").unwrap().is_null());
+            }
+            send_server::ResultMode::Rejected => {
+                assert_eq!(sent["state"], "Failed");
+                assert_eq!(
+                    sent["diagnostic"],
+                    json!({"stage":"submission","kind":"rejected","smtp_code":550})
+                );
+            }
+            send_server::ResultMode::Disconnected => {
+                assert_eq!(sent["state"], "Uncertain");
+                assert_eq!(sent["diagnostic"]["stage"], "submission");
+            }
+        }
+        for value in [&sent, &status] {
+            for forbidden in [
+                send_server::PRIVATE_REPLY,
+                "recipient@example.test",
+                "synthetic-secret",
+                "synthetic body",
+            ] {
+                assert!(!value.to_string().contains(forbidden));
+            }
+        }
+        assert_eq!(
+            smtp.finish()
+                .iter()
+                .filter(|line| line.starts_with("DATA"))
+                .count(),
+            1
+        );
+    }
+}
+
+#[test]
+fn submissions_finished_without_diagnostics_remain_explicitly_unknown() {
+    let imap = support::Server::start_shared();
+    let smtp = support::Server::start(support::Scenario::Smtp);
+    let cfg = config(&imap, &smtp);
+    let dir = tempfile::tempdir().unwrap();
+    let state = dir.path().join("state");
+    let h = RemoteHost::open(cfg, &state, Arc::new(Vault::default()), sandbox()).unwrap();
+    let draft = h
+        .create_draft(letterkeeper_adapters::DraftInput {
+            to: vec!["to@example.test".into()],
+            subject: "legacy".into(),
+            body: "test".into(),
+        })
+        .unwrap();
+    let id = draft["id"].as_i64().unwrap();
+    let mut store = Store::open(state.join("state.sqlite"))
+        .unwrap()
+        .with_policy(policy());
+    store
+        .approve(id, draft["digest"].as_str().unwrap(), i64::MAX)
+        .unwrap();
+    let sub = store.claim_send(id, 1).unwrap();
+    store
+        .finish_submission(sub.id, letterkeeper_core::SendOutcome::Failed)
+        .unwrap();
+    drop(store);
+    let status = h.send_status(&sub.id.to_string()).unwrap();
+    assert_eq!(status["state"], "Failed");
+    assert!(status.get("diagnostic").unwrap().is_null());
+    assert!(smtp.finish().is_empty());
+}
+
+#[test]
+fn diagnostic_query_failure_keeps_known_host_and_cli_status() {
+    let dir = tempfile::tempdir().unwrap();
+    let config_dir = dir.path().join("config");
+    let data_dir = dir.path().join("data");
+    let cfg: AccountConfig = serde_json::from_value(json!({"id":"controlled","email":"reader@example.test","username":"person@example.test","imap":{"host":"localhost","port":9993},"smtp":{"host":"localhost","port":9465},"allowed_folders":["INBOX","Drafts","Sent"],"permissions":{"read":true,"draft":true,"send":true},"drafts_folder":"Drafts","sent_folder":"Sent","sent_copy":"server_managed","authentication":{"type":"password"},"extra_ca_pem":null})).unwrap();
+    AccountRepository::new(config_dir.clone(), data_dir.clone())
+        .unwrap()
+        .save(&cfg)
+        .unwrap();
+    let state = data_dir.join("controlled");
+    let h = RemoteHost::open(cfg, &state, Arc::new(Vault::default()), sandbox()).unwrap();
+    let draft = h
+        .create_draft(letterkeeper_adapters::DraftInput {
+            to: vec!["recipient@example.test".into()],
+            subject: "synthetic".into(),
+            body: "synthetic".into(),
+        })
+        .unwrap();
+    let mut store = Store::open(state.join("state.sqlite"))
+        .unwrap()
+        .with_policy(policy());
+    let id = draft["id"].as_i64().unwrap();
+    store
+        .approve(id, draft["digest"].as_str().unwrap(), i64::MAX)
+        .unwrap();
+    let sub = store.claim_send(id, 1).unwrap();
+    store
+        .finish_submission(sub.id, letterkeeper_core::SendOutcome::Accepted)
+        .unwrap();
+    drop(store);
+    // Corrupt only diagnostic availability after initialization; submission remains readable.
+    let changed = std::process::Command::new("python3")
+        .args(["-c", "import sqlite3,sys; db=sqlite3.connect(sys.argv[1]); db.execute('DROP TABLE submission_diagnostics'); db.commit(); db.close()"])
+        .arg(state.join("state.sqlite")).status().unwrap();
+    assert!(changed.success());
+    let status = h.send_status(&sub.id.to_string());
+    assert!(
+        status.is_ok(),
+        "known submission state must survive diagnostic query failure"
+    );
+    let status = status.unwrap();
+    assert_eq!(status["state"], "Accepted");
+    assert_eq!(status["state_recorded"], true);
+    assert!(status.get("diagnostic").unwrap().is_null());
+    assert_eq!(status["diagnostic_query_succeeded"], false);
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_letterkeeper"))
+        .arg("--config-dir")
+        .arg(config_dir)
+        .arg("--data-dir")
+        .arg(data_dir)
+        .args(["--account", "controlled", "status"])
+        .arg(sub.id.to_string())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "CLI must retain readable submission state"
+    );
+    let cli: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    for field in [
+        "state",
+        "state_recorded",
+        "diagnostic",
+        "diagnostic_query_succeeded",
+    ] {
+        assert_eq!(cli[field], status[field]);
+    }
+    for bytes in [&output.stdout, &output.stderr] {
+        let text = String::from_utf8_lossy(bytes);
+        for forbidden in [
+            "no such table",
+            "submission_diagnostics",
+            "recipient@example.test",
+            "synthetic-secret",
+        ] {
+            assert!(!text.contains(forbidden));
+        }
+    }
+    assert!(
+        h.send_status("999999").is_err(),
+        "missing submission still fails"
+    );
 }

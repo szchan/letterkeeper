@@ -43,7 +43,21 @@ pub fn draft_view(d: &Draft) -> Value {
     json!({"id":d.id,"revision":d.revision,"digest":d.digest,"account":d.input.account,"from":d.input.from,"to":d.input.to,"cc":d.input.cc,"bcc":d.input.bcc,"subject":d.input.subject,"body":d.input.body,"in_reply_to":d.input.in_reply_to,"references":d.input.references,"attachments":d.input.attachments.iter().map(|a|json!({"name":a.name,"content_type":a.content_type,"bytes":a.bytes.len()})).collect::<Vec<_>>()})
 }
 pub fn submission_view(s: &Submission) -> Value {
-    json!({"id":s.id,"draft_id":s.draft_id,"revision":s.revision,"digest":s.digest,"message_id":s.message_id,"state":s.state,"state_recorded":true})
+    json!({"id":s.id,"draft_id":s.draft_id,"revision":s.revision,"digest":s.digest,"message_id":s.message_id,"state":s.state,"state_recorded":true,"diagnostic":null})
+}
+/// Preserve a readable submission even when optional diagnostic storage fails.
+pub fn submission_status_view(store: &Store, sub: &Submission) -> Value {
+    let mut value = submission_view(sub);
+    match store.get_submission_diagnostic(sub.id) {
+        Ok(diagnostic) => {
+            value["diagnostic"] = json!(diagnostic);
+            value["diagnostic_query_succeeded"] = json!(true);
+        }
+        Err(_) => {
+            value["diagnostic_query_succeeded"] = json!(false);
+        }
+    }
+    value
 }
 pub fn validate_demo(input: &DraftInput) -> Result<(), String> {
     if input.account != ACCOUNT
@@ -415,18 +429,13 @@ impl Host for AppHost {
             Ok(submission_view(&sub))
         } else {
             Ok(
-                json!({"id":info.id,"draft_id":info.draft_id,"state":"Uncertain","state_recorded":false,"detail":"query_persisted_submission_before_any_further_action"}),
+                json!({"id":info.id,"draft_id":info.draft_id,"state":"Uncertain","state_recorded":false,"diagnostic":null,"detail":"query_persisted_submission_before_any_further_action"}),
             )
         }
     }
     fn send_status(&self, id: &str) -> Result<Value, HostError> {
-        Ok(submission_view(
-            &self
-                .store
-                .lock()
-                .map_err(host_error)?
-                .get_submission(numeric_id(id)?)
-                .map_err(host_error)?,
-        ))
+        let store = self.store.lock().map_err(host_error)?;
+        let sub = store.get_submission(numeric_id(id)?).map_err(host_error)?;
+        Ok(submission_status_view(&store, &sub))
     }
 }

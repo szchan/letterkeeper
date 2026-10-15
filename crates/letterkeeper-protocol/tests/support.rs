@@ -9,6 +9,7 @@ use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 #[derive(Clone, Copy)]
 pub enum Scenario {
     Imap,
+    Paged { count: u32, mode: PageMode },
     Mailbox,
     Recovery,
     Utf8Search,
@@ -25,6 +26,28 @@ pub enum Scenario {
     Smtp,
     SmtpReject,
     SmtpDisconnect,
+}
+#[derive(Clone, Copy)]
+pub enum PageMode {
+    All,
+    Sparse,
+    Empty,
+    Rejected,
+    Duplicate,
+    Zero,
+    TooMany,
+    Expunge,
+    ChangedExists,
+    ChangedValidity,
+    WrongTag,
+    MissingSearch,
+    HugeLine,
+    MissingFetch,
+    DuplicateFetch,
+    UnexpectedFetch,
+}
+pub fn page_uid(sequence: u32) -> u32 {
+    1_000_000_000 + sequence * 3
 }
 pub struct Server {
     pub endpoint: Endpoint,
@@ -186,6 +209,9 @@ async fn imap_reply(
     observed: &Arc<Mutex<Vec<String>>>,
 ) -> bool {
     let (tag, cmd) = line.trim_end().split_once(' ').unwrap();
+    if let Scenario::Paged { count, mode } = scenario {
+        return paged_reply(io, tag, cmd, count, mode, observed).await;
+    }
     if matches!(scenario, Scenario::Stall) {
         tokio::time::sleep(std::time::Duration::from_millis(16000)).await;
         return false;
@@ -531,4 +557,105 @@ async fn receive_search_literal(
         "search-literal:{}",
         String::from_utf8(raw).unwrap()
     ));
+}
+
+// Compact synthetic large mailbox: no real mail or account state is stored.
+async fn paged_reply(
+    io: &mut BufReader<tokio_rustls::server::TlsStream<tokio::net::TcpStream>>,
+    tag: &str,
+    cmd: &str,
+    count: u32,
+    mode: PageMode,
+    observed: &Arc<Mutex<Vec<String>>>,
+) -> bool {
+    let reply = if cmd.starts_with("LOGIN") {
+        format!("{tag} OK login\r\n")
+    } else if cmd.starts_with("EXAMINE") {
+        format!(
+            "* {count} EXISTS\r\n* OK [UIDVALIDITY 77] stable\r\n{tag} OK [READ-ONLY] examine\r\n"
+        )
+    } else if cmd.starts_with("UID SEARCH") {
+        if cmd.contains("CHARSET UTF-8") {
+            receive_search_literal(io, cmd, observed).await;
+        }
+        let range = cmd.split_whitespace().find_map(|word| {
+            let (start, end) = word.split_once(':')?;
+            Some((start.parse::<u32>().ok()?, end.parse::<u32>().ok()?))
+        });
+        let (start, end) = range.unwrap_or((1, count));
+        assert!(start >= 1 && start <= end && end <= count);
+        if let Some((start, end)) = range {
+            assert!(end - start < 4096, "sequence search must be bounded");
+        }
+        let mut ids: Vec<_> = (start..=end)
+            .filter(|seq| match mode {
+                PageMode::Empty => false,
+                PageMode::Sparse => seq % 1000 == 0,
+                _ => true,
+            })
+            .map(page_uid)
+            .collect();
+        match mode {
+            PageMode::Rejected => {
+                return io
+                    .get_mut()
+                    .write_all(format!("{tag} NO refused\r\n").as_bytes())
+                    .await
+                    .is_ok();
+            }
+            PageMode::Duplicate => ids = vec![page_uid(start), page_uid(start)],
+            PageMode::Zero => ids = vec![0],
+            PageMode::TooMany => ids = (1..=4097).map(page_uid).collect(),
+            _ => (),
+        }
+        let change = match mode {
+            PageMode::Expunge => "* 1 EXPUNGE\r\n".to_string(),
+            PageMode::ChangedExists => format!("* {} EXISTS\r\n", count + 1),
+            PageMode::ChangedValidity => "* OK [UIDVALIDITY 78] changed\r\n".to_string(),
+            _ => String::new(),
+        };
+        if matches!(mode, PageMode::HugeLine) {
+            ids = (1..=20_000).map(page_uid).collect();
+        }
+        let search = if matches!(mode, PageMode::MissingSearch) {
+            String::new()
+        } else {
+            format!(
+                "* SEARCH{}\r\n",
+                ids.iter().map(|id| format!(" {id}")).collect::<String>()
+            )
+        };
+        let completed = if matches!(mode, PageMode::WrongTag) {
+            "WRONG"
+        } else {
+            tag
+        };
+        format!("{change}{search}{completed} OK search\r\n")
+    } else if cmd.starts_with("UID FETCH") {
+        let mut ids: Vec<u32> = cmd
+            .split_whitespace()
+            .nth(2)
+            .unwrap()
+            .split(',')
+            .map(|id| id.parse().unwrap())
+            .collect();
+        match mode {
+            PageMode::MissingFetch => {
+                ids.pop();
+            }
+            PageMode::DuplicateFetch => ids.push(ids[0]),
+            PageMode::UnexpectedFetch => ids.push(42),
+            _ => (),
+        }
+        let header = "From: synthetic@example.test\r\nSubject: bounded page\r\n\r\n";
+        let mut reply = String::new();
+        for uid in ids {
+            reply.push_str(&format!("* 1 FETCH (UID {uid} RFC822.SIZE 100 FLAGS () BODY[HEADER] {{{}}}\r\n{header})\r\n", header.len()));
+        }
+        reply.push_str(&format!("{tag} OK fetch\r\n"));
+        reply
+    } else {
+        panic!("unexpected synthetic paging command {cmd}")
+    };
+    io.get_mut().write_all(reply.as_bytes()).await.is_ok()
 }

@@ -6,7 +6,7 @@ RED：`5c87e656fb715b1c6e8d4d2657403608b05654a9`，[Actions 38709952540](https:/
 
 实现使用核心同事务 finish：状态和诊断一起提交，返回值直接携带实际报告；发送后的诊断查询故障不覆盖已知三态。准备、TLS 文件/证书配置、凭据准备按序执行；TLS 配置失败不读取凭据。协议阶段/种类穷尽映射为核心固定枚举，不保存服务器原始文本。状态落盘故障保留 Uncertain、`state_recorded=false`、`diagnostic=null`。
 
-CLI `send` / `status` 的 `diagnostic` 为 `{stage,kind,smtp_code}` 或 `null`。null 表示没有诊断信息，不能根据旧记录追溯推断失败阶段。Accepted 不附失败诊断。TUI 共用持久化查询，显示固定阶段/种类/可选数值码；没有诊断或查询失败显示 unknown，不重发。既有 SubmissionInfo 及模型批准边界保留；HumanWorkspace 新查询默认 None，兼容离线与 mock Host。
+CLI `send` / `status` 的 `diagnostic` 为 `{stage,kind,smtp_code}` 或 `null`。null 表示没有诊断信息，不能根据旧记录追溯推断失败阶段。Accepted 不附失败诊断。TUI 共用持久化查询，显示固定阶段/种类/可选数值码；Failed/Uncertain 没有诊断或任何查询失败显示 unknown，Accepted 正常查询 None 显示无失败诊断，不重发。既有 SubmissionInfo 及模型批准边界保留；HumanWorkspace 新查询默认 None，兼容离线与 mock Host。
 
 新增受控验证：
 
@@ -19,7 +19,17 @@ CLI `send` / `status` 的 `diagnostic` 为 `{stage,kind,smtp_code}` 或 `null`�
 
 该 TLS 账户路径使用 PLAIN 合成凭据，不放宽 Gmail 固定生产端点验证。XOAUTH2 由协议层独立受控测试覆盖，不能声称本地模拟完成 Gmail 账户全链。
 
-GREEN 与完整 CI：等待核心/协议依赖提交后运行，当前未验收。所有 Cargo 构建、测试与 Clippy 均留在 GitHub Actions；本机仅编辑、rustfmt、Git 和静态审查。既有四尺寸 PTY、正文隔离 HTTP/DNS 与 Codex 路径门禁必须保留；任务分支通过不替代集成 revision 的完整门禁。
+GREEN 与完整 CI 已通过实现 SHA `bbaa3896808d917c4beea3151ade022cd0841f51`：
+
+- [真实 PTY / TLS SMTP 精确 GREEN 38731623502](https://github.com/szchan/letterkeeper/actions/runs/38731623502)：`pty_f9_uses_remote_host_tls_and_persists_safe_diagnostics`，crate letterkeeper。
+- [status 故障精确 GREEN 38731630465](https://github.com/szchan/letterkeeper/actions/runs/38731630465)：`diagnostic_query_failure_keeps_known_host_and_cli_status`，crate letterkeeper。
+- [40/80 列精确 GREEN 38731691134](https://github.com/szchan/letterkeeper/actions/runs/38731691134)：`accepted_without_failure_diagnostic_is_clear_and_codes_fit_narrow_terminal`，crate letterkeeper-adapters。
+
+三个精确 GREEN 均核对 checkout SHA、matched_tests=1、raw_exit_code=0、state=test_finished。原诊断回归亦在 c63bb5aa577e0522313d51d0c71f14ad4bb2ca94 的 [38730306421](https://github.com/szchan/letterkeeper/actions/runs/38730306421) 和 604f69f3aa11ac223244d9f71d5a665af00d896a 的 [38730496182](https://github.com/szchan/letterkeeper/actions/runs/38730496182) 独立通过，最终实现由完整 workspace 重验。
+
+[完整 CI 38731592076](https://github.com/szchan/letterkeeper/actions/runs/38731592076) 的 workspace、codex-client、ci-gate 均 success。Ubuntu 24.04 托管 runner、Rust 1.99.0；fmt、Clippy、全部 workspace 测试、构建、实际终端中文/宽字符、120x40/80x24/40x12/20x6 工作区、终端恢复、真实 Codex app-server 均通过。可达 DNS/HTTP 正向控制成功，MCP/TUI 编辑/完整审阅观测到正文阶段 DNS 查询 0、HTTP 资源连接 0，宿主配置未修改。
+
+所有 Cargo 构建、测试与 Clippy 均留在 GitHub Actions；本机仅编辑、rustfmt、Git 和静态审查。任务分支通过不替代主代理集成 revision 的完整门禁；真实 Gmail、系统凭据故障和桌面 F9 绑定的独立验收边界保留。
 
 第二项独立 RED：`f34f376852112efe0bcbf52adbcc780067804b08`，[Actions 38730779434](https://github.com/szchan/letterkeeper/actions/runs/38730779434)，精确 `diagnostic_query_failure_keeps_known_host_and_cli_status`，matched=1、exit=101，真实行为断言失败：已读到 Accepted，但诊断表不可用使 Host status 返回 Err。测试仅在临时合成数据库用 Python sqlite3 删除诊断表，保留提交表。
 

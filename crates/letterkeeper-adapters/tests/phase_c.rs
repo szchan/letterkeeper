@@ -499,11 +499,11 @@ fn diagnostic_display_uses_fixed_codes_and_unrecorded_state_stays_unknown() {
                     state: SubmissionState::Uncertain,
                     state_recorded: recorded,
                 },
-                Some(SendDiagnostic {
+                Ok(Some(SendDiagnostic {
                     stage: SendStage::Submission,
                     kind: SendFailureKind::Timeout,
                     smtp_code: None,
-                }),
+                })),
             )),
         ));
         assert!(state.status.contains("Uncertain"));
@@ -513,5 +513,58 @@ fn diagnostic_display_uses_fixed_codes_and_unrecorded_state_stays_unknown() {
             "unknown"
         }));
         assert!(state.take_request(true).is_none());
+    }
+}
+
+#[test]
+fn accepted_without_failure_diagnostic_is_clear_and_codes_fit_narrow_terminal() {
+    use letterkeeper_core::{SendDiagnostic, SendFailureKind, SendStage, SubmissionState};
+    let mut state = saved_state();
+    state.complete(response(
+        WorkflowJob::Send(1),
+        Ok(WorkflowData::SubmissionDiagnostic(
+            SubmissionInfo {
+                id: 7,
+                draft_id: 1,
+                state: SubmissionState::Accepted,
+                state_recorded: true,
+            },
+            Ok(None),
+        )),
+    ));
+    assert!(state.status.contains("无失败诊断"));
+    assert!(!state.status.contains("unknown"));
+    state.complete(response(
+        WorkflowJob::Status(7),
+        Ok(WorkflowData::SubmissionDiagnostic(
+            SubmissionInfo {
+                id: 7,
+                draft_id: 1,
+                state: SubmissionState::Failed,
+                state_recorded: true,
+            },
+            Ok(Some(SendDiagnostic {
+                stage: SendStage::TlsConfiguration,
+                kind: SendFailureKind::UnexpectedResponse,
+                smtp_code: Some(550),
+            })),
+        )),
+    ));
+    for width in [40, 80] {
+        let backend = ratatui::backend::TestBackend::new(width, 12);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| letterkeeper_adapters::render_workspace(frame, &mut state))
+            .unwrap();
+        let text = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+        assert!(text.contains("tls_configuration / unexpected_response"));
+        assert!(text.contains("SMTP 550"));
+        assert!(text.contains("Failed"));
     }
 }

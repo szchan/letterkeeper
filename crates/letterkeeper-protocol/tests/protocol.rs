@@ -416,3 +416,159 @@ fn ascii_search_refusal_is_not_a_successful_empty_page() {
     assert!(log.iter().any(|s| s.contains("UID SEARCH TEXT \"ascii\"")));
     assert_eq!(log.iter().filter(|s| s.contains("UID SEARCH")).count(), 1);
 }
+
+#[test]
+fn large_mailbox_first_page_uses_bounded_search_instead_of_all_uids() {
+    use support::{PageMode, page_uid};
+    // The old ALL response is 220 KiB: valid synthetic UIDs, over the 64 KiB
+    // line budget, well under the existing 8 MiB operation budget.
+    let server = Server::start(Scenario::Paged {
+        count: 20_000,
+        mode: PageMode::All,
+    });
+    let page = client(&server).list_messages("INBOX", 0, 50, None).unwrap();
+    assert_eq!(
+        page.messages.iter().map(|m| m.uid).collect::<Vec<_>>(),
+        (1..=50).map(page_uid).collect::<Vec<_>>()
+    );
+    assert!(page.more);
+    let log = server.finish();
+    assert_eq!(log.iter().filter(|s| s.contains("UID SEARCH")).count(), 1);
+    assert!(log.iter().any(|s| s.contains("UID SEARCH 1:4096 ALL")));
+    assert!(log.iter().any(|s| s.contains("EXAMINE")));
+    assert!(log.iter().any(|s| s.contains("BODY.PEEK[HEADER.FIELDS")));
+    assert!(
+        !log.iter()
+            .any(|s| s.contains("SELECT") || s.contains("STORE"))
+    );
+}
+
+#[test]
+fn bounded_pages_preserve_offsets_boundary_more_and_empty_mailbox() {
+    use support::{PageMode, page_uid};
+    for (count, offset, limit, expected, more) in [
+        (4100, 4094, 3, vec![4095, 4096, 4097], true),
+        (4100, 4097, 3, vec![4098, 4099, 4100], false),
+        (4100, 4100, 3, vec![], false),
+        (4096, 4095, 1, vec![4096], false),
+        (0, 0, 50, vec![], false),
+    ] {
+        let server = Server::start(Scenario::Paged {
+            count,
+            mode: PageMode::All,
+        });
+        let page = client(&server)
+            .list_messages("INBOX", offset, limit, None)
+            .unwrap();
+        assert_eq!(
+            page.messages.iter().map(|m| m.uid).collect::<Vec<_>>(),
+            expected.into_iter().map(page_uid).collect::<Vec<_>>()
+        );
+        assert_eq!(page.more, more);
+        let log = server.finish();
+        if count == 0 {
+            assert!(
+                !log.iter()
+                    .any(|s| s.contains("SEARCH") || s.contains("FETCH"))
+            );
+        }
+    }
+}
+
+#[test]
+fn bounded_sparse_unicode_search_keeps_literal_and_scans_in_order() {
+    use support::{PageMode, page_uid};
+    let server = Server::start(Scenario::Paged {
+        count: 20_000,
+        mode: PageMode::Sparse,
+    });
+    let page = client(&server)
+        .list_messages("INBOX", 3, 2, Some("中文\"\\查询"))
+        .unwrap();
+    assert_eq!(
+        page.messages.iter().map(|m| m.uid).collect::<Vec<_>>(),
+        vec![page_uid(4000), page_uid(5000)]
+    );
+    assert!(page.more);
+    let log = server.finish();
+    assert_eq!(log.iter().filter(|s| s.contains("UID SEARCH")).count(), 2);
+    assert_eq!(
+        log.iter()
+            .filter(|s| s.as_str() == "search-literal:中文\"\\查询")
+            .count(),
+        2
+    );
+    assert!(
+        log.iter()
+            .any(|s| s.contains("CHARSET UTF-8 4097:8192 TEXT"))
+    );
+}
+
+#[test]
+fn bounded_search_rejects_unsafe_results_and_mailbox_drift() {
+    use support::PageMode;
+    for (mode, expected) in [
+        (PageMode::Rejected, ProtocolError::Rejected),
+        (PageMode::Duplicate, ProtocolError::Rejected),
+        (PageMode::Zero, ProtocolError::Rejected),
+        (PageMode::TooMany, ProtocolError::Limit),
+        (PageMode::Expunge, ProtocolError::StaleMailbox),
+        (PageMode::ChangedExists, ProtocolError::StaleMailbox),
+        (PageMode::ChangedValidity, ProtocolError::StaleMailbox),
+        (PageMode::WrongTag, ProtocolError::Rejected),
+        (PageMode::MissingSearch, ProtocolError::Rejected),
+        (PageMode::HugeLine, ProtocolError::Limit),
+    ] {
+        let server = Server::start(Scenario::Paged {
+            count: 20_000,
+            mode,
+        });
+        assert_eq!(
+            client(&server)
+                .list_messages("INBOX", 0, 1, None)
+                .unwrap_err(),
+            expected
+        );
+        assert!(!server.finish().iter().any(|s| s.contains("FETCH")));
+    }
+}
+
+#[test]
+fn bounded_search_budget_applies_when_no_messages_match() {
+    use support::PageMode;
+    let server = Server::start(Scenario::Paged {
+        count: 524_289,
+        mode: PageMode::Empty,
+    });
+    assert_eq!(
+        client(&server)
+            .list_messages("INBOX", 0, 1, Some("no matches"))
+            .unwrap_err(),
+        ProtocolError::Limit
+    );
+    let log = server.finish();
+    assert_eq!(log.iter().filter(|s| s.contains("UID SEARCH")).count(), 128);
+    assert!(!log.iter().any(|s| s.contains("FETCH")));
+}
+
+#[test]
+fn bounded_page_rejects_missing_duplicate_and_unrequested_fetches() {
+    use support::PageMode;
+    for mode in [
+        PageMode::MissingFetch,
+        PageMode::DuplicateFetch,
+        PageMode::UnexpectedFetch,
+    ] {
+        let server = Server::start(Scenario::Paged {
+            count: 20_000,
+            mode,
+        });
+        assert_eq!(
+            client(&server)
+                .list_messages("INBOX", 0, 2, None)
+                .unwrap_err(),
+            ProtocolError::Rejected
+        );
+        server.finish();
+    }
+}

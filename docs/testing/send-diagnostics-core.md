@@ -12,7 +12,7 @@ schema 0/1/2 在同一迁移事务升级到 3，独立 `submission_diagnostics` 
 
 新入口先保留原账户发送权限与 Submitting 状态检查，再校验 Accepted 不带诊断、码值 100..599；状态 UPDATE 与诊断 INSERT 同一即时事务，任何存储失败都回滚。getter 检查 read 和提交账户；不存在与越权 ID 均返回 Denied，允许的旧记录返回 None。Serde 仅接受固定枚举，拒绝未知字段和超界码。
 
-7 项新增集成测试覆盖 Failed/Uncertain 重开、Accepted/旧 finish、范围与序列化、权限/存在性、双向触发器故障回滚、schema 0/1/2 与恢复、SQLite 固定值/唯一外键约束。旧迁移测试按新 schema 更新。精确 GREEN SHA、TDD 与完整 CI 结果待远程补充。
+7 项新增集成测试覆盖 Failed/Uncertain 重开、Accepted/旧 finish、范围与序列化、权限/存在性、双向触发器故障回滚、schema 0/1/2 与恢复、SQLite 固定值/唯一外键约束。旧迁移测试按新 schema 更新。首个实现 SHA `e61d04bb80536abeb9e07d191807a16017b8427c` 的 [完整 CI](https://github.com/szchan/letterkeeper/actions/runs/38710458345) 在 Clippy 拒绝 `manual_range_patterns` 与 `collapsible_if`；workspace 测试尚未执行，Codex job 成功。已改用范围匹配和 `Option::is_some_and`，不降低 lint。精确最终 GREEN SHA、TDD 与完整 CI 结果待远程补充。
 
 ## 验证边界
 

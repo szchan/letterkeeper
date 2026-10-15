@@ -156,6 +156,46 @@ fn smtp_outcomes_and_bcc_envelope() {
 }
 
 #[test]
+fn smtp_report_preserves_auth_rejection_stage_without_server_text() {
+    let server = Server::start(Scenario::SmtpAuthReject);
+    let mut credentials = Server::credentials();
+    credentials.oauth = true;
+    let report = send_smtp_report(
+        &server.endpoint,
+        &server.tls,
+        &credentials,
+        "person@example.test",
+        &["recipient@example.test".into()],
+        b"From: person@example.test\r\n\r\nsynthetic",
+    );
+    let transcript = server.finish();
+    assert!(
+        transcript
+            .iter()
+            .any(|line| line.starts_with("AUTH XOAUTH2"))
+    );
+    assert!(!transcript.iter().any(|line| line.starts_with("MAIL")));
+    assert_eq!(report.outcome, WriteOutcome::Failed);
+    assert_eq!(
+        report.diagnostic,
+        Some(SmtpDiagnostic {
+            stage: SmtpStage::Authentication,
+            kind: SmtpFailureKind::Rejected,
+            smtp_code: Some(535),
+        }),
+        "SMTP AUTH refusal must retain its fixed stage, kind and numeric code",
+    );
+    let displayed = format!("{report:?}");
+    for sensitive in [
+        "synthetic-private-response",
+        "person@example.test",
+        "synthetic-secret",
+    ] {
+        assert!(!displayed.contains(sensitive));
+    }
+}
+
+#[test]
 fn recovery_confirms_exact_message_id_candidates() {
     let server = Server::start(Scenario::Recovery);
     assert_eq!(

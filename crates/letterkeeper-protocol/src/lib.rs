@@ -73,6 +73,39 @@ pub enum WriteOutcome {
     Failed,
     Uncertain,
 }
+/// Bounded diagnostic metadata. Never contains server text or mail identities.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SmtpStage {
+    Preparation,
+    TlsConfiguration,
+    Connection,
+    TlsHandshake,
+    Greeting,
+    Authentication,
+    MailFrom,
+    Recipient,
+    DataCommand,
+    Submission,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SmtpFailureKind {
+    InvalidInput,
+    Connection,
+    Timeout,
+    Rejected,
+    UnexpectedResponse,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SmtpDiagnostic {
+    pub stage: SmtpStage,
+    pub kind: SmtpFailureKind,
+    pub smtp_code: Option<u16>,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SmtpReport {
+    pub outcome: WriteOutcome,
+    pub diagnostic: Option<SmtpDiagnostic>,
+}
 pub struct ImapClient {
     endpoint: Endpoint,
     tls: TlsOptions,
@@ -761,6 +794,20 @@ impl ImapClient {
             Err(_) if state.submitted.load(Ordering::Relaxed) => WriteOutcome::Uncertain,
             Err(_) => WriteOutcome::Failed,
         }
+    }
+}
+/// One strict implicit-TLS attempt. Callers must enforce authorization before invoking.
+pub fn send_smtp_report(
+    endpoint: &Endpoint,
+    tls: &TlsOptions,
+    credentials: &Credentials,
+    from: &str,
+    to: &[String],
+    raw: &[u8],
+) -> SmtpReport {
+    SmtpReport {
+        outcome: send_smtp(endpoint, tls, credentials, from, to, raw),
+        diagnostic: None,
     }
 }
 /// One strict implicit-TLS attempt. Callers must enforce authorization before invoking.

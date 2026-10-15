@@ -45,6 +45,9 @@ pub enum PageMode {
     MissingFetch,
     DuplicateFetch,
     UnexpectedFetch,
+    FetchRejected,
+    FetchWrongTag,
+    FetchDrift,
 }
 pub fn page_uid(sequence: u32) -> u32 {
     1_000_000_000 + sequence * 3
@@ -652,7 +655,17 @@ async fn paged_reply(
         for uid in ids {
             reply.push_str(&format!("* 1 FETCH (UID {uid} RFC822.SIZE 100 FLAGS () BODY[HEADER] {{{}}}\r\n{header})\r\n", header.len()));
         }
-        reply.push_str(&format!("{tag} OK fetch\r\n"));
+        match mode {
+            PageMode::FetchRejected => reply.push_str(&format!("{tag} NO refused\r\n")),
+            PageMode::FetchWrongTag => {
+                reply.push_str("WRONG OK fetch\r\n");
+                // Old stream handling ignores a wrong tag; the later correct
+                // completion lets the regression fail promptly by assertion.
+                reply.push_str(&format!("{tag} OK fetch\r\n"));
+            }
+            PageMode::FetchDrift => reply.push_str(&format!("* 1 EXPUNGE\r\n{tag} OK fetch\r\n")),
+            _ => reply.push_str(&format!("{tag} OK fetch\r\n")),
+        }
         reply
     } else {
         panic!("unexpected synthetic paging command {cmd}")

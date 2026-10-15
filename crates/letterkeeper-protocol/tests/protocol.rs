@@ -572,3 +572,34 @@ fn bounded_page_rejects_missing_duplicate_and_unrequested_fetches() {
         server.finish();
     }
 }
+
+#[test]
+fn page_fetch_requires_successful_exact_tagged_completion() {
+    use support::PageMode;
+    for mode in [PageMode::FetchRejected, PageMode::FetchWrongTag] {
+        // Small enough that the baseline ALL search succeeds and reaches FETCH.
+        let server = Server::start(Scenario::Paged { count: 3, mode });
+        assert_eq!(
+            client(&server)
+                .list_messages("INBOX", 0, 2, None)
+                .unwrap_err(),
+            ProtocolError::Rejected
+        );
+        assert!(server.finish().iter().any(|s| s.contains("UID FETCH")));
+    }
+}
+#[test]
+fn page_fetch_rejects_mailbox_drift_after_complete_headers() {
+    use support::PageMode;
+    let server = Server::start(Scenario::Paged {
+        count: 3,
+        mode: PageMode::FetchDrift,
+    });
+    assert_eq!(
+        client(&server)
+            .list_messages("INBOX", 0, 2, None)
+            .unwrap_err(),
+        ProtocolError::StaleMailbox
+    );
+    assert!(server.finish().iter().any(|s| s.contains("UID FETCH")));
+}

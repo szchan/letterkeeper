@@ -24,6 +24,7 @@ pub enum Scenario {
     AppendDisconnect,
     AppendReject,
     Smtp,
+    SmtpAuthReject,
     SmtpReject,
     SmtpDisconnect,
 }
@@ -130,6 +131,7 @@ impl Server {
                     let smtp = matches!(
                         scenario,
                         Scenario::Smtp
+                            | Scenario::SmtpAuthReject
                             | Scenario::SmtpReject
                             | Scenario::SmtpDisconnect
                             | Scenario::SmtpFinalReject
@@ -337,7 +339,11 @@ async fn smtp_reply(
     let reply = if line.starts_with("EHLO") {
         "250-synthetic.test\r\n250-AUTH PLAIN XOAUTH2\r\n250 8BITMIME\r\n"
     } else if line.starts_with("AUTH") {
-        "235 authenticated\r\n"
+        if matches!(scenario, Scenario::SmtpAuthReject) {
+            "535 synthetic-private-response person@example.test synthetic-secret\r\n"
+        } else {
+            "235 authenticated\r\n"
+        }
     } else if line.starts_with("MAIL") {
         "250 sender\r\n"
     } else if line.starts_with("RCPT") {

@@ -80,7 +80,7 @@ TUI：`j/k` 或上下键选择/滚动，`Enter/Tab` 阅读，`r` 刷新，`n/p` 
 
 旧 `64dd635` 下载构建的手写配置仅接受 `gmail_o_auth`；其 `account add` 可正常生成配置，已用于上述本机验收。别名兼容修复需使用包含该变更的新构建。
 
-`account login ID` 打印供用户在系统浏览器打开的 OAuth URL，使用 S256 PKCE、state 和临时 loopback 回调；支持续期、`account logout ID` 本地注销及 `account revoke ID` 远程撤销。没有注册/借用其他客户端身份；个人和公开发布的 OAuth client 流程仍需真实验收。
+`account login ID` 打印供用户在系统浏览器打开的 OAuth URL，使用 S256 PKCE、state 和临时 loopback 回调；支持续期、`account logout ID` 本地注销及 `account revoke ID` 远程撤销。使用用户自己的 Desktop client；本机个人 OAuth 登录与保存已通过，真实续期/撤销及公开发布的 OAuth client 流程仍待验收。
 
 配置后的账户操作用全局 `--account ID`：
 

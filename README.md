@@ -20,6 +20,7 @@ LetterKeeper 是隐私优先、面向人和 Agent 的开源邮件客户端，目
 - IMAP 分页/搜索每批扫描最多 4096 个消息序号、每次列表最多 128 批，收齐页面后停止；64 KiB 行、8 MiB 响应与 15 秒协议操作界限保留。大 offset/稀疏搜索超过预算会报错，邮箱发生变化需刷新，不承诺跨调用快照。
 - 人工 CLI/TUI 完整审阅正文、全部收件人、线程头和附件元数据；TUI 另显示附件字节 SHA-256。输入完整摘要批准，绑定内容和版本，五分钟有效、单次消费；内容变化取消原批准。批准后另行发送。
 - 发送保留精确 MIME 字节；DATA 后断连记录 Uncertain，不盲目重试。Sent 的 ServerManaged/Append 策略明确分开，Append 使用原发送字节且每提交仅认领一次。Accepted 只表示 SMTP 接受，Sent 查询仅提供观察证据。
+- 发送诊断仅包含固定阶段、错误种类和可选 SMTP 数值码，与终态原子保存；不保存服务器原始错误文字。CLI 状态查询和 TUI 共用诊断，旧记录没有原因时显示未知，诊断读取故障不触发重发。增量验证见[发送诊断](docs/testing/send-diagnostics.md)。
 - TUI 使用各一个网络/本地后台 worker、有界通道、按需正文和 50 项页面；本地编辑保存不等待网络。只在事件/结果/窗口变化时重绘。MCP 每会话最多 8 个 Host 任务，取消请求也保留正在运行任务的配额。
 
 CLI `read` JSON 保留链接目标，不能交给会自动预览资源的组件。第三方 MCP 客户端的最终展示行为仍需逐一验证。本地 MCP 不代表本地模型处理：交给云端 Agent 的正文仍会传给模型服务商。
@@ -99,6 +100,8 @@ TUI：`j/k` 或上下键选择/滚动，`Enter/Tab` 阅读，`r` 刷新，`n/p` 
 账户默认配置/数据路径为 XDG_CONFIG_HOME/letterkeeper 与 XDG_DATA_HOME/letterkeeper（未设置时 ~/.config、~/.local/share）；可用 `--config-dir` / `--data-dir` 覆盖，每账户单独状态库。`--state-dir` 仅用于原离线演示，缺省 cwd 的 `.local/letterkeeper`。系统凭据刷新锁按 UID/账户固定在 `/run/user/UID/letterkeeper/credential-locks`，不随数据目录覆盖改变。
 
 私有目录/文件要求 0700/0600，配置使用 descriptor walk 和原子替换；SQLite 的既有路径重新打开限制仍在。草稿数据库未加密。读取/发送原文上限 2 MiB，单附件导入/导出 512 KiB；SafeDocument 显示预算 64 Ki 字符，回复元数据另有字段限制。同步 Pending/Uncertain 不自动重试；目前明确 Failed 同步也不能重认领同一版本，旧服务器草稿不会自动删除。
+
+发送诊断将状态库自动迁移到 schema 3，保留既有草稿、批准、提交和发送字节；旧记录不会补造诊断。升级前退出旧进程并备份状态库；旧构建不能打开升级后的数据库。旧备份用于迁移失败时恢复，发生新发送后须保留新库，不能依据旧备份重发。设计见 [ADR 0006](docs/decisions/0006-send-diagnostics.md)。
 
 ## 验证与开发
 

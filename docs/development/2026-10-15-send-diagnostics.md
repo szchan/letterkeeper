@@ -6,9 +6,9 @@
 
 | 单元 | 文件范围 | 远程证据 |
 | --- | --- | --- |
-| 协议阶段报告 | protocol crate 及独立测试记录 | RED/GREEN 待完成 |
-| 核心诊断与迁移 | core crate 及独立测试记录 | RED/GREEN 待完成 |
-| 账户与 TUI | application、workspace trait、human TUI 及独立测试记录 | RED/GREEN 待完成 |
+| 协议阶段报告 | protocol crate 及独立测试记录 | [认证 RED 38709805368](https://github.com/szchan/letterkeeper/actions/runs/38709805368)、[TLS RED 38729860078](https://github.com/szchan/letterkeeper/actions/runs/38729860078)，精确 GREEN 与完整 CI 见[协议记录](../testing/send-diagnostics-protocol.md) |
+| 核心诊断与迁移 | core crate 及独立测试记录 | [RED 38710063986](https://github.com/szchan/letterkeeper/actions/runs/38710063986)，精确 GREEN 与完整 CI 见[核心记录](../testing/send-diagnostics-core.md) |
+| 账户与 TUI | application、workspace trait、human TUI 及独立测试记录 | [发送 RED 38709952540](https://github.com/szchan/letterkeeper/actions/runs/38709952540)、[查询 RED 38730779434](https://github.com/szchan/letterkeeper/actions/runs/38730779434)，最终精确 GREEN 与完整 CI 见[应用记录](../testing/send-diagnostics-app.md) |
 
 本机仅编辑、Git、rustfmt/静态审查；所有 Rust 构建/测试/Clippy、PTY 与隐私验证在 GitHub Actions。新集成 revision 完整门禁通过之前，不把子分支通过当作集成验收。
 

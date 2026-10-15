@@ -10,7 +10,7 @@ LetterKeeper 是隐私优先、面向人和 Agent 的开源邮件客户端，目
 
 2026-10-14：已完成阶段 C 的**受控 TUI / Agent 人工审批工作流**及账户接入引导增量。严格 TLS IMAP/SMTP、账户/OAuth、分页搜索、安全阅读、回复/转发、附件与显式 Drafts/Sent 同步继续共用后端；内置草稿编辑、完整审阅、人工批准、独立发送及结果查询保留。
 
-243 项已登记 Rust 测试、fmt/Clippy、实际 PTY、可达 HTTP/DNS 观察器和实际 Codex MCP 数据路径已通过；新增配置兼容与有界分页的 RED/GREEN 见[配置兼容](docs/testing/gmail-config-compat.md)和[分页回归](docs/testing/imap-bounded-paging.md)，后续集成 revision 仍须最新门禁通过。2026-10-15 已完成[本机 GNOME Keyring 与 Google OAuth](docs/testing/live-keyring-2026-10-15.md)和[真实 Gmail 只读 IMAP 认证、分页、搜索、正文抽样及 Flags 不变检查](docs/testing/live-imap-2026-10-15.md)。本轮没有外发或修改邮件状态。真实续期、SMTP/草稿/Sent 闭环、完整凭据服务故障关卡、公开图形前端及受限自动发送仍待验收，**不能称为全部 P0 已完成或生产可用**。实际完成项和缺口见 [验收状态](docs/STATUS.md)。
+243 项已登记 Rust 测试、fmt/Clippy、实际 PTY、可达 HTTP/DNS 观察器和实际 Codex MCP 数据路径已通过；新增配置兼容与有界分页的 RED/GREEN 见[配置兼容](docs/testing/gmail-config-compat.md)和[分页回归](docs/testing/imap-bounded-paging.md)，后续集成 revision 仍须最新门禁通过。2026-10-15 已完成[本机 GNOME Keyring 与 Google OAuth](docs/testing/live-keyring-2026-10-15.md)和[真实 Gmail 只读 IMAP 认证、分页、搜索、正文抽样及 Flags 不变检查](docs/testing/live-imap-2026-10-15.md)。后续[真实续期与服务器草稿写入](docs/testing/live-write-2026-10-15.md)已通过；一次经 TUI 人工批准的 SMTP 尝试持久化为 Failed，独立检查显示当前 SMTP 握手超时，尚未取得 Sent/投递成功证据。SMTP/Sent、真实撤销、完整凭据服务故障关卡、公开图形前端及受限自动发送仍待验收，**不能称为全部 P0 已完成或生产可用**。实际完成项和缺口见 [验收状态](docs/STATUS.md)。
 
 ## 实现边界
 
@@ -83,7 +83,7 @@ TUI：`j/k` 或上下键选择/滚动，`Enter/Tab` 阅读，`r` 刷新，`n/p` 
 
 旧构建的大邮箱列表也可能因全量 SEARCH 响应超过上限而失败；`5fde670` 验证构建已修复并通过真实只读 IMAP 重验，下载来源和二进制校验值见[验收记录](docs/testing/live-imap-2026-10-15.md)。本机新旧构建分别保留。
 
-`account login ID` 打印供用户在系统浏览器打开的 OAuth URL，使用 S256 PKCE、state 和临时 loopback 回调；支持续期、`account logout ID` 本地注销及 `account revoke ID` 远程撤销。使用用户自己的 Desktop client；本机个人 OAuth 登录与保存已通过，真实续期/撤销及公开发布的 OAuth client 流程仍待验收。
+`account login ID` 打印供用户在系统浏览器打开的 OAuth URL，使用 S256 PKCE、state 和临时 loopback 回调；支持续期、`account logout ID` 本地注销及 `account revoke ID` 远程撤销。使用用户自己的 Desktop client；本机个人 OAuth 登录、保存及自然到期后的续期已通过；真实撤销及公开发布的 OAuth client 流程仍待验收。
 
 配置后的账户操作用全局 `--account ID`：
 

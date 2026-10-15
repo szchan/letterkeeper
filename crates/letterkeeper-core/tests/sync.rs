@@ -217,7 +217,7 @@ fn legacy_schema_migrates_atomically_and_preserves_existing_approval() {
     drop(s);
     let conn = rusqlite::Connection::open(&db).unwrap();
     conn.execute_batch(
-        "DROP TABLE sync_records; DROP TABLE submission_wire; PRAGMA user_version=1;",
+        "DROP TABLE submission_diagnostics; DROP TABLE sync_records; DROP TABLE submission_wire; PRAGMA user_version=1;",
     )
     .unwrap();
     let content = serde_json::to_string(&input()).unwrap();
@@ -244,7 +244,7 @@ fn legacy_schema_migrates_atomically_and_preserves_existing_approval() {
     assert_eq!(
         conn.pragma_query_value::<i64, _>(None, "user_version", |r| r.get(0))
             .unwrap(),
-        2
+        3
     );
 }
 

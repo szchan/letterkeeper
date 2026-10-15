@@ -56,6 +56,39 @@ pub enum SendOutcome {
     Failed,
     Uncertain,
 }
+/// Fixed, non-sensitive point at which a send attempt failed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SendStage {
+    Preparation,
+    TlsConfiguration,
+    Credentials,
+    Connection,
+    TlsHandshake,
+    Greeting,
+    Authentication,
+    MailFrom,
+    Recipient,
+    DataCommand,
+    Submission,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SendFailureKind {
+    InvalidInput,
+    Connection,
+    Timeout,
+    Rejected,
+    UnexpectedResponse,
+    Unavailable,
+}
+/// No server-provided strings, addresses or credentials may be stored here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SendDiagnostic {
+    pub stage: SendStage,
+    pub kind: SendFailureKind,
+    pub smtp_code: Option<u16>,
+}
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Submission {
     pub id: i64,
@@ -392,6 +425,17 @@ impl Store {
         tx.commit()?;
         sub.state = state;
         Ok(sub)
+    }
+    pub fn finish_submission_with_diagnostic(
+        &mut self,
+        id: i64,
+        outcome: SendOutcome,
+        _diagnostic: Option<SendDiagnostic>,
+    ) -> Result<Submission> {
+        self.finish_submission(id, outcome)
+    }
+    pub fn get_submission_diagnostic(&self, _id: i64) -> Result<Option<SendDiagnostic>> {
+        Ok(None)
     }
     pub fn get_submission(&self, id: i64) -> Result<Submission> {
         let sub = load_submission(&self.conn, id)?;

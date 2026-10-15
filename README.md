@@ -76,7 +76,7 @@ TUI：`j/k` 或上下键选择/滚动，`Enter/Tab` 阅读，`r` 刷新，`n/p` 
 
 引导目前接受 ASCII dot-atom 邮箱地址、DNS/IP 端点及中文文件夹；带引号或国际化邮箱地址不在该入口支持范围。隐式 TLS 默认 IMAP 993 / SMTP 465，不把其他端口自动当作 STARTTLS。Gmail 默认文件夹名可覆盖，实际标签和非 ASCII mailbox 协议兼容性仍待独立验收。显式选择发送权限仍需既有人工批准流程。
 
-[合成配置示例](tests/fixtures/account.example.json)展示配置形状，端口不是已启动的服务。`account import FILE` 导入不含凭据的配置，`account list` 列出本机账户。密码用 `account password ID` 的隐藏终端输入；Gmail 配置使用 `authentication.type=gmail_oauth`、自己的 Desktop client_id 及 client_secret_ref，后者启用时用 `account client-secret ID` 保存秘密。密码、token 和 client secret 均不放在普通配置或命令参数中，凭据库不可用时拒绝认证。
+[合成配置示例](tests/fixtures/account.example.json)展示配置形状，端口不是已启动的服务。`account import FILE` 导入不含凭据的配置，`account list` 列出本机账户。新建账户优先使用 `account add` 的类型化引导，避免手写配置标签。密码用 `account password ID` 的隐藏终端输入；Gmail 手写配置接受 `authentication.type=gmail_oauth` 或兼容的 `gmail_o_auth`，保存时仍输出 `gmail_o_auth`。填写自己的 Desktop client_id 及 client_secret_ref，后者启用时用 `account client-secret ID` 保存秘密。密码、token 和 client secret 均不放在普通配置或命令参数中，凭据库不可用时拒绝认证。
 
 `account login ID` 打印供用户在系统浏览器打开的 OAuth URL，使用 S256 PKCE、state 和临时 loopback 回调；支持续期、`account logout ID` 本地注销及 `account revoke ID` 远程撤销。没有注册/借用其他客户端身份；个人和公开发布的 OAuth client 流程仍需真实验收。
 

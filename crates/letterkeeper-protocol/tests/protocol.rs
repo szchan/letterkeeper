@@ -371,7 +371,7 @@ fn unicode_search_declares_utf8_and_preserves_quotes_backslashes() {
     assert!(
         transcript
             .iter()
-            .any(|s| s.contains("UID SEARCH CHARSET UTF-8 TEXT"))
+            .any(|s| s.contains("UID SEARCH CHARSET UTF-8 1:3 TEXT"))
     );
 }
 #[test]
@@ -393,7 +393,7 @@ fn unsupported_utf8_charset_returns_fixed_error_without_fallback_or_retry() {
     assert!(
         transcript
             .iter()
-            .any(|s| s.contains("UID SEARCH CHARSET UTF-8 TEXT"))
+            .any(|s| s.contains("UID SEARCH CHARSET UTF-8 1:3 TEXT"))
     );
     assert!(!transcript.iter().any(|s| s.contains("UID FETCH")));
     assert!(
@@ -413,7 +413,10 @@ fn ascii_search_refusal_is_not_a_successful_empty_page() {
         ProtocolError::Rejected
     );
     let log = server.finish();
-    assert!(log.iter().any(|s| s.contains("UID SEARCH TEXT \"ascii\"")));
+    assert!(
+        log.iter()
+            .any(|s| s.contains("UID SEARCH 1:3 TEXT \"ascii\""))
+    );
     assert_eq!(log.iter().filter(|s| s.contains("UID SEARCH")).count(), 1);
 }
 

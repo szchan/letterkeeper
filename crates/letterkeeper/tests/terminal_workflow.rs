@@ -758,7 +758,7 @@ fn pty_f9_uses_remote_host_tls_and_persists_safe_diagnostics() {
         let config: AccountConfig = serde_json::from_value(serde_json::json!({
             "id":"controlled", "email":"reader@example.test", "username":"person@example.test",
             "imap":{"host":"localhost","port":imap.endpoint.port},
-            "smtp":{"host":"localhost","port":smtp.port}, "allowed_folders":["INBOX"],
+            "smtp":{"host":"localhost","port":smtp.port}, "allowed_folders":["INBOX","Drafts","Sent"],
             "permissions":{"read":true,"draft":true,"send":true},
             "drafts_folder":"Drafts","sent_folder":"Sent","sent_copy":"server_managed",
             "authentication":{"type":"password"},"extra_ca_pem":ca,

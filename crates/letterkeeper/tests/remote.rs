@@ -534,7 +534,7 @@ fn cli_status_matches_remote_diagnostic_without_sensitive_reply_text() {
         let data_dir = dir.path().join("data");
         let ca = dir.path().join("ca.pem");
         std::fs::write(&ca, &smtp.pem).unwrap();
-        let cfg: AccountConfig = serde_json::from_value(json!({"id":"controlled","email":"reader@example.test","username":"person@example.test","imap":{"host":"localhost","port":9993},"smtp":{"host":"localhost","port":smtp.port},"allowed_folders":["INBOX"],"permissions":{"read":true,"draft":true,"send":true},"drafts_folder":"Drafts","sent_folder":"Sent","sent_copy":"server_managed","authentication":{"type":"password"},"extra_ca_pem":ca})).unwrap();
+        let cfg: AccountConfig = serde_json::from_value(json!({"id":"controlled","email":"reader@example.test","username":"person@example.test","imap":{"host":"localhost","port":9993},"smtp":{"host":"localhost","port":smtp.port},"allowed_folders":["INBOX","Drafts","Sent"],"permissions":{"read":true,"draft":true,"send":true},"drafts_folder":"Drafts","sent_folder":"Sent","sent_copy":"server_managed","authentication":{"type":"password"},"extra_ca_pem":ca})).unwrap();
         AccountRepository::new(config_dir.clone(), data_dir.clone())
             .unwrap()
             .save(&cfg)

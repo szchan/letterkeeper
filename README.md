@@ -10,7 +10,7 @@ LetterKeeper 是隐私优先、面向人和 Agent 的开源邮件客户端，目
 
 2026-10-14：已完成阶段 C 的**受控 TUI / Agent 人工审批工作流**及账户接入引导增量。严格 TLS IMAP/SMTP、账户/OAuth、分页搜索、安全阅读、回复/转发、附件与显式 Drafts/Sent 同步继续共用后端；内置草稿编辑、完整审阅、人工批准、独立发送及结果查询保留。
 
-243 项已登记 Rust 测试、fmt/Clippy、实际 PTY、可达 HTTP/DNS 观察器和实际 Codex MCP 数据路径已通过；新增配置兼容与有界分页的 RED/GREEN 见[配置兼容](docs/testing/gmail-config-compat.md)和[分页回归](docs/testing/imap-bounded-paging.md)，后续集成 revision 仍须最新门禁通过。2026-10-15 已完成[本机 GNOME Keyring 与 Google OAuth](docs/testing/live-keyring-2026-10-15.md)和[真实 Gmail 只读 IMAP 认证、分页、搜索、正文抽样及 Flags 不变检查](docs/testing/live-imap-2026-10-15.md)。后续[真实续期、服务器草稿写入与 CLI SMTP/Sent/本人投递闭环](docs/testing/live-write-2026-10-15.md)已通过；网络恢复后使用新的 TUI 人工批准完成单次发送，原失败记录保留，驱动记录的 Draft APPEND 当前仍有一个匹配；用户报告 Gmail 网页两份测试草稿中发送对应的一份已消失、另一份仍在，驱动无法重建网页历史两份的身份关系，未将观察判断为 Gmail 故障，也未执行客户端 DELETE/EXPUNGE。Hyprland 已由独立按键脚本和只读绑定查询定位为环境中截获 F9 的原因；真实客户端 F9 触发仍未验收。真实撤销、完整凭据服务故障关卡、公开图形前端及受限自动发送仍待验收，**不能称为全部 P0 已完成或生产可用**。实际完成项和缺口见 [验收状态](docs/STATUS.md)。
+243 项已登记 Rust 测试、fmt/Clippy、实际 PTY、可达 HTTP/DNS 观察器和实际 Codex MCP 数据路径已通过；新增配置兼容与有界分页的 RED/GREEN 见[配置兼容](docs/testing/gmail-config-compat.md)和[分页回归](docs/testing/imap-bounded-paging.md)，后续集成 revision 仍须最新门禁通过。2026-10-15 已完成[本机 GNOME Keyring 与 Google OAuth](docs/testing/live-keyring-2026-10-15.md)和[真实 Gmail 只读 IMAP 认证、分页、搜索、正文抽样及 Flags 不变检查](docs/testing/live-imap-2026-10-15.md)。后续[真实续期、服务器草稿写入与 CLI SMTP/Sent/本人投递闭环](docs/testing/live-write-2026-10-15.md)已通过；网络恢复后经新的 TUI 人工批准完成单次发送，原失败记录保留。用户确认 Gmail 网页上发送对应的草稿已消失、另一份仍在；不将其记为草稿刷新故障。Hyprland 听写快捷键截获 F9，真实客户端 F9 仍未验收。真实撤销、完整凭据服务故障关卡、公开图形前端及受限自动发送仍待验收，**不能称为全部 P0 已完成或生产可用**。实际完成项和缺口见 [验收状态](docs/STATUS.md)。
 
 ## 实现边界
 

@@ -16,9 +16,9 @@
 
 独立只读 LIST 通过服务商 special-use 属性定位 Drafts 和 Sent，不假定本地化文件夹名称。建立同一账户的独立写入配置和状态库：允许起草/发送，Sent 使用 ServerManaged；原先只读配置和只读 TUI 入口保持不变。
 
-驱动和专用工作区记录创建 1 个带验收标识的合成草稿，仅当前账户本人为收件人，Cc/Bcc/附件/线程引用为空；产品只执行一次 `sync-draft`，记录一次 Confirmed Draft APPEND。独立只读 SEARCH/EXAMINE/BODY.PEEK 当时查到一个匹配 Message-ID，内容与准备稿一致且带 `\Draft` 标记。另一次只读复核按合成主题查到当前一个匹配，其 Message-ID 与驱动记录的一次 APPEND 相同。用户后来补充其 Gmail 网页原有两份测试草稿：成功发送对应的那份现已从 Drafts 消失，另一份仍在。此网页观察由用户提供；驱动没有重建网页历史两份草稿的身份关系，也不能证明网页第二份草稿的来源。驱动的单份 APPEND 与查询快照不能推断成功发送对应的草稿未消失，或认定 Gmail 草稿刷新/清理故障。
+驱动和专用工作区记录创建 1 个带验收标识的合成草稿，仅当前账户本人为收件人，Cc/Bcc/附件/线程引用为空；产品只执行一次 `sync-draft`，记录一次 Confirmed Draft APPEND。独立只读 SEARCH/EXAMINE/BODY.PEEK 当时查到一个匹配 Message-ID，内容与准备稿一致且带 `\Draft` 标记。另一次只读复核按合成主题查到当前一个匹配，其 Message-ID 与驱动记录的一次 APPEND 相同。用户后来补充其 Gmail 网页原有两份测试草稿：成功发送对应的那份现已从 Drafts 消失，另一份仍在。此网页观察由用户提供；驱动记录的一次 APPEND 和查询不能分别对应网页上的两份草稿，因此不将该观察记为 Gmail 草稿刷新故障。
 
-没有为测试幂等性再次 APPEND，没有修改或删除任何既有草稿。没有调用 Sent APPEND。
+没有为测试幂等性再次 APPEND，没有修改或删除任何既有草稿。没有调用 Sent APPEND。Append 的版本快照设计不会自动清理旧草稿；这是设计行为，不是本次 Gmail 网页观察的故障结论。
 
 ## 人工批准与首次 SMTP 失败
 
@@ -26,7 +26,7 @@
 
 当前 F8 对话框没有重复展示待输入值，F6 审阅页仅用“摘要”标注 SHA-256，提示存在可发现性问题。已指导关闭输入框、按 Home 回到完整审阅顶部，用户确认看到对应字符串；人工审阅和批准仍由用户实际操作，不由代理代填摘要或修改 approvals 表绕过。
 
-随后用户通过 TUI 输入正确摘要，独立只读检查确认存在仍有效、绑定原始 revision/digest 的批准。用户按 F9 后没有观察到提交记录，不能把该次 TUI 发送触发记为通过。用户在同一 Ghostty 中运行独立的有界按键脚本，按 F9 得到 `no_input_received`；只读 `hyprctl binds -j` 显示默认 submap 有两条 `modmask=0` 的 consuming F9 绑定，按下描述为 “Start dictation (push-to-talk)”，松开描述为 “Stop dictation (push-to-talk)”。这定位了环境原因：Hyprland 截获 F9。未修改系统绑定；真实客户端 F9 触发未验收。代理未代填摘要，未创建或修改批准条目。
+随后用户通过 TUI 输入正确摘要，独立只读检查确认存在仍有效、绑定原始 revision/digest 的批准。用户按 F9 后没有观察到提交记录，不能把该次 TUI 发送触发记为通过。后续用户在同一 Ghostty 中运行独立的有界按键脚本，按 F9 得到 `no_input_received`；只读 `hyprctl binds -j` 显示默认 submap 有两条 `modmask=0` 的 consuming F9 绑定，按下描述为 “Start dictation (push-to-talk)”，松开描述为 “Stop dictation (push-to-talk)”。该后续诊断定位了环境原因：Hyprland 截获 F9。未修改系统绑定；真实客户端 F9 触发未验收。代理未代填摘要，未创建或修改批准条目。
 
 经核对仍无既有 submission、人工批准有效、内容与仅本人收件人一致后，通过正常产品 CLI 原子消费这次人工批准，执行一次发送尝试。产品返回并持久化 `Failed`；没有自动重试。独立只读状态核对为一个 Failed submission、批准已消费、原始 SMTP wire 快照存在。随后独立只读查询本次 submission 的精确 Message-ID：Sent 和 Inbox 均无匹配；当时驱动记录的 APPEND 仍有一个草稿匹配。查询无匹配只是当时观察，不单独作为未投递的证明；这一阶段未记为 SMTP、Sent 副本或投递闭环通过。
 
@@ -68,9 +68,9 @@
 | 服务商 Sent | 本次 Message-ID 仅一个匹配 |
 | 本人 Inbox | 本次 Message-ID 仅一个匹配；解码主题、正文和本人收件人正确 |
 | ServerManaged | 没有本地 Sent APPEND 同步记录 |
-| 驱动查询的测试草稿 | 一个匹配，保留未删除 |
+| 驱动查询的测试草稿 | 只读复核当前一个匹配，与驱动记录的 APPEND 一致 |
 
-Accepted 仍仅表示 SMTP 接受；本人收件箱观察是本次自发邮件的额外实际投递证据，不泛化为所有外部收件人的投递保证。所有回验只读，不修改既有邮件标记；没有删除、移动、EXPUNGE 或额外发信。
+Accepted 仍仅表示 SMTP 接受；本人收件箱观察是本次自发邮件的额外实际投递证据，不泛化为所有外部收件人的投递保证。客户端回验为只读；本轮客户端未执行删除、移动或 EXPUNGE。这不表示 Gmail 未移除发送对应的草稿；用户确认该草稿已消失、另一份仍在。
 
 本轮自然续期、真实服务器草稿写入、TUI 人工批准和 CLI 单次发送/结果查询/Sent/本人投递闭环通过。F8 摘要提示的可发现性仍待改善；F9 环境截获原因已定位，但客户端 F9 触发仍未验收，不能把 CLI 成功写成 TUI F9 成功。
 

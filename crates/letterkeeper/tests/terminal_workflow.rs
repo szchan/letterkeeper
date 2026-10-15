@@ -859,7 +859,7 @@ fn pty_f9_uses_remote_host_tls_and_persists_safe_diagnostics() {
         master.write_all(b"\x1b[20~").unwrap();
         let expected = match mode {
             send_server::ResultMode::Accepted => "Accepted",
-            send_server::ResultMode::Rejected => "submission / rejected / 550",
+            send_server::ResultMode::Rejected => "SMTP 550",
             send_server::ResultMode::Disconnected => "Uncertain",
         };
         let output = recv(&mut master, expected);

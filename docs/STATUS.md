@@ -1,5 +1,7 @@
 # 实现与验收状态
 
+发送诊断增量正在集成验证：固定阶段/种类/SMTP 数值码与终态原子保存，CLI/TUI 查询共用，旧记录不推测原因；保留人工批准和三态发送语义。核心、协议与应用的远程 RED/GREEN 已取得，最终集成门禁尚待完成，不能据此宣布真实故障已定位。见[诊断验收](testing/send-diagnostics.md)与[ADR 0006](decisions/0006-send-diagnostics.md)。
+
 2026-10-15 增量：已获明确授权并完成本机已解锁 GNOME Keyring 的生产凭据往返、跨进程锁和本次合成条目清理，以及真实 Google OAuth 浏览器同意、代码交换和 token 本机保存/独立读回。随后用户明确授权账户全部邮件的只读 IMAP 验收：严格 TLS/XOAUTH2、文件夹、INBOX/All Mail 分页、ASCII/中文搜索、正文抽样及前后 Flags/UIDVALIDITY 比较通过。旧构建发现的大邮箱列表问题已经远程 TDD 修复，并使用新构建真实重验。该只读阶段没有发送或修改邮件状态。随后真实令牌自然到期后的续期、并发认证及服务器草稿写入通过；首次 CLI SMTP 尝试持久化 Failed，独立观察到握手超时；用户修复网络并通过新的 TUI 人工批准后，CLI 单次发送持久化 Accepted，Sent/本人 Inbox 核对通过。用户确认 Gmail 网页上发送对应的草稿已消失、另一份仍在，不将其记为草稿刷新故障。Hyprland 听写快捷键截获 F9，真实客户端 F9 仍未验收。详细证据见[续期/写入记录](testing/live-write-2026-10-15.md)。范围、构建和环境见[钥匙环/OAuth](testing/live-keyring-2026-10-15.md)及[只读 IMAP](testing/live-imap-2026-10-15.md)。
 
 账户接入增量 `doctor` 和 `account add` 已通过 [代码 SHA `84b5dee` 的完整集成 CI](https://github.com/szchan/letterkeeper/actions/runs/38583555164)，[PR #6](https://github.com/szchan/letterkeeper/pull/6) 保留最终 revision 的门禁。诊断只读取目录和凭据服务元数据，配置默认只读、确认后原子创建；不表示已登录或真实服务验收完成。详见[本批开发记录](development/2026-10-14-account-onboarding.md)。

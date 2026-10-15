@@ -26,3 +26,5 @@ GREEN 与完整 CI：等待核心/协议依赖提交后运行，当前未验收�
 修复后 Host/CLI/offline status 共用安全投影：只有账户/提交读取成功后才查询可选诊断；诊断查询失败保留原 state、`state_recorded=true`、`diagnostic=null`、`diagnostic_query_succeeded=false`，不输出 SQL 错误。正常查询包括旧记录 None 标记为 true。TUI 区分 Accepted 无失败诊断与查询不可用 unknown，诊断状态拆三短行，40/80 列覆盖完整固定阶段、种类与 SMTP 数值码。
 
 早期真实 PTY run 38730311907 的测试账户遗漏可写 Drafts/Sent scope，被现有生产配置校验拒绝；2121e26 仅修正合成配置，不放宽生产策略。随后 38730684425 的拒绝显示 marker 未捕获，保留失败并继续检查终端差分帧。未据此宣称 PTY 通过。
+
+PTY marker 调查：f7e5c1a 的 [38731155157](https://github.com/szchan/letterkeeper/actions/runs/38731155157) 有界合成 tail 显示 `Failed`、`submission/rejected`，以及 `SMT` 后直接移动到第 5 列写 ` 550`。第 4 列 P 从上一帧 PgUp 文本复用，剥 ANSI 不能重建屏幕，因此完整 SMTP550 不出现在差分字节串。测试改为先严格等 F9 实际三态，再真实 resize/clear 并等完整帧结束，在全帧严格断言阶段/种类/码和拒绝回显；保留单次 DATA、批准不发送、重开持久化及 40/80 列 TestBackend 断言。不降低UI断言或删除失败证据。

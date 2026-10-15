@@ -16,6 +16,11 @@ README 指导手写 `gmail_oauth`，而 `Authentication::GmailOAuth` 的 `snake_
 
 ## GREEN 与完整 CI
 
-实现 SHA、远程 GREEN 和完整门禁结果将在运行完成后补充。本机只执行 rustfmt 和 `git diff --check`，未执行 Cargo 构建、测试、check 或 Clippy。
+- 实现 SHA：`da65ada7c4392311bff3d152842e6c1b5069ef28`。
+- [GREEN TDD evidence](https://github.com/szchan/letterkeeper/actions/runs/38674916147)：completed / success；相同精确测试，`matched_tests=1`、`state=test_finished`、`raw_exit_code=0`。
+- [该实现 SHA 的完整 CI](https://github.com/szchan/letterkeeper/actions/runs/38674919136)：completed / success，workspace、codex-client、ci-gate 均通过。包括 fmt、Clippy、workspace 测试、实际 PTY、编辑/审阅/批准/提交闭环、可达 HTTP/DNS 隐私观察器与实际 Codex MCP 数据路径。
+- 运行环境：GitHub-hosted Ubuntu 24.04，仓库固定 Rust 1.99.0 与既有 sandbox 预检。
+
+本机只执行 rustfmt 和 `git diff --check`，未执行 Cargo 构建、测试、check 或 Clippy。后续文档提交及主代理集成 revision 仍须各自的当前完整门禁；上述链接明确对应实现 SHA。
 
 远程结果只证明配置兼容性与既有受控回归；不替代真实 Gmail、系统凭据库或发行验收。

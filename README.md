@@ -10,7 +10,7 @@ LetterKeeper 是隐私优先、面向人和 Agent 的开源邮件客户端，目
 
 2026-10-14：已完成阶段 C 的**受控 TUI / Agent 人工审批工作流**及账户接入引导增量。严格 TLS IMAP/SMTP、账户/OAuth、分页搜索、安全阅读、回复/转发、附件与显式 Drafts/Sent 同步继续共用后端；内置草稿编辑、完整审阅、人工批准、独立发送及结果查询保留。
 
-231 项已登记 Rust 测试、fmt/Clippy、实际 PTY、可达 HTTP/DNS 观察器和实际 Codex MCP 数据路径已通过。真实 Gmail、真实系统凭据库、公开图形前端及受限自动发送尚未验收，**不能称为全部 P0 已完成或生产可用**。实际完成项和缺口见 [验收状态](docs/STATUS.md)。本轮没有使用真实邮箱或外发邮件。
+231 项已登记 Rust 测试、fmt/Clippy、实际 PTY、可达 HTTP/DNS 观察器和实际 Codex MCP 数据路径已通过。2026-10-15 另已完成[本机 GNOME Keyring 往返与真实 Google OAuth 登录/token 保存](docs/testing/live-keyring-2026-10-15.md)，没有读取邮件或外发。真实 Gmail 邮件闭环、续期、完整凭据服务故障关卡、公开图形前端及受限自动发送仍待验收，**不能称为全部 P0 已完成或生产可用**。实际完成项和缺口见 [验收状态](docs/STATUS.md)。
 
 ## 实现边界
 
@@ -115,7 +115,7 @@ python3 scripts/benchmark.py target/debug/letterkeeper
 
 release 的 1k/10k 合成邮箱、32 KiB/2 MiB 原文与 32 KiB/1 MiB 编辑输入实测见 [阶段 C 性能](docs/testing/performance-phase-c.md)。测量采用从进程启动开始的子进程树采样；输入与空闲 CPU 门槛在该样本上通过，不等于真实服务性能承诺。
 
-已记录 [GitHub runner 性能基线](docs/testing/hosted-performance.md)及原始合成 JSON，不能直接用 Arch 本机历史样本认定远程回归通过。真实 Gmail/系统凭据库仍是独立、另行授权的验收关卡。
+已记录 [GitHub runner 性能基线](docs/testing/hosted-performance.md)及原始合成 JSON，不能直接用 Arch 本机历史样本认定远程回归通过。真实服务按独立授权关卡分步执行；已完成的本机凭据往返与 OAuth 登录及剩余范围见[真实验收记录](docs/testing/live-keyring-2026-10-15.md)。
 
 开发继续使用独立分支/worktree、远程独立编译目录、TDD 和按任务选择模型的子代理，见 [协作流程](docs/WORKFLOW.md)。真实服务操作清单见 [独立验收关卡](docs/testing/live-acceptance.md)。
 

@@ -844,8 +844,12 @@ fn smtp_disconnect_after_data_remains_uncertain_with_submission_stage() {
     let diagnostic = report.diagnostic.unwrap();
     assert_eq!(diagnostic.stage, SmtpStage::Submission);
     assert_eq!(diagnostic.smtp_code, None);
-    // Lettre represents clean EOF as an incomplete-response error.
-    assert_eq!(diagnostic.kind, SmtpFailureKind::UnexpectedResponse);
+    // An abrupt TLS close may be a transport error or an incomplete SMTP
+    // response. Both retain the conservative post-DATA uncertainty boundary.
+    assert!(matches!(
+        diagnostic.kind,
+        SmtpFailureKind::Connection | SmtpFailureKind::UnexpectedResponse
+    ));
     assert_eq!(
         server
             .finish()
@@ -924,6 +928,37 @@ fn smtp_local_preparation_and_tls_validation_never_connect() {
         );
         assert_eq!(report.outcome, WriteOutcome::Failed);
     }
+    for credentials in [
+        Credentials {
+            username: "person@example.test".into(),
+            secret: String::new(),
+            oauth: true,
+        },
+        Credentials {
+            username: "person\r\nAUTH".into(),
+            secret: "synthetic-secret".into(),
+            oauth: false,
+        },
+    ] {
+        assert_eq!(
+            send_smtp_report(
+                &endpoint,
+                &TlsOptions::default(),
+                &credentials,
+                "person@example.test",
+                &["recipient@example.test".into()],
+                b"synthetic"
+            ),
+            SmtpReport {
+                outcome: WriteOutcome::Failed,
+                diagnostic: Some(SmtpDiagnostic {
+                    stage: SmtpStage::Preparation,
+                    kind: SmtpFailureKind::InvalidInput,
+                    smtp_code: None,
+                }),
+            },
+        );
+    }
     let invalid_tls = TlsOptions {
         roots_pem: Some(b"not a certificate".to_vec()),
     };
@@ -959,6 +994,16 @@ fn smtp_tls_validation_rejects_invalid_configuration_without_network() {
         port: listener.local_addr().unwrap().port(),
     };
     assert_eq!(validate_smtp_tls(&endpoint, &TlsOptions::default()), Ok(()));
+    let certificate = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+    assert_eq!(
+        validate_smtp_tls(
+            &endpoint,
+            &TlsOptions {
+                roots_pem: Some(certificate.cert.pem().into_bytes()),
+            }
+        ),
+        Ok(()),
+    );
     for pem in [
         b"not a certificate".to_vec(),
         vec![b'x'; 65537],

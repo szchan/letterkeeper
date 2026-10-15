@@ -254,20 +254,15 @@ async fn connect(
 ) -> Result<Wire, ProtocolError> {
     connect_with_progress(endpoint, tls, state, imap, None).await
 }
-/// Validate SMTP endpoint and trust configuration without any network or authentication.
-pub fn validate_smtp_tls(_endpoint: &Endpoint, _tls: &TlsOptions) -> Result<(), ProtocolError> {
-    Ok(())
+/// Validate SMTP endpoint and trust configuration without DNS, connection or authentication.
+/// Uses the same default roots, extra CA bounds and strict TLS policy as connect.
+pub fn validate_smtp_tls(endpoint: &Endpoint, tls: &TlsOptions) -> Result<(), ProtocolError> {
+    tls_configuration(endpoint, tls).map(|_| ())
 }
-async fn connect_with_progress(
+fn tls_configuration(
     endpoint: &Endpoint,
     tls: &TlsOptions,
-    state: Arc<State>,
-    imap: bool,
-    progress: Option<&SmtpProgress>,
-) -> Result<Wire, ProtocolError> {
-    if let Some(progress) = progress {
-        progress.set(SmtpStage::TlsConfiguration);
-    }
+) -> Result<(rustls::pki_types::ServerName<'static>, rustls::ClientConfig), ProtocolError> {
     if !valid(&endpoint.host, 253) || endpoint.port == 0 {
         return Err(ProtocolError::InvalidInput);
     }
@@ -297,6 +292,19 @@ async fn connect_with_progress(
     .map_err(|_| ProtocolError::Connection)?
     .with_root_certificates(roots)
     .with_no_client_auth();
+    Ok((name, config))
+}
+async fn connect_with_progress(
+    endpoint: &Endpoint,
+    tls: &TlsOptions,
+    state: Arc<State>,
+    imap: bool,
+    progress: Option<&SmtpProgress>,
+) -> Result<Wire, ProtocolError> {
+    if let Some(progress) = progress {
+        progress.set(SmtpStage::TlsConfiguration);
+    }
+    let (name, config) = tls_configuration(endpoint, tls)?;
     if let Some(progress) = progress {
         progress.set(SmtpStage::Connection);
     }

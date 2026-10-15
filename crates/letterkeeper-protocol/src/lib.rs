@@ -88,6 +88,35 @@ use std::{
 use wire::{MAX_HEADER, MAX_RAW, State, Wire};
 type Session = async_imap::Session<Wire>;
 const DEADLINE: Duration = Duration::from_secs(15);
+// 4096 ten-digit UID tokens plus separators fit below Wire's 64 KiB line bound.
+const SEARCH_WINDOW: u32 = 4096;
+const MAX_SEARCH_WINDOWS: usize = 128;
+#[derive(Clone, Copy)]
+struct MailboxSnapshot {
+    exists: u32,
+    validity: u32,
+}
+impl MailboxSnapshot {
+    fn check(&self, response: &async_imap::imap_proto::Response<'_>) -> Result<(), ProtocolError> {
+        use async_imap::imap_proto::{MailboxDatum, Response, ResponseCode};
+        match response {
+            Response::Expunge(_) | Response::Vanished { .. } => Err(ProtocolError::StaleMailbox),
+            Response::MailboxData(MailboxDatum::Exists(n)) if *n != self.exists => {
+                Err(ProtocolError::StaleMailbox)
+            }
+            Response::Data { outcome, .. } | Response::Done { outcome, .. } if matches!(outcome.code, Some(ResponseCode::UidValidity(n)) if n != self.validity) => {
+                Err(ProtocolError::StaleMailbox)
+            }
+            _ => Ok(()),
+        }
+    }
+}
+#[derive(Clone, Copy)]
+struct SearchWindow {
+    snapshot: MailboxSnapshot,
+    max_results: usize,
+    previous_uid: u32,
+}
 fn valid(value: &str, max: usize) -> bool {
     !value.is_empty() && value.len() <= max && !value.chars().any(char::is_control)
 }
@@ -212,6 +241,7 @@ async fn checked_uid_search(
     session: &mut Session,
     criteria: &str,
     literal: Option<&str>,
+    window: Option<SearchWindow>,
 ) -> Result<std::collections::HashSet<u32>, ProtocolError> {
     use async_imap::imap_proto::{MailboxDatum, Response, Status};
     let tag = session
@@ -227,6 +257,9 @@ async fn checked_uid_search(
             .await
             .map_err(|_| ProtocolError::Rejected)?
             .ok_or(ProtocolError::Rejected)?;
+        if let Some(window) = window {
+            window.snapshot.check(response.parsed())?;
+        }
         match response.parsed() {
             Response::Continue(_) if awaiting_literal => {
                 session
@@ -240,7 +273,21 @@ async fn checked_uid_search(
                 if found.contains(&0) {
                     return Err(ProtocolError::Rejected);
                 }
-                ids.extend(found.iter().copied());
+                if let Some(window) = window {
+                    if saw_search {
+                        return Err(ProtocolError::Rejected);
+                    }
+                    if found.len() > window.max_results {
+                        return Err(ProtocolError::Limit);
+                    }
+                    for &uid in found {
+                        if uid <= window.previous_uid || !ids.insert(uid) {
+                            return Err(ProtocolError::Rejected);
+                        }
+                    }
+                } else {
+                    ids.extend(found.iter().copied());
+                }
                 saw_search = true;
                 if ids.len() > 1_000_000 {
                     return Err(ProtocolError::Limit);
@@ -258,6 +305,100 @@ async fn checked_uid_search(
                 ..
             } => return Err(ProtocolError::Rejected),
             // Unsolicited mailbox status updates do not change the search result.
+            _ => (),
+        }
+    }
+}
+// async-imap's fetch stream discards tagged status, just like uid_search.
+// Use its parser's typed attributes and explicitly validate completion instead.
+async fn checked_page_fetch(
+    session: &mut Session,
+    wanted: &[u32],
+    snapshot: MailboxSnapshot,
+) -> Result<Vec<RemoteMessage>, ProtocolError> {
+    use async_imap::imap_proto::{AttributeValue, MessageSection, Response, SectionPath, Status};
+    if wanted.is_empty() {
+        return Ok(Vec::new());
+    }
+    let set = wanted
+        .iter()
+        .map(u32::to_string)
+        .collect::<Vec<_>>()
+        .join(",");
+    let tag = session.run_command(format!(
+        "UID FETCH {set} (UID RFC822.SIZE FLAGS BODY.PEEK[HEADER.FIELDS (FROM TO CC SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES)])"
+    )).await.map_err(|_| ProtocolError::Rejected)?;
+    let mut messages: Vec<RemoteMessage> = Vec::with_capacity(wanted.len());
+    loop {
+        let response = session
+            .read_response()
+            .await
+            .map_err(|_| ProtocolError::Rejected)?
+            .ok_or(ProtocolError::Rejected)?;
+        snapshot.check(response.parsed())?;
+        match response.parsed() {
+            Response::Fetch(_, attributes) => {
+                let mut uid = None;
+                let mut size = None;
+                let mut headers: Option<&[u8]> = None;
+                let mut flags = Vec::new();
+                for attribute in attributes {
+                    match attribute {
+                        AttributeValue::Uid(value) => {
+                            if uid.replace(*value).is_some() {
+                                return Err(ProtocolError::Rejected);
+                            }
+                        }
+                        AttributeValue::Rfc822Size(value) => {
+                            if size.replace(*value).is_some() {
+                                return Err(ProtocolError::Rejected);
+                            }
+                        }
+                        AttributeValue::BodySection {
+                            section: Some(SectionPath::Full(MessageSection::Header)),
+                            data: Some(data),
+                            ..
+                        }
+                        | AttributeValue::Rfc822Header(Some(data)) => {
+                            if headers.replace(data.as_ref()).is_some() {
+                                return Err(ProtocolError::Rejected);
+                            }
+                        }
+                        AttributeValue::Flags(values) => {
+                            flags.extend(values.iter().map(|flag| flag.to_string()));
+                        }
+                        _ => (),
+                    }
+                }
+                let uid = uid.ok_or(ProtocolError::Rejected)?;
+                if !wanted.contains(&uid) || messages.iter().any(|m| m.uid == uid) {
+                    return Err(ProtocolError::Rejected);
+                }
+                let headers = headers.ok_or(ProtocolError::Rejected)?;
+                if headers.len() > MAX_HEADER {
+                    return Err(ProtocolError::Limit);
+                }
+                messages.push(RemoteMessage {
+                    uid,
+                    headers: headers.to_vec(),
+                    size: size.ok_or(ProtocolError::Rejected)?,
+                    flags,
+                });
+            }
+            Response::Done {
+                tag: completed,
+                status: Status::Ok,
+                ..
+            } if completed == &tag && messages.len() == wanted.len() => {
+                messages.sort_by_key(|m| m.uid);
+                return Ok(messages);
+            }
+            Response::Done { .. }
+            | Response::Continue(_)
+            | Response::Data {
+                status: Status::Bye,
+                ..
+            } => return Err(ProtocolError::Rejected),
             _ => (),
         }
     }
@@ -374,23 +515,84 @@ impl ImapClient {
         if !valid(folder, 1024) || !(1..=50).contains(&limit) || offset > 1_000_000 {
             return Err(ProtocolError::InvalidInput);
         }
-        let (search, literal) = match query {
+        let (search, literal, charset) = match query {
             Some(q) if !q.is_ascii() => {
                 quoted(q)?; // Validate length/control characters before credentials.
-                (format!("CHARSET UTF-8 TEXT {{{}}}", q.len()), Some(q))
+                (format!("TEXT {{{}}}", q.len()), Some(q), "CHARSET UTF-8 ")
             }
-            Some(q) => (format!("TEXT {}", quoted(q)?), None),
-            None => ("ALL".into(), None),
+            Some(q) => (format!("TEXT {}", quoted(q)?), None, ""),
+            None => ("ALL".into(), None, ""),
         };
         let state = Arc::new(State::default());
-        self.operation(async{
-   let mut s=self.session(state.clone()).await?;let mailbox=s.examine(folder).await.map_err(|_|ProtocolError::Rejected)?;let validity=mailbox.uid_validity.ok_or(ProtocolError::Rejected)?;
-   let mut ids:Vec<u32>=checked_uid_search(&mut s,&search,literal).await?.into_iter().collect();ids.sort_unstable();let more=ids.len()>offset.saturating_add(limit);let wanted:Vec<u32>=ids.into_iter().skip(offset).take(limit).collect();let mut messages=Vec::new();
-   if !wanted.is_empty(){let set=wanted.iter().map(u32::to_string).collect::<Vec<_>>().join(",");let mut stream=s.uid_fetch(set,"(UID RFC822.SIZE FLAGS BODY.PEEK[HEADER.FIELDS (FROM TO CC SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES)])").await.map_err(|_|ProtocolError::Rejected)?;
-    while let Some(fetch)=stream.try_next().await.map_err(|_|ProtocolError::Rejected)?{let uid=fetch.uid.ok_or(ProtocolError::Rejected)?;if !wanted.contains(&uid){continue;}
-if messages.len()>=limit{return Err(ProtocolError::Limit);}let headers=fetch.header().ok_or(ProtocolError::Rejected)?;if headers.len()>MAX_HEADER{return Err(ProtocolError::Limit);}messages.push(RemoteMessage{uid,headers:headers.to_vec(),size:fetch.size.ok_or(ProtocolError::Rejected)?,flags:fetch.flags().map(|flag|match flag { async_imap::types::Flag::Custom(s)=>s.into_owned(),async_imap::types::Flag::MayCreate=>"\\*".into(),other=>format!("\\{other:?}") }).collect()});}
-   }messages.sort_by_key(|m|m.uid);Ok(MessagePage{uid_validity:validity,messages,more})
-  },&state)
+        self.operation(
+            async {
+                let mut s = self.session(state.clone()).await?;
+                let mailbox = s
+                    .examine(folder)
+                    .await
+                    .map_err(|_| ProtocolError::Rejected)?;
+                let snapshot = MailboxSnapshot {
+                    exists: mailbox.exists,
+                    validity: mailbox
+                        .uid_validity
+                        .filter(|v| *v != 0)
+                        .ok_or(ProtocolError::Rejected)?,
+                };
+                let mut wanted = Vec::with_capacity(limit + 1);
+                let mut remaining_offset = offset;
+                let mut start = 1;
+                let mut previous_uid = 0;
+                let mut windows = 0;
+                while start <= snapshot.exists {
+                    if windows >= MAX_SEARCH_WINDOWS {
+                        return Err(ProtocolError::Limit);
+                    }
+                    windows += 1;
+                    let end = start.saturating_add(SEARCH_WINDOW - 1).min(snapshot.exists);
+                    let criteria = format!("{charset}{start}:{end} {search}");
+                    let mut ids: Vec<_> = checked_uid_search(
+                        &mut s,
+                        &criteria,
+                        literal,
+                        Some(SearchWindow {
+                            snapshot,
+                            max_results: (end - start + 1) as usize,
+                            previous_uid,
+                        }),
+                    )
+                    .await?
+                    .into_iter()
+                    .collect();
+                    ids.sort_unstable();
+                    if let Some(last) = ids.last() {
+                        previous_uid = *last;
+                    }
+                    for uid in ids {
+                        if remaining_offset > 0 {
+                            remaining_offset -= 1;
+                        } else {
+                            wanted.push(uid);
+                            if wanted.len() > limit {
+                                break;
+                            }
+                        }
+                    }
+                    if wanted.len() > limit || end == snapshot.exists {
+                        break;
+                    }
+                    start = end + 1;
+                }
+                let more = wanted.len() > limit;
+                wanted.truncate(limit);
+                let messages = checked_page_fetch(&mut s, &wanted, snapshot).await?;
+                Ok(MessagePage {
+                    uid_validity: snapshot.validity,
+                    messages,
+                    more,
+                })
+            },
+            &state,
+        )
     }
     pub fn read_message(
         &self,
@@ -457,7 +659,7 @@ if messages.len()>=limit{return Err(ProtocolError::Limit);}let headers=fetch.hea
                     .await
                     .map_err(|_| ProtocolError::Rejected)?;
                 let uid_validity = mailbox.uid_validity.ok_or(ProtocolError::Rejected)?;
-                let ids = checked_uid_search(&mut s, &query, None).await?;
+                let ids = checked_uid_search(&mut s, &query, None, None).await?;
                 if ids.len() > 1024 {
                     return Err(ProtocolError::Limit);
                 }

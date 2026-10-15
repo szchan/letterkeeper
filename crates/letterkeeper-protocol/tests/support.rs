@@ -235,7 +235,9 @@ async fn imap_reply(
         if matches!(scenario, Scenario::BadCharset) {
             format!("{tag} NO [BADCHARSET (US-ASCII)] rejected synthetic-secret private-search\r\n")
         } else if matches!(scenario, Scenario::Utf8Search) {
-            if !cmd.is_ascii() || !cmd.starts_with("UID SEARCH CHARSET UTF-8 TEXT {") {
+            if !cmd.is_ascii()
+                || !(cmd.starts_with("UID SEARCH CHARSET UTF-8 ") && cmd.contains(" TEXT {"))
+            {
                 format!("{tag} NO [BADCHARSET (US-ASCII)] charset and literal required\r\n")
             } else {
                 receive_search_literal(io, cmd, observed).await;
@@ -426,7 +428,7 @@ async fn mailbox_reply(
                 .count()
         )
     } else if cmd.starts_with("UID SEARCH") {
-        if cmd.starts_with("UID SEARCH CHARSET UTF-8 TEXT {") {
+        if cmd.starts_with("UID SEARCH CHARSET UTF-8 ") && cmd.contains(" TEXT {") {
             receive_search_literal(io, cmd, observed).await;
         }
         let wanted = cmd

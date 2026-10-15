@@ -377,3 +377,56 @@ fn server_managed_sent_policy_never_issues_client_append() {
     assert_eq!(vault.gets.load(Ordering::SeqCst), 0);
     assert!(imap.finish().is_empty());
 }
+
+#[test]
+fn failed_send_has_safe_persistent_diagnostic() {
+    let imap = support::Server::start_shared();
+    let smtp = support::Server::start(support::Scenario::SmtpReject);
+    let mut cfg = config(&imap, &smtp);
+    let dir = tempfile::tempdir().unwrap();
+    let ca = dir.path().join("ca.pem");
+    std::fs::write(&ca, smtp.tls.roots_pem.as_ref().unwrap()).unwrap();
+    cfg.extra_ca_pem = Some(ca);
+    let state = dir.path().join("state");
+    let vault = Arc::new(Vault::default());
+    let h = RemoteHost::open(cfg.clone(), &state, vault.clone(), sandbox()).unwrap();
+    let draft = h
+        .create_draft(letterkeeper_adapters::DraftInput {
+            to: vec!["private-recipient@example.test".into()],
+            subject: "合成诊断".into(),
+            body: "private synthetic body".into(),
+        })
+        .unwrap();
+    let id = draft["id"].as_i64().unwrap();
+    assert!(h.send_draft(&id.to_string()).is_err());
+    assert_eq!(vault.gets.load(Ordering::SeqCst), 0);
+    let mut store = Store::open(state.join("state.sqlite"))
+        .unwrap()
+        .with_policy(policy());
+    store
+        .approve(id, draft["digest"].as_str().unwrap(), i64::MAX)
+        .unwrap();
+    drop(store);
+    let sent = h.send_draft(&id.to_string()).unwrap();
+    assert_eq!(sent["state"], "Failed");
+    assert_eq!(
+        sent["diagnostic"],
+        json!({"stage":"recipient","kind":"rejected","smtp_code":550})
+    );
+    let submission = sent["id"].as_i64().unwrap();
+    drop(h);
+    let reopened = RemoteHost::open(cfg, &state, vault, sandbox()).unwrap();
+    let status = reopened.send_status(&submission.to_string()).unwrap();
+    assert_eq!(status["diagnostic"], sent["diagnostic"]);
+    for forbidden in [
+        "private-recipient@example.test",
+        "person@example.test",
+        "synthetic-secret",
+        "private synthetic body",
+        "refused",
+    ] {
+        assert!(!sent.to_string().contains(forbidden));
+        assert!(!status.to_string().contains(forbidden));
+    }
+    assert!(smtp.finish().iter().any(|line| line.starts_with("RCPT")));
+}

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use clap::{Parser, Subcommand};
 use letterkeeper::{
-    app::{AppHost, draft_view, now, store_at, submission_view, validate_demo},
+    app::{AppHost, draft_view, now, store_at, submission_status_view, validate_demo},
     files::{export_attachment, import_attachment, read_regular},
     remote::{RemoteHost, store_for_account, validate_identity},
     sandbox::Sandbox,
@@ -678,13 +678,7 @@ fn run(cli: Cli) -> Result<(), String> {
         Action::Status { id } => {
             let store = scoped_store(account.as_ref(), &cli.state_dir)?;
             let sub = store.get_submission(id).map_err(|e| e.to_string())?;
-            let mut value = submission_view(&sub);
-            value["diagnostic"] = serde_json::json!(
-                store
-                    .get_submission_diagnostic(id)
-                    .map_err(|e| e.to_string())?
-            );
-            print_json(&value)
+            print_json(&submission_status_view(&store, &sub))
         }
     }
 }

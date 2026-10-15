@@ -167,3 +167,39 @@ fn private_permissions_reject_special_bits_and_changed_parent_modes() {
     assert!(repo.save(&config()).is_err());
     assert!(repo.list().is_err());
 }
+
+#[test]
+fn gmail_oauth_documented_and_legacy_tags_preserve_serialization() {
+    let expected = Authentication::GmailOAuth {
+        client_id: "synthetic-desktop-client".into(),
+        client_secret_ref: false,
+    };
+    let mut value = serde_json::to_value(config()).unwrap();
+    value["authentication"] = serde_json::json!({
+        "type": "gmail_o_auth",
+        "client_id": "synthetic-desktop-client",
+        "client_secret_ref": false,
+    });
+    let legacy: AccountConfig = serde_json::from_value(value.clone()).unwrap();
+    legacy.validate().unwrap();
+    assert_eq!(legacy.authentication, expected);
+    assert_eq!(
+        serde_json::to_value(&legacy).unwrap()["authentication"]["type"],
+        "gmail_o_auth"
+    );
+    value["authentication"]["type"] = "unknown_oauth".into();
+    assert!(serde_json::from_value::<AccountConfig>(value.clone()).is_err());
+    value["authentication"]["type"] = "gmail_oauth".into();
+    let documented = serde_json::from_value::<AccountConfig>(value);
+    assert!(
+        documented.is_ok(),
+        "the documented gmail_oauth authentication tag must deserialize"
+    );
+    let documented = documented.unwrap();
+    documented.validate().unwrap();
+    assert_eq!(documented, legacy);
+    assert_eq!(
+        serde_json::to_value(&documented).unwrap()["authentication"]["type"],
+        "gmail_o_auth"
+    );
+}

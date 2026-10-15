@@ -520,6 +520,7 @@ fn bounded_search_rejects_unsafe_results_and_mailbox_drift() {
         (PageMode::ChangedValidity, ProtocolError::StaleMailbox),
         (PageMode::WrongTag, ProtocolError::Rejected),
         (PageMode::MissingSearch, ProtocolError::Rejected),
+        (PageMode::MultipleSearch, ProtocolError::Rejected),
         (PageMode::HugeLine, ProtocolError::Limit),
     ] {
         let server = Server::start(Scenario::Paged {
@@ -605,4 +606,73 @@ fn page_fetch_rejects_mailbox_drift_after_complete_headers() {
         ProtocolError::StaleMailbox
     );
     assert!(server.finish().iter().any(|s| s.contains("UID FETCH")));
+}
+
+#[test]
+fn bounded_search_rejects_cross_window_uid_regression() {
+    use support::PageMode;
+    let server = Server::start(Scenario::Paged {
+        count: 8192,
+        mode: PageMode::CrossWindowOverlap,
+    });
+    assert_eq!(
+        client(&server)
+            .list_messages("INBOX", 4096, 1, None)
+            .unwrap_err(),
+        ProtocolError::Rejected
+    );
+    let log = server.finish();
+    assert_eq!(log.iter().filter(|s| s.contains("UID SEARCH")).count(), 2);
+    assert!(!log.iter().any(|s| s.contains("FETCH")));
+}
+
+#[test]
+fn bounded_ascii_matches_and_empty_search_complete_within_budget() {
+    use support::{PageMode, page_uid};
+    let server = Server::start(Scenario::Paged {
+        count: 20_000,
+        mode: PageMode::Sparse,
+    });
+    let page = client(&server)
+        .list_messages("INBOX", 7, 2, Some("matched text"))
+        .unwrap();
+    assert_eq!(
+        page.messages.iter().map(|m| m.uid).collect::<Vec<_>>(),
+        vec![page_uid(8000), page_uid(9000)]
+    );
+    assert!(page.more);
+    let log = server.finish();
+    assert_eq!(log.iter().filter(|s| s.contains("UID SEARCH")).count(), 3);
+    assert!(
+        log.iter()
+            .any(|s| s.contains("8193:12288 TEXT \"matched text\""))
+    );
+    let server = Server::start(Scenario::Paged {
+        count: 8193,
+        mode: PageMode::Empty,
+    });
+    let page = client(&server)
+        .list_messages("INBOX", 0, 50, Some("absent text"))
+        .unwrap();
+    assert!(page.messages.is_empty());
+    assert!(!page.more);
+    let log = server.finish();
+    assert_eq!(log.iter().filter(|s| s.contains("UID SEARCH")).count(), 3);
+    assert!(!log.iter().any(|s| s.contains("FETCH")));
+}
+
+#[test]
+fn bounded_search_sorts_arbitrary_wire_order_before_paging() {
+    use support::{PageMode, page_uid};
+    let server = Server::start(Scenario::Paged {
+        count: 100,
+        mode: PageMode::ReverseOrder,
+    });
+    let page = client(&server).list_messages("INBOX", 5, 2, None).unwrap();
+    assert_eq!(
+        page.messages.iter().map(|m| m.uid).collect::<Vec<_>>(),
+        vec![page_uid(6), page_uid(7)]
+    );
+    assert!(page.more);
+    server.finish();
 }

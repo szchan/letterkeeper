@@ -37,7 +37,7 @@ GREEN、网络观测、受控 SMTP 与实际终端验证见后续章节。
 
 官方 rmcp client 通过实际子进程 stdin/stdout 完成初始化、列工具、读取正文、创建草稿及未授权发送拒绝。输出没有 HTML、图片内容块或活动 URL；无 approve/改策略工具，confirm/role 等字段被拒绝。额外实进程测试让 stdin 持续打开并写入超过 128 KiB 的无换行帧，进程关闭而非无限缓存。测试将 stdin handle 从 Child 中取出，避免 `Child::wait` 自动关闭 stdin 导致假通过。
 
-`python3 scripts/verify_terminal.py target/debug/letterkeeper` 已通过：真实 PTY 的 80×24 与 24×12，中文与宽字符输出、j/Enter/?/q、resize、终端属性恢复，以及人工输入完整摘要批准合成草稿。测试处理应用合法的光标控制序列；它不替代实际字体和审美评审。Ratatui TestBackend 另外覆盖极小/空尺寸和多封邮件的选择可见性。
+`python3 tests/e2e/verify_terminal.py target/debug/letterkeeper` 已通过：真实 PTY 的 80×24 与 24×12，中文与宽字符输出、j/Enter/?/q、resize、终端属性恢复，以及人工输入完整摘要批准合成草稿。测试处理应用合法的光标控制序列；它不替代实际字体和审美评审。Ratatui TestBackend 另外覆盖极小/空尺寸和多封邮件的选择可见性。
 
 公开 MCP 客户端/GUI 的最终渲染、真实网络协议、OAuth、Sent 同步、性能目标和完整产品行为仍未验收，见 [STATUS](../STATUS.md)。
 

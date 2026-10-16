@@ -6,7 +6,7 @@
 
 首次直接 app-server 启动因只读 Codex runtime SQLite 失败。解决方法是在 bubblewrap 中挂载新临时 `.codex` 目录，不重设 HOME/CODEX_HOME，不挂载真实 auth/config/plugins。客户端禁网，只有合成fixture、临时应用数据和必要执行文件；解析另走原 worker。先 config/read 核对只有两个指定测试服务器，然后创建 ephemeral thread，不发 turn/start。
 
-`python3 scripts/verify_codex.py /绝对路径/letterkeeper` 通过：两个已连接 MCP 服务各14工具；实际工具调用能够读取中文合成HTML的保守文本、创建/读取草稿；只读写入、未批准发送、模型confirm参数和账户覆盖都拒绝。输出无活动URL/HTML/终端escape，正文标注untrusted。身份均为example.test，smtp_test使用不可批准的草稿，因此没有SMTP连接。
+`python3 tests/e2e/verify_codex.py /绝对路径/letterkeeper` 通过：两个已连接 MCP 服务各14工具；实际工具调用能够读取中文合成HTML的保守文本、创建/读取草稿；只读写入、未批准发送、模型confirm参数和账户覆盖都拒绝。输出无活动URL/HTML/终端escape，正文标注untrusted。身份均为example.test，smtp_test使用不可批准的草稿，因此没有SMTP连接。
 
 脚本输出版本与断言结果，不输出个人配置/凭据或邮件正文。临时目录和客户端进程清理后退出。运行需要namespace/bubblewrap权限及已安装Codex，不进入普通cargo单元测试（外部客户端为独立验收命令）。源码采用GPL-3.0-only。
 

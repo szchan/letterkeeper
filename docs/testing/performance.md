@@ -7,8 +7,7 @@
 重现：
 
 ```sh
-cargo build --locked
-python3 scripts/benchmark.py target/debug/letterkeeper
+cargo bench --locked -p letterkeeper --bench read -- --binary target/release/letterkeeper --output target/artifacts/read-performance.json
 ```
 
 | 指标 | 本次样本 |

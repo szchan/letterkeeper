@@ -1,6 +1,6 @@
 # 阶段 C：展示工作流的 HTTP / DNS 验证
 
-`python3 scripts/verify_privacy_workspace.py /绝对路径/letterkeeper` 已在合成数据上通过。临时 user/network namespace 内启动真实 UDP 53 DNS 服务及 TCP HTTP 观察器；给该测试挂载专用 hosts/nsswitch/resolv 文件，不改宿主配置。DNS 正向控制实际调用 gethostbyname；HTTP 正向控制通过域名建立连接。两者成功后清零观察记录。
+`python3 tests/e2e/verify_privacy_workspace.py /绝对路径/letterkeeper` 已在合成数据上通过。临时 user/network namespace 内启动真实 UDP 53 DNS 服务及 TCP HTTP 观察器；给该测试挂载专用 hosts/nsswitch/resolv 文件，不改宿主配置。DNS 正向控制实际调用 gethostbyname；HTTP 正向控制通过域名建立连接。两者成功后清零观察记录。
 
 随后在同一可联网测试网络中运行实际应用：MCP stdio 创建/读取含 img、dns-prefetch、script/fetch 字样的草稿；TUI 打开编辑器、完整审阅并 End 到超过16KiB正文后的 TAIL_PRIVACY。无新DNS查询或HTTP连接，终端属性恢复。客户端主进程能够连接观察器，不能将这项结果归因于切断了客户端全部网络。测试网络与宿主/外部网络分离；绑定53端口能力仅用于这个临时 namespace 内的DNS夹具。
 

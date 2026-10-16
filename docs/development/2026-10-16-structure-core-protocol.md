@@ -18,6 +18,6 @@
 - 基线完整 CI：[`38736285052`](https://github.com/szchan/letterkeeper/actions/runs/38736285052)，基线 SHA 见本次任务记录。
 - 本机只执行 `rustfmt --edition 2024 --check`、`git diff --check` 和轻量源码审查；没有 Cargo 构建、check、测试、Clippy 或安装编译。
 - 轻量审查将原根文件和拆分后的 Rust 函数分词比较：核心 42 个、协议 32 个函数的签名和函数体 token 全部保留，忽略导入、空白、注释和函数外可见性限定；这只能证明机械搬移一致，不替代编译或行为验收。
-- 子任务分支：`refactor/structure-core-protocol`。远程完整 CI 当前待验证；结果以精确 SHA 和 Actions run 为准。
+- 子任务分支：`refactor/structure-core-protocol`；[draft PR #22](https://github.com/szchan/letterkeeper/pull/22)。代码提交 `a3d3ed5c62883684660741d677c7b29226c9d597` 的[完整 CI `38842693170`](https://github.com/szchan/letterkeeper/actions/runs/38842693170) 已通过：`workspace`、`codex-client`、`ci-gate` 均为 success。运行环境为 Ubuntu 24.04、Rust 1.99.0，使用仓库原有完整门禁。随后开发记录提交的精确 revision 另由 PR 最新 checks 验证；这份代码证据不替代其结果。
 
 远程门禁覆盖 fmt、Clippy、完整 workspace 回归、真实 PTY、工作区审批/发送、可达 HTTP/DNS 隐私观察器及实际 Codex MCP 路径。子任务通过不能代替主代理集成后新 SHA 的完整门禁，也不增加产品或真实服务验收结论。

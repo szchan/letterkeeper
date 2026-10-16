@@ -19,3 +19,4 @@
 
 # Optional code graph artifacts (normal use stays under .local/)
 /.gitnexus/
+/.codex/config.toml

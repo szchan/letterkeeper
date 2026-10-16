@@ -16,3 +16,4 @@
 - [2026-10-16 核心/协议模块拆分](2026-10-16-structure-core-protocol.md)。
 
 - [2026-10-16 适配/正文/应用模块拆分](2026-10-16-structure-modules.md)。
+- [2026-10-16 GitNexus 接入与验证](2026-10-16-gitnexus.md)；[图谱使用指南](gitnexus.md)。

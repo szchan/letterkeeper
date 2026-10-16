@@ -42,3 +42,5 @@
 当前受控测试为 272 项已登记 Rust 测试：原账户接入基线 231 项、1 项 Gmail 配置标签兼容回归、11 项有界分页/完成状态协议回归与 29 项安全发送诊断增量；发送诊断结果见[集成记录](testing/send-diagnostics.md)，精确 RED/GREEN 及完整 CI 见[配置兼容](testing/gmail-config-compat.md)和[分页回归](testing/imap-bounded-paging.md)。fmt/Clippy、实际 PTY、独立客户端与隐私门禁保留，新集成 revision 必须重新通过；helper 登记不视为额外独立产品验收。另见[账户接入记录](development/2026-10-14-account-onboarding.md)、[阶段 C 集成](testing/phase-c-integration.md)和[真实服务关卡](testing/live-acceptance.md)。阶段 B/C 历史结果仍保留追溯。
 
 2026-10-16 结构整理：原 3 个性能辅助测试入口迁到正式 `read`/`workspace` Cargo benchmarks，新增 4 个入口/路径/共享设施检查单列登记。原安全/协议/PTY/实际 Codex 回归保留；测试总数不代表覆盖范围增加。新 revision 的远程证据见[结构整理记录](development/2026-10-16-project-structure.md)，本次不改变以上真实服务或 P0 缺口结论。
+
+结构整理源码 `6321cfe` 的[完整远程门禁](https://github.com/szchan/letterkeeper/actions/runs/38844476241)通过，新增基准入口/共享设施及路径回归有独立 RED/GREEN；[原始证据与测试声明差异](development/2026-10-16-project-structure.md)单列。源码声明 273 项，三项原基准 helper 移出普通测试；这不改变上面的历史验收结论。最终文档 revision 和合并后 main 仍按最新门禁验收。

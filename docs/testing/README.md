@@ -58,3 +58,5 @@
 - [历史验证：托管性能](hosted-performance.md)：GitHub runner 性能样本。
 - [历史数据：托管性能 JSON](hosted-performance.json)：阶段 C 原始合成测量数据。
 - [历史数据：阶段 A 托管性能 JSON](hosted-performance-phase-a.json)：阶段 A 原始合成测量数据。
+
+- [结构整理静态测试声明清单](structure-test-inventory.json)：基线/重组源码声明与迁入 benches 的负载；实际执行证据见[集成记录](../development/2026-10-16-project-structure.md)。

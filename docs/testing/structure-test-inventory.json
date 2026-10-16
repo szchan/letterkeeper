@@ -1,0 +1,2200 @@
+{
+  "method": "Static Rust #[test]/#[tokio::test] declarations, not a substitute for remote execution; child-process harness output must not be added to registered-test counts.",
+  "baseline": {
+    "commit": "3cf6b01697a3dd31adbeaccb2a9cfdae27e5d279",
+    "count": 272,
+    "tests": [
+      {
+        "path": "crates/letterkeeper-accounts/src/credentials.rs",
+        "name": "runtime_parent_must_exist_private_owned_and_without_symlinks"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/src/diagnostics.rs",
+        "name": "secret_service_collection_paths_follow_the_dbus_object_path_contract"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/src/diagnostics.rs",
+        "name": "directory_diagnostic_is_read_only_and_distinguishes_missing_unsafe_ready"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/src/diagnostics.rs",
+        "name": "directory_owner_modes_files_and_lexical_boundaries_fail_closed"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/src/diagnostics.rs",
+        "name": "bus_addresses_and_reply_shapes_reject_nonlocal_or_ambiguous_inputs"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/src/diagnostics.rs",
+        "name": "metadata_fixture_can_be_read_while_a_script_writer_is_open"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/src/diagnostics.rs",
+        "name": "credential_metadata_uses_only_fixed_calls_and_cleared_environment"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/src/diagnostics.rs",
+        "name": "credential_metadata_errors_output_floods_and_shared_deadline_are_bounded"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/accounts.rs",
+        "name": "strict_configuration_namespace_scope_and_public_serialization"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/accounts.rs",
+        "name": "secrets_redact_and_password_uses_account_namespace"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/accounts.rs",
+        "name": "private_repository_atomic_roundtrip_and_rejects_links_permissions_bounds"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/accounts.rs",
+        "name": "repository_refuses_symlink_directory_and_public_existing_directory"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/accounts.rs",
+        "name": "repository_replacement_is_atomic_and_id_is_bound_to_filename"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/accounts.rs",
+        "name": "default_paths_follow_xdg_without_creating_storage"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/accounts.rs",
+        "name": "default_paths_subprocess_probe"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/accounts.rs",
+        "name": "private_permissions_reject_special_bits_and_changed_parent_modes"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/accounts.rs",
+        "name": "gmail_oauth_documented_and_legacy_tags_preserve_serialization"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/coordination.rs",
+        "name": "mock_vault_coordination_defaults_to_none"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/coordination.rs",
+        "name": "system_vault_coordination_is_stable_private_and_does_not_create_directories"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/coordination.rs",
+        "name": "system_coordination_ignores_configuration_and_xdg_overrides"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/coordination.rs",
+        "name": "coordination_subprocess_probe"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/oauth.rs",
+        "name": "code_exchange_refresh_rotation_cache_logout_and_revoke"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/oauth.rs",
+        "name": "callback_denial_timeout_state_duplicates_and_scope_failure"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/oauth.rs",
+        "name": "invalid_grant_and_http_error_body_are_redacted"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/oauth.rs",
+        "name": "rejected_callback_shapes_do_not_contact_the_token_service"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/oauth.rs",
+        "name": "callback_stall_is_bounded"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/oauth.rs",
+        "name": "token_bounds_type_lifetime_refresh_scope_and_failed_revoke"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/oauth.rs",
+        "name": "configured_client_secret_is_vault_only_and_login_state_is_random"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/oauth.rs",
+        "name": "oauth_login_is_bound_to_the_originating_account"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/oauth.rs",
+        "name": "refresh_is_serialized_across_instances_in_one_process"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/oauth.rs",
+        "name": "http_redirect_is_rejected_without_contacting_the_target"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/onboarding.rs",
+        "name": "onboarding_rejects_bidi_format_marks_in_reviewed_account_fields"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/onboarding.rs",
+        "name": "onboarding_defaults_and_create_only_contract"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/onboarding.rs",
+        "name": "onboarding_gmail_is_fixed_and_scope_additions_are_explicit"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/onboarding.rs",
+        "name": "onboarding_rejects_invalid_untrusted_and_oversized_inputs"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/onboarding.rs",
+        "name": "onboarding_bounds_and_nonduplicating_scope_folders"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/onboarding.rs",
+        "name": "create_only_rejects_every_existing_type_and_racing_creators"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/boundaries.rs",
+        "name": "malicious_text_is_inert_and_bounded"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/boundaries.rs",
+        "name": "navigation_is_bounded"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/boundaries.rs",
+        "name": "terminal_sizes_and_unicode"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/boundaries.rs",
+        "name": "input_policy_and_pagination"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/boundaries.rs",
+        "name": "official_sdk_initialize_list_call"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/boundaries.rs",
+        "name": "all_routes_and_end_of_body_page"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/boundaries.rs",
+        "name": "limits_and_attachment_inputs_reject_before_host"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/boundaries.rs",
+        "name": "navigation_repeated_edges"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/boundaries.rs",
+        "name": "last_list_page_and_draft_truncation_are_explicit"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/boundaries.rs",
+        "name": "tui_long_body_truncation_has_visible_notice"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/boundaries.rs",
+        "name": "selected_list_subject_and_marker_remain_visible"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/boundaries.rs",
+        "name": "stdio_frame_limit_rejects_unterminated_and_fragmented_input"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/boundaries.rs",
+        "name": "stdio_frame_limit_resets_per_line_and_handles_eof_empty_buffer"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_b.rs",
+        "name": "new_routes_are_scoped_and_opaque_ids_survive_inert_output"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_b.rs",
+        "name": "invalid_new_arguments_never_reach_host"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_b.rs",
+        "name": "browser_cancellation_discards_stale_results_and_single_flight"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_b.rs",
+        "name": "official_sdk_lists_schemas_and_calls_new_tools"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_b.rs",
+        "name": "browser_pages_search_read_and_tiny_layout"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_b.rs",
+        "name": "blocked_host_does_not_block_escape_quit_or_spawn_more_work"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_b.rs",
+        "name": "forward_requires_explicit_recipients_and_reply_cannot_override_reply_to"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_b.rs",
+        "name": "mcp_shared_quota_rejects_ninth_job_and_cancellation_retains_permit"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_b.rs",
+        "name": "mcp_quota_releases_permits_after_host_error_and_panic"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "editor_q_is_text_and_dirty_escape_requires_decision"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "paste_is_atomic_and_dangerous_controls_rejected"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "full_review_preserves_tail_thread_and_escapes_reversibly"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "body_budget_and_tab_focus_are_bounded"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "read_only_cannot_open_editor_or_approve"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "save_ack_preserves_newer_editor_text_and_thread"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "conflict_retains_text_and_save_as_new_has_no_old_id"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "review_cancel_discards_read_result_but_send_result_survives"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "approve_and_send_are_distinct_actions"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "attachments_require_explicit_path_and_cancel_never_dispatches"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "four_sizes_chinese_combining_and_complete_review_tail"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "network_block_does_not_block_local_save_and_worker_drop_does_not_cancel_send"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "reload_does_not_discard_text_typed_after_reload_request"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "readonly_loaded_draft_cannot_mutate_or_request_path_dialog"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "failed_diagnostic_lookup_keeps_known_outcome_and_never_retries"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "diagnostic_display_uses_fixed_codes_and_unrecorded_state_stays_unknown"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "accepted_without_failure_diagnostic_is_clear_and_codes_fit_narrow_terminal"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/composition.rs",
+        "name": "reply_all_prefers_reply_to_and_deduplicates_without_self_or_bcc"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/composition.rs",
+        "name": "reply_and_forward_have_distinct_envelopes_and_prefixes"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/composition.rs",
+        "name": "explicit_attachment_bytes_preserve_binary_and_normalize_name"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/composition.rs",
+        "name": "extraction_limits_and_invalid_inputs_fail_closed"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/composition.rs",
+        "name": "untrusted_metadata_is_revalidated_at_composition"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/composition.rs",
+        "name": "long_threads_keep_root_and_tail_bounded"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/composition.rs",
+        "name": "malformed_headers_cannot_become_thread_or_recipient_injection"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/composition.rs",
+        "name": "nested_multipart_ids_are_extractable_but_attached_messages_are_not_traversed"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/composition.rs",
+        "name": "text_attachments_preserve_original_charset_bytes"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/composition.rs",
+        "name": "unsupported_and_broken_transfer_encoding_are_rejected"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/composition.rs",
+        "name": "exact_attachment_cap_and_draft_rejection_are_explicit"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/composition.rs",
+        "name": "unicode_header_bounds_and_truncated_quote_are_visible"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/composition.rs",
+        "name": "opaque_message_ids_support_long_atoms_literals_and_nondns_right_parts"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/composition.rs",
+        "name": "opaque_message_id_subset_rejects_injection_controls_and_obsolete_forms"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "decoded_chinese_subject_sender_and_body"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "legacy_charset_and_quoted_printable"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "multipart_alternative_prefers_plain_without_html_links"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "nested_alternative_keeps_only_plain_from_selected_branch"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "alternative_skips_attachment_when_html_is_only_display_body"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "alternative_skips_unsupported_text_when_html_is_available"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "html_entities_blocks_lists_and_tables_are_text"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "active_subtrees_and_resource_attributes_are_discarded"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "images_have_remote_cid_and_local_placeholders_no_sources"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "numbered_links_reveal_actual_target_without_fetching"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "unsafe_and_obfuscated_links_are_not_retained"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "attachment_metadata_only_and_filename_cannot_be_path"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "attachment_metadata_uses_shared_budget_without_partial_entries"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "control_and_bidi_removed_but_chinese_newline_and_tab_survive"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "all_control_codepoints_are_removed_and_sanitizing_is_idempotent"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "raw_limit_checked_before_parsing_and_empty_rejected"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "zero_limits_are_invalid"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "mime_part_limit_includes_containers_and_nested_messages"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "html_depth_limit_rejects_instead_of_rendering_partial_tree"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "html_depth_limit_counts_discarded_template_contents"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "attachment_name_is_normalized_after_control_removal"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "output_truncates_on_unicode_boundaries_with_explicit_warning"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "document_display_fields_share_total_character_budget"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "malformed_html_still_has_no_active_subtrees"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/send_diagnostics.rs",
+        "name": "failed_and_uncertain_diagnostics_survive_reopen_without_retry"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/send_diagnostics.rs",
+        "name": "accepted_and_legacy_finish_do_not_fabricate_diagnostics"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/send_diagnostics.rs",
+        "name": "diagnostic_code_limits_and_closed_serialization"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/send_diagnostics.rs",
+        "name": "diagnostic_reads_and_writes_enforce_account_permissions_without_existence_leak"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/send_diagnostics.rs",
+        "name": "diagnostic_and_state_commit_or_rollback_together"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/send_diagnostics.rs",
+        "name": "legacy_schema_migration_preserves_snapshots_and_recovery_has_no_diagnostic"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/send_diagnostics.rs",
+        "name": "sqlite_rejects_untyped_diagnostics_and_foreign_submission_ids"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "creation_revision_and_cas"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "approval_is_single_use_and_content_bound"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "bcc_and_attachment_change_invalidate_approval"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "expiry_is_exclusive"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "uncertain_blocks_retry_and_explicit_recovery_only"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "definitive_failure_requires_fresh_approval"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "default_deny_account_and_operation_scope"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "rejects_header_injection_paths_controls_and_size"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "persistence_does_not_recover_other_workers"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "concurrent_connections_claim_once"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "terminal_outcomes_cannot_be_rewritten"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "read_scope_checks_submissions_and_existing_account_updates"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "private_paths_and_schema_versions_fail_closed"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "generated_parent_directory_and_file_are_private"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "digest_covers_each_field_independently_of_revision"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "approval_survives_reopen_then_is_consumed_durably"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "rejects_attachment_and_recipient_resource_limits"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/sync.rs",
+        "name": "thread_headers_reject_injection_and_excessive_references"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/sync.rs",
+        "name": "changing_thread_headers_invalidates_approval"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/sync.rs",
+        "name": "empty_thread_fields_preserve_legacy_snapshot_serialization"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/sync.rs",
+        "name": "draft_sync_is_single_claim_per_revision_and_content_bound"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/sync.rs",
+        "name": "uncertain_append_cannot_be_retried_after_reopen"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/sync.rs",
+        "name": "pending_claim_and_scope_survive_reopen_without_auto_recovery"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/sync.rs",
+        "name": "sent_sync_requires_smtp_acceptance_and_uses_same_message_id"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/sync.rs",
+        "name": "sync_folder_rejects_commands_and_concurrent_claim_has_one_winner"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/sync.rs",
+        "name": "immutable_wire_is_durable_and_scoped_for_exact_sent_copy"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/sync.rs",
+        "name": "legacy_schema_migrates_atomically_and_preserves_existing_approval"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/sync.rs",
+        "name": "sync_keeps_claimed_snapshot_if_local_draft_is_edited"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/sync.rs",
+        "name": "message_ids_are_opaque_identifiers_not_limited_email_addresses"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/sync.rs",
+        "name": "malformed_thread_ids_fail_closed"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/workspace.rs",
+        "name": "account_scoped_pages_cover_drafts_and_submissions"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/workspace.rs",
+        "name": "list_pages_are_bounded_and_do_not_return_attachment_bytes"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/workspace.rs",
+        "name": "two_stores_conflict_on_stale_digest_and_one_claim_consumes_approval"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "folders_and_read_are_tls_peek"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "pagination_and_quoted_search"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "invalid_input_and_stale_uid_are_rejected"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "unknown_ca_and_wrong_hostname_send_no_credentials"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "giant_literal_rejected_before_payload"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "oauth_diagnostics_redact_secret"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "append_outcomes_one_attempt"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "smtp_outcomes_and_bcc_envelope"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "smtp_report_preserves_auth_rejection_stage_without_server_text"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "recovery_confirms_exact_message_id_candidates"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "explicit_seen_is_separate_and_checked"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "body_limit_accepts_exact_maximum_and_header_limit_rejects_declaration"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "append_and_smtp_final_refusal_are_known_failures"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "smtp_certificates_fail_before_auth_and_payload"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "blocking_api_inside_runtime_uses_safe_bridge_without_panicking"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "command_deadline_covers_authentication"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "sensitive_upstream_trace_is_disabled_even_with_trace_logger"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "shared_mailbox_preserves_append_across_tls_sessions"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "tls_operations_work_from_std_thread_and_tokio_spawn_blocking"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "unicode_search_declares_utf8_and_preserves_quotes_backslashes"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "unsupported_utf8_charset_returns_fixed_error_without_fallback_or_retry"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "ascii_search_refusal_is_not_a_successful_empty_page"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "large_mailbox_first_page_uses_bounded_search_instead_of_all_uids"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "bounded_pages_preserve_offsets_boundary_more_and_empty_mailbox"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "bounded_sparse_unicode_search_keeps_literal_and_scans_in_order"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "bounded_search_rejects_unsafe_results_and_mailbox_drift"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "bounded_search_budget_applies_when_no_messages_match"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "bounded_page_rejects_missing_duplicate_and_unrequested_fetches"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "page_fetch_requires_successful_exact_tagged_completion"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "page_fetch_rejects_mailbox_drift_after_complete_headers"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "bounded_search_rejects_cross_window_uid_regression"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "bounded_ascii_matches_and_empty_search_complete_within_budget"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "bounded_search_sorts_arbitrary_wire_order_before_paging"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "smtp_reports_success_and_each_explicit_refusal_without_retry"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "smtp_unexpected_and_malformed_responses_are_bounded_diagnostics"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "smtp_disconnect_after_data_remains_uncertain_with_submission_stage"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "smtp_report_certificates_fail_at_handshake_before_authentication"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "smtp_local_preparation_and_tls_validation_never_connect"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "smtp_tls_validation_rejects_invalid_configuration_without_network"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "smtp_report_distinguishes_connection_refusal_from_tls_configuration"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "smtp_deadline_retains_phase_and_submission_uncertainty"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "smtp_reports_work_from_std_thread_runtime_and_spawn_blocking"
+      },
+      {
+        "path": "crates/letterkeeper/src/diagnostics.rs",
+        "name": "report_separates_environment_readiness_from_authentication_and_fixed_output"
+      },
+      {
+        "path": "crates/letterkeeper/src/onboarding.rs",
+        "name": "bidi_formatting_marks_are_rejected_before_configuration_review"
+      },
+      {
+        "path": "crates/letterkeeper/src/onboarding.rs",
+        "name": "truncated_overlong_and_terminal_controls_cannot_confirm"
+      },
+      {
+        "path": "crates/letterkeeper/src/remote.rs",
+        "name": "unavailable_state_recording_never_claims_a_persisted_diagnostic"
+      },
+      {
+        "path": "crates/letterkeeper/tests/account_cli.rs",
+        "name": "cli_imports_public_account_config_and_creates_scoped_local_draft"
+      },
+      {
+        "path": "crates/letterkeeper/tests/account_cli.rs",
+        "name": "cli_does_not_accept_secrets_in_account_configuration_or_arguments"
+      },
+      {
+        "path": "crates/letterkeeper/tests/cli.rs",
+        "name": "help_describes_the_offline_prototype_and_entry_points"
+      },
+      {
+        "path": "crates/letterkeeper/tests/cli.rs",
+        "name": "cli_creates_persistent_draft_and_rejects_piped_approval"
+      },
+      {
+        "path": "crates/letterkeeper/tests/diagnostics.rs",
+        "name": "doctor_requires_a_functional_isolated_worker_not_a_present_launcher"
+      },
+      {
+        "path": "crates/letterkeeper/tests/locks.rs",
+        "name": "child_lock_probe"
+      },
+      {
+        "path": "crates/letterkeeper/tests/locks.rs",
+        "name": "operating_system_lock_excludes_other_processes_and_releases_on_drop"
+      },
+      {
+        "path": "crates/letterkeeper/tests/locks.rs",
+        "name": "special_files_and_symlink_ancestors_are_rejected_without_blocking"
+      },
+      {
+        "path": "crates/letterkeeper/tests/mcp_stdio.rs",
+        "name": "actual_stdio_client_reads_safe_mail_and_cannot_approve"
+      },
+      {
+        "path": "crates/letterkeeper/tests/mcp_stdio.rs",
+        "name": "oversized_unterminated_stdio_frame_closes_session_before_json_decoding"
+      },
+      {
+        "path": "crates/letterkeeper/tests/onboarding_cli.rs",
+        "name": "account_add_interactive_save_is_configuration_only"
+      },
+      {
+        "path": "crates/letterkeeper/tests/onboarding_cli.rs",
+        "name": "account_add_rejects_pipes_before_storage_creation"
+      },
+      {
+        "path": "crates/letterkeeper/tests/onboarding_cli.rs",
+        "name": "doctor_is_safe_json_and_does_not_initialize_selected_account"
+      },
+      {
+        "path": "crates/letterkeeper/tests/onboarding_cli.rs",
+        "name": "account_add_requires_both_terminal_streams"
+      },
+      {
+        "path": "crates/letterkeeper/tests/remote.rs",
+        "name": "controlled_host_reads_replies_and_syncs_without_marking_seen"
+      },
+      {
+        "path": "crates/letterkeeper/tests/remote.rs",
+        "name": "accepted_sent_copy_uses_exact_wire_once_and_evidence_is_not_delivery"
+      },
+      {
+        "path": "crates/letterkeeper/tests/remote.rs",
+        "name": "sent_evidence_respects_reduced_read_scope_before_vault_access"
+      },
+      {
+        "path": "crates/letterkeeper/tests/remote.rs",
+        "name": "host_denies_scope_before_credentials_and_mcp_does_not_self_approve"
+      },
+      {
+        "path": "crates/letterkeeper/tests/remote.rs",
+        "name": "smtp_uncertainty_persists_across_host_reopen_and_requires_no_blind_retry"
+      },
+      {
+        "path": "crates/letterkeeper/tests/remote.rs",
+        "name": "mcp_receives_inert_network_content_and_rejects_path_policy_inputs"
+      },
+      {
+        "path": "crates/letterkeeper/tests/remote.rs",
+        "name": "missing_credentials_do_not_consume_a_draft_sync_revision"
+      },
+      {
+        "path": "crates/letterkeeper/tests/remote.rs",
+        "name": "server_managed_sent_policy_never_issues_client_append"
+      },
+      {
+        "path": "crates/letterkeeper/tests/remote.rs",
+        "name": "failed_send_has_safe_persistent_diagnostic"
+      },
+      {
+        "path": "crates/letterkeeper/tests/remote.rs",
+        "name": "tls_preflight_failure_never_reads_credentials"
+      },
+      {
+        "path": "crates/letterkeeper/tests/remote.rs",
+        "name": "unavailable_credentials_are_diagnostic_and_do_not_connect"
+      },
+      {
+        "path": "crates/letterkeeper/tests/remote.rs",
+        "name": "cli_status_matches_remote_diagnostic_without_sensitive_reply_text"
+      },
+      {
+        "path": "crates/letterkeeper/tests/remote.rs",
+        "name": "submissions_finished_without_diagnostics_remain_explicitly_unknown"
+      },
+      {
+        "path": "crates/letterkeeper/tests/remote.rs",
+        "name": "diagnostic_query_failure_keeps_known_host_and_cli_status"
+      },
+      {
+        "path": "crates/letterkeeper/tests/sandbox.rs",
+        "name": "isolated_worker_reads_chinese_without_active_content"
+      },
+      {
+        "path": "crates/letterkeeper/tests/sandbox.rs",
+        "name": "missing_sandbox_refuses_processing_instead_of_falling_back"
+      },
+      {
+        "path": "crates/letterkeeper/tests/sandbox.rs",
+        "name": "oversized_raw_message_is_rejected_before_launch"
+      },
+      {
+        "path": "crates/letterkeeper/tests/sandbox.rs",
+        "name": "internal_worker_cannot_be_used_as_an_unconfined_reader"
+      },
+      {
+        "path": "crates/letterkeeper/tests/sandbox.rs",
+        "name": "parser_network_namespace_blocks_http_dns_and_host_files"
+      },
+      {
+        "path": "crates/letterkeeper/tests/smtp.rs",
+        "name": "prepared_envelope_includes_bcc_but_headers_do_not"
+      },
+      {
+        "path": "crates/letterkeeper/tests/smtp.rs",
+        "name": "smtp_acceptance_and_actual_envelope_are_recorded"
+      },
+      {
+        "path": "crates/letterkeeper/tests/smtp.rs",
+        "name": "explicit_smtp_rejection_is_a_definite_failure"
+      },
+      {
+        "path": "crates/letterkeeper/tests/smtp.rs",
+        "name": "disconnect_after_data_is_uncertain_and_not_retried"
+      },
+      {
+        "path": "crates/letterkeeper/tests/smtp.rs",
+        "name": "test_transport_rejects_non_loopback_endpoints_before_network"
+      },
+      {
+        "path": "crates/letterkeeper/tests/smtp.rs",
+        "name": "host_requires_approval_and_preserves_uncertain_state_across_restart"
+      },
+      {
+        "path": "crates/letterkeeper/tests/smtp.rs",
+        "name": "readonly_host_cannot_consume_an_approval_or_create_drafts"
+      },
+      {
+        "path": "crates/letterkeeper/tests/smtp.rs",
+        "name": "prototype_rejects_real_recipients_and_cross_account_input"
+      },
+      {
+        "path": "crates/letterkeeper/tests/terminal_network.rs",
+        "name": "network_tui_child"
+      },
+      {
+        "path": "crates/letterkeeper/tests/terminal_network.rs",
+        "name": "real_tls_terminal_reads_on_demand_resizes_and_restores_terminal"
+      },
+      {
+        "path": "crates/letterkeeper/tests/terminal_workflow.rs",
+        "name": "workspace_pty_child"
+      },
+      {
+        "path": "crates/letterkeeper/tests/terminal_workflow.rs",
+        "name": "workspace_smtp_pty_child"
+      },
+      {
+        "path": "crates/letterkeeper/tests/terminal_workflow.rs",
+        "name": "workspace_benchmark_child"
+      },
+      {
+        "path": "crates/letterkeeper/tests/terminal_workflow.rs",
+        "name": "workspace_tls_benchmark_child"
+      },
+      {
+        "path": "crates/letterkeeper/tests/terminal_workflow.rs",
+        "name": "workspace_tls_mcp_benchmark_child"
+      },
+      {
+        "path": "crates/letterkeeper/tests/terminal_workflow.rs",
+        "name": "remote_human_workspace_shares_controlled_tls_mail_and_drafts"
+      },
+      {
+        "path": "crates/letterkeeper/tests/terminal_workflow.rs",
+        "name": "workspace_four_sizes_editing_q_and_terminal_restore"
+      },
+      {
+        "path": "crates/letterkeeper/tests/terminal_workflow.rs",
+        "name": "pty_approval_requires_full_digest_and_f9_sends_once"
+      },
+      {
+        "path": "crates/letterkeeper/tests/terminal_workflow.rs",
+        "name": "workspace_remote_send_child"
+      },
+      {
+        "path": "crates/letterkeeper/tests/terminal_workflow.rs",
+        "name": "pty_f9_uses_remote_host_tls_and_persists_safe_diagnostics"
+      },
+      {
+        "path": "crates/letterkeeper/tests/tui_cli.rs",
+        "name": "tui_help_exposes_read_only_and_explicit_synthetic_transport"
+      },
+      {
+        "path": "crates/letterkeeper/tests/tui_cli.rs",
+        "name": "noninteractive_tui_rejects_before_reading_mail_or_creating_storage"
+      },
+      {
+        "path": "crates/letterkeeper/tests/tui_cli.rs",
+        "name": "draft_only_tui_starts_without_eml_input"
+      },
+      {
+        "path": "crates/letterkeeper/tests/worker_composition.rs",
+        "name": "isolated_worker_returns_thread_metadata_and_exact_attachment_bytes"
+      },
+      {
+        "path": "crates/letterkeeper/tests/worker_composition.rs",
+        "name": "new_worker_entries_fail_closed_without_isolation"
+      },
+      {
+        "path": "crates/letterkeeper/tests/worker_composition.rs",
+        "name": "attachment_files_are_explicit_private_and_never_overwrite_or_follow_links"
+      },
+      {
+        "path": "crates/letterkeeper/tests/worker_composition.rs",
+        "name": "smtp_builder_emits_approved_thread_headers_without_bcc"
+      },
+      {
+        "path": "crates/letterkeeper/tests/workflow.rs",
+        "name": "trusted_workflow_scopes_and_approval_transition"
+      },
+      {
+        "path": "crates/letterkeeper/tests/workflow.rs",
+        "name": "read_only_and_attachment_path_denial_precede_io"
+      },
+      {
+        "path": "crates/letterkeeper/tests/workflow.rs",
+        "name": "read_only_can_review_existing_draft_but_cannot_approve_it"
+      },
+      {
+        "path": "crates/letterkeeper/tests/workflow.rs",
+        "name": "configured_transport_still_requires_an_unexpired_approval"
+      },
+      {
+        "path": "crates/letterkeeper/tests/workflow.rs",
+        "name": "offline_unavailable_operations_are_explicit"
+      },
+      {
+        "path": "crates/letterkeeper/tests/workflow.rs",
+        "name": "attachment_bytes_are_reviewed_and_mutation_invalidates_revision"
+      },
+      {
+        "path": "crates/letterkeeper/tests/workflow.rs",
+        "name": "identity_and_attachment_failures_leave_revision_unchanged"
+      },
+      {
+        "path": "crates/letterkeeper/tests/workflow.rs",
+        "name": "approval_rejects_oversized_mime_before_grant"
+      },
+      {
+        "path": "crates/letterkeeper/tests/workflow.rs",
+        "name": "approval_uses_actual_message_id_length_at_wire_boundary"
+      },
+      {
+        "path": "crates/letterkeeper/tests/workflow_mcp.rs",
+        "name": "mcp_draft_is_human_editable_and_approval_never_sends"
+      },
+      {
+        "path": "crates/letterkeeper/tests/workflow_mcp.rs",
+        "name": "another_store_revision_invalidates_reviewed_digest"
+      },
+      {
+        "path": "crates/letterkeeper/tests/workflow_mcp.rs",
+        "name": "attachment_review_hashes_exact_bytes_and_large_body"
+      }
+    ]
+  },
+  "restructured_source": {
+    "commit": "6321cfe4730b513ef389584875dea274fd7be184",
+    "count": 273,
+    "tests": [
+      {
+        "path": "crates/letterkeeper-accounts/src/credentials.rs",
+        "name": "runtime_parent_must_exist_private_owned_and_without_symlinks"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/src/diagnostics.rs",
+        "name": "secret_service_collection_paths_follow_the_dbus_object_path_contract"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/src/diagnostics.rs",
+        "name": "directory_diagnostic_is_read_only_and_distinguishes_missing_unsafe_ready"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/src/diagnostics.rs",
+        "name": "directory_owner_modes_files_and_lexical_boundaries_fail_closed"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/src/diagnostics.rs",
+        "name": "bus_addresses_and_reply_shapes_reject_nonlocal_or_ambiguous_inputs"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/src/diagnostics.rs",
+        "name": "metadata_fixture_can_be_read_while_a_script_writer_is_open"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/src/diagnostics.rs",
+        "name": "credential_metadata_uses_only_fixed_calls_and_cleared_environment"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/src/diagnostics.rs",
+        "name": "credential_metadata_errors_output_floods_and_shared_deadline_are_bounded"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/accounts.rs",
+        "name": "strict_configuration_namespace_scope_and_public_serialization"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/accounts.rs",
+        "name": "secrets_redact_and_password_uses_account_namespace"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/accounts.rs",
+        "name": "private_repository_atomic_roundtrip_and_rejects_links_permissions_bounds"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/accounts.rs",
+        "name": "repository_refuses_symlink_directory_and_public_existing_directory"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/accounts.rs",
+        "name": "repository_replacement_is_atomic_and_id_is_bound_to_filename"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/accounts.rs",
+        "name": "default_paths_follow_xdg_without_creating_storage"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/accounts.rs",
+        "name": "default_paths_subprocess_probe"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/accounts.rs",
+        "name": "private_permissions_reject_special_bits_and_changed_parent_modes"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/accounts.rs",
+        "name": "gmail_oauth_documented_and_legacy_tags_preserve_serialization"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/coordination.rs",
+        "name": "mock_vault_coordination_defaults_to_none"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/coordination.rs",
+        "name": "system_vault_coordination_is_stable_private_and_does_not_create_directories"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/coordination.rs",
+        "name": "system_coordination_ignores_configuration_and_xdg_overrides"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/coordination.rs",
+        "name": "coordination_subprocess_probe"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/oauth.rs",
+        "name": "code_exchange_refresh_rotation_cache_logout_and_revoke"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/oauth.rs",
+        "name": "callback_denial_timeout_state_duplicates_and_scope_failure"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/oauth.rs",
+        "name": "invalid_grant_and_http_error_body_are_redacted"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/oauth.rs",
+        "name": "rejected_callback_shapes_do_not_contact_the_token_service"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/oauth.rs",
+        "name": "callback_stall_is_bounded"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/oauth.rs",
+        "name": "token_bounds_type_lifetime_refresh_scope_and_failed_revoke"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/oauth.rs",
+        "name": "configured_client_secret_is_vault_only_and_login_state_is_random"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/oauth.rs",
+        "name": "oauth_login_is_bound_to_the_originating_account"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/oauth.rs",
+        "name": "refresh_is_serialized_across_instances_in_one_process"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/oauth.rs",
+        "name": "http_redirect_is_rejected_without_contacting_the_target"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/onboarding.rs",
+        "name": "onboarding_rejects_bidi_format_marks_in_reviewed_account_fields"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/onboarding.rs",
+        "name": "onboarding_defaults_and_create_only_contract"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/onboarding.rs",
+        "name": "onboarding_gmail_is_fixed_and_scope_additions_are_explicit"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/onboarding.rs",
+        "name": "onboarding_rejects_invalid_untrusted_and_oversized_inputs"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/onboarding.rs",
+        "name": "onboarding_bounds_and_nonduplicating_scope_folders"
+      },
+      {
+        "path": "crates/letterkeeper-accounts/tests/onboarding.rs",
+        "name": "create_only_rejects_every_existing_type_and_racing_creators"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/boundaries.rs",
+        "name": "malicious_text_is_inert_and_bounded"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/boundaries.rs",
+        "name": "navigation_is_bounded"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/boundaries.rs",
+        "name": "terminal_sizes_and_unicode"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/boundaries.rs",
+        "name": "input_policy_and_pagination"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/boundaries.rs",
+        "name": "official_sdk_initialize_list_call"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/boundaries.rs",
+        "name": "all_routes_and_end_of_body_page"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/boundaries.rs",
+        "name": "limits_and_attachment_inputs_reject_before_host"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/boundaries.rs",
+        "name": "navigation_repeated_edges"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/boundaries.rs",
+        "name": "last_list_page_and_draft_truncation_are_explicit"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/boundaries.rs",
+        "name": "tui_long_body_truncation_has_visible_notice"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/boundaries.rs",
+        "name": "selected_list_subject_and_marker_remain_visible"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/boundaries.rs",
+        "name": "stdio_frame_limit_rejects_unterminated_and_fragmented_input"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/boundaries.rs",
+        "name": "stdio_frame_limit_resets_per_line_and_handles_eof_empty_buffer"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_b.rs",
+        "name": "new_routes_are_scoped_and_opaque_ids_survive_inert_output"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_b.rs",
+        "name": "invalid_new_arguments_never_reach_host"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_b.rs",
+        "name": "browser_cancellation_discards_stale_results_and_single_flight"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_b.rs",
+        "name": "official_sdk_lists_schemas_and_calls_new_tools"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_b.rs",
+        "name": "browser_pages_search_read_and_tiny_layout"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_b.rs",
+        "name": "blocked_host_does_not_block_escape_quit_or_spawn_more_work"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_b.rs",
+        "name": "forward_requires_explicit_recipients_and_reply_cannot_override_reply_to"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_b.rs",
+        "name": "mcp_shared_quota_rejects_ninth_job_and_cancellation_retains_permit"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_b.rs",
+        "name": "mcp_quota_releases_permits_after_host_error_and_panic"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "editor_q_is_text_and_dirty_escape_requires_decision"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "paste_is_atomic_and_dangerous_controls_rejected"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "full_review_preserves_tail_thread_and_escapes_reversibly"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "body_budget_and_tab_focus_are_bounded"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "read_only_cannot_open_editor_or_approve"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "save_ack_preserves_newer_editor_text_and_thread"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "conflict_retains_text_and_save_as_new_has_no_old_id"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "review_cancel_discards_read_result_but_send_result_survives"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "approve_and_send_are_distinct_actions"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "attachments_require_explicit_path_and_cancel_never_dispatches"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "four_sizes_chinese_combining_and_complete_review_tail"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "network_block_does_not_block_local_save_and_worker_drop_does_not_cancel_send"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "reload_does_not_discard_text_typed_after_reload_request"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "readonly_loaded_draft_cannot_mutate_or_request_path_dialog"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "failed_diagnostic_lookup_keeps_known_outcome_and_never_retries"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "diagnostic_display_uses_fixed_codes_and_unrecorded_state_stays_unknown"
+      },
+      {
+        "path": "crates/letterkeeper-adapters/tests/phase_c.rs",
+        "name": "accepted_without_failure_diagnostic_is_clear_and_codes_fit_narrow_terminal"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/composition.rs",
+        "name": "reply_all_prefers_reply_to_and_deduplicates_without_self_or_bcc"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/composition.rs",
+        "name": "reply_and_forward_have_distinct_envelopes_and_prefixes"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/composition.rs",
+        "name": "explicit_attachment_bytes_preserve_binary_and_normalize_name"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/composition.rs",
+        "name": "extraction_limits_and_invalid_inputs_fail_closed"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/composition.rs",
+        "name": "untrusted_metadata_is_revalidated_at_composition"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/composition.rs",
+        "name": "long_threads_keep_root_and_tail_bounded"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/composition.rs",
+        "name": "malformed_headers_cannot_become_thread_or_recipient_injection"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/composition.rs",
+        "name": "nested_multipart_ids_are_extractable_but_attached_messages_are_not_traversed"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/composition.rs",
+        "name": "text_attachments_preserve_original_charset_bytes"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/composition.rs",
+        "name": "unsupported_and_broken_transfer_encoding_are_rejected"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/composition.rs",
+        "name": "exact_attachment_cap_and_draft_rejection_are_explicit"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/composition.rs",
+        "name": "unicode_header_bounds_and_truncated_quote_are_visible"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/composition.rs",
+        "name": "opaque_message_ids_support_long_atoms_literals_and_nondns_right_parts"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/composition.rs",
+        "name": "opaque_message_id_subset_rejects_injection_controls_and_obsolete_forms"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "decoded_chinese_subject_sender_and_body"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "legacy_charset_and_quoted_printable"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "multipart_alternative_prefers_plain_without_html_links"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "nested_alternative_keeps_only_plain_from_selected_branch"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "alternative_skips_attachment_when_html_is_only_display_body"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "alternative_skips_unsupported_text_when_html_is_available"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "html_entities_blocks_lists_and_tables_are_text"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "active_subtrees_and_resource_attributes_are_discarded"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "images_have_remote_cid_and_local_placeholders_no_sources"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "numbered_links_reveal_actual_target_without_fetching"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "unsafe_and_obfuscated_links_are_not_retained"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "attachment_metadata_only_and_filename_cannot_be_path"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "attachment_metadata_uses_shared_budget_without_partial_entries"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "control_and_bidi_removed_but_chinese_newline_and_tab_survive"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "all_control_codepoints_are_removed_and_sanitizing_is_idempotent"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "raw_limit_checked_before_parsing_and_empty_rejected"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "zero_limits_are_invalid"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "mime_part_limit_includes_containers_and_nested_messages"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "html_depth_limit_rejects_instead_of_rendering_partial_tree"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "html_depth_limit_counts_discarded_template_contents"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "attachment_name_is_normalized_after_control_removal"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "output_truncates_on_unicode_boundaries_with_explicit_warning"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "document_display_fields_share_total_character_budget"
+      },
+      {
+        "path": "crates/letterkeeper-content/tests/content.rs",
+        "name": "malformed_html_still_has_no_active_subtrees"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/send_diagnostics.rs",
+        "name": "failed_and_uncertain_diagnostics_survive_reopen_without_retry"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/send_diagnostics.rs",
+        "name": "accepted_and_legacy_finish_do_not_fabricate_diagnostics"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/send_diagnostics.rs",
+        "name": "diagnostic_code_limits_and_closed_serialization"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/send_diagnostics.rs",
+        "name": "diagnostic_reads_and_writes_enforce_account_permissions_without_existence_leak"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/send_diagnostics.rs",
+        "name": "diagnostic_and_state_commit_or_rollback_together"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/send_diagnostics.rs",
+        "name": "legacy_schema_migration_preserves_snapshots_and_recovery_has_no_diagnostic"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/send_diagnostics.rs",
+        "name": "sqlite_rejects_untyped_diagnostics_and_foreign_submission_ids"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "creation_revision_and_cas"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "approval_is_single_use_and_content_bound"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "bcc_and_attachment_change_invalidate_approval"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "expiry_is_exclusive"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "uncertain_blocks_retry_and_explicit_recovery_only"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "definitive_failure_requires_fresh_approval"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "default_deny_account_and_operation_scope"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "rejects_header_injection_paths_controls_and_size"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "persistence_does_not_recover_other_workers"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "concurrent_connections_claim_once"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "terminal_outcomes_cannot_be_rewritten"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "read_scope_checks_submissions_and_existing_account_updates"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "private_paths_and_schema_versions_fail_closed"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "generated_parent_directory_and_file_are_private"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "digest_covers_each_field_independently_of_revision"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "approval_survives_reopen_then_is_consumed_durably"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/state.rs",
+        "name": "rejects_attachment_and_recipient_resource_limits"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/sync.rs",
+        "name": "thread_headers_reject_injection_and_excessive_references"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/sync.rs",
+        "name": "changing_thread_headers_invalidates_approval"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/sync.rs",
+        "name": "empty_thread_fields_preserve_legacy_snapshot_serialization"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/sync.rs",
+        "name": "draft_sync_is_single_claim_per_revision_and_content_bound"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/sync.rs",
+        "name": "uncertain_append_cannot_be_retried_after_reopen"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/sync.rs",
+        "name": "pending_claim_and_scope_survive_reopen_without_auto_recovery"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/sync.rs",
+        "name": "sent_sync_requires_smtp_acceptance_and_uses_same_message_id"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/sync.rs",
+        "name": "sync_folder_rejects_commands_and_concurrent_claim_has_one_winner"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/sync.rs",
+        "name": "immutable_wire_is_durable_and_scoped_for_exact_sent_copy"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/sync.rs",
+        "name": "legacy_schema_migrates_atomically_and_preserves_existing_approval"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/sync.rs",
+        "name": "sync_keeps_claimed_snapshot_if_local_draft_is_edited"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/sync.rs",
+        "name": "message_ids_are_opaque_identifiers_not_limited_email_addresses"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/sync.rs",
+        "name": "malformed_thread_ids_fail_closed"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/workspace.rs",
+        "name": "account_scoped_pages_cover_drafts_and_submissions"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/workspace.rs",
+        "name": "list_pages_are_bounded_and_do_not_return_attachment_bytes"
+      },
+      {
+        "path": "crates/letterkeeper-core/tests/workspace.rs",
+        "name": "two_stores_conflict_on_stale_digest_and_one_claim_consumes_approval"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "folders_and_read_are_tls_peek"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "pagination_and_quoted_search"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "invalid_input_and_stale_uid_are_rejected"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "unknown_ca_and_wrong_hostname_send_no_credentials"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "giant_literal_rejected_before_payload"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "oauth_diagnostics_redact_secret"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "append_outcomes_one_attempt"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "smtp_outcomes_and_bcc_envelope"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "smtp_report_preserves_auth_rejection_stage_without_server_text"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "recovery_confirms_exact_message_id_candidates"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "explicit_seen_is_separate_and_checked"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "body_limit_accepts_exact_maximum_and_header_limit_rejects_declaration"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "append_and_smtp_final_refusal_are_known_failures"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "smtp_certificates_fail_before_auth_and_payload"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "blocking_api_inside_runtime_uses_safe_bridge_without_panicking"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "command_deadline_covers_authentication"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "sensitive_upstream_trace_is_disabled_even_with_trace_logger"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "shared_mailbox_preserves_append_across_tls_sessions"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "tls_operations_work_from_std_thread_and_tokio_spawn_blocking"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "unicode_search_declares_utf8_and_preserves_quotes_backslashes"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "unsupported_utf8_charset_returns_fixed_error_without_fallback_or_retry"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "ascii_search_refusal_is_not_a_successful_empty_page"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "large_mailbox_first_page_uses_bounded_search_instead_of_all_uids"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "bounded_pages_preserve_offsets_boundary_more_and_empty_mailbox"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "bounded_sparse_unicode_search_keeps_literal_and_scans_in_order"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "bounded_search_rejects_unsafe_results_and_mailbox_drift"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "bounded_search_budget_applies_when_no_messages_match"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "bounded_page_rejects_missing_duplicate_and_unrequested_fetches"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "page_fetch_requires_successful_exact_tagged_completion"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "page_fetch_rejects_mailbox_drift_after_complete_headers"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "bounded_search_rejects_cross_window_uid_regression"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "bounded_ascii_matches_and_empty_search_complete_within_budget"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "bounded_search_sorts_arbitrary_wire_order_before_paging"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "smtp_reports_success_and_each_explicit_refusal_without_retry"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "smtp_unexpected_and_malformed_responses_are_bounded_diagnostics"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "smtp_disconnect_after_data_remains_uncertain_with_submission_stage"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "smtp_report_certificates_fail_at_handshake_before_authentication"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "smtp_local_preparation_and_tls_validation_never_connect"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "smtp_tls_validation_rejects_invalid_configuration_without_network"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "smtp_report_distinguishes_connection_refusal_from_tls_configuration"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "smtp_deadline_retains_phase_and_submission_uncertainty"
+      },
+      {
+        "path": "crates/letterkeeper-protocol/tests/protocol.rs",
+        "name": "smtp_reports_work_from_std_thread_runtime_and_spawn_blocking"
+      },
+      {
+        "path": "crates/letterkeeper/src/diagnostics.rs",
+        "name": "report_separates_environment_readiness_from_authentication_and_fixed_output"
+      },
+      {
+        "path": "crates/letterkeeper/src/onboarding.rs",
+        "name": "bidi_formatting_marks_are_rejected_before_configuration_review"
+      },
+      {
+        "path": "crates/letterkeeper/src/onboarding.rs",
+        "name": "truncated_overlong_and_terminal_controls_cannot_confirm"
+      },
+      {
+        "path": "crates/letterkeeper/src/remote.rs",
+        "name": "unavailable_state_recording_never_claims_a_persisted_diagnostic"
+      },
+      {
+        "path": "crates/letterkeeper/tests/account_cli.rs",
+        "name": "cli_imports_public_account_config_and_creates_scoped_local_draft"
+      },
+      {
+        "path": "crates/letterkeeper/tests/account_cli.rs",
+        "name": "cli_does_not_accept_secrets_in_account_configuration_or_arguments"
+      },
+      {
+        "path": "crates/letterkeeper/tests/benchmark_entry.rs",
+        "name": "benchmark_requires_explicit_binary_and_output"
+      },
+      {
+        "path": "crates/letterkeeper/tests/benchmark_entry.rs",
+        "name": "benchmark_measurement_passes_paths_and_preserves_failure"
+      },
+      {
+        "path": "crates/letterkeeper/tests/benchmark_entry.rs",
+        "name": "benchmark_relative_paths_are_anchored_to_workspace"
+      },
+      {
+        "path": "crates/letterkeeper/tests/cli.rs",
+        "name": "help_describes_the_offline_prototype_and_entry_points"
+      },
+      {
+        "path": "crates/letterkeeper/tests/cli.rs",
+        "name": "cli_creates_persistent_draft_and_rejects_piped_approval"
+      },
+      {
+        "path": "crates/letterkeeper/tests/diagnostics.rs",
+        "name": "doctor_requires_a_functional_isolated_worker_not_a_present_launcher"
+      },
+      {
+        "path": "crates/letterkeeper/tests/locks.rs",
+        "name": "child_lock_probe"
+      },
+      {
+        "path": "crates/letterkeeper/tests/locks.rs",
+        "name": "operating_system_lock_excludes_other_processes_and_releases_on_drop"
+      },
+      {
+        "path": "crates/letterkeeper/tests/locks.rs",
+        "name": "special_files_and_symlink_ancestors_are_rejected_without_blocking"
+      },
+      {
+        "path": "crates/letterkeeper/tests/mcp_stdio.rs",
+        "name": "actual_stdio_client_reads_safe_mail_and_cannot_approve"
+      },
+      {
+        "path": "crates/letterkeeper/tests/mcp_stdio.rs",
+        "name": "oversized_unterminated_stdio_frame_closes_session_before_json_decoding"
+      },
+      {
+        "path": "crates/letterkeeper/tests/onboarding_cli.rs",
+        "name": "account_add_interactive_save_is_configuration_only"
+      },
+      {
+        "path": "crates/letterkeeper/tests/onboarding_cli.rs",
+        "name": "account_add_rejects_pipes_before_storage_creation"
+      },
+      {
+        "path": "crates/letterkeeper/tests/onboarding_cli.rs",
+        "name": "doctor_is_safe_json_and_does_not_initialize_selected_account"
+      },
+      {
+        "path": "crates/letterkeeper/tests/onboarding_cli.rs",
+        "name": "account_add_requires_both_terminal_streams"
+      },
+      {
+        "path": "crates/letterkeeper/tests/remote.rs",
+        "name": "controlled_host_reads_replies_and_syncs_without_marking_seen"
+      },
+      {
+        "path": "crates/letterkeeper/tests/remote.rs",
+        "name": "accepted_sent_copy_uses_exact_wire_once_and_evidence_is_not_delivery"
+      },
+      {
+        "path": "crates/letterkeeper/tests/remote.rs",
+        "name": "sent_evidence_respects_reduced_read_scope_before_vault_access"
+      },
+      {
+        "path": "crates/letterkeeper/tests/remote.rs",
+        "name": "host_denies_scope_before_credentials_and_mcp_does_not_self_approve"
+      },
+      {
+        "path": "crates/letterkeeper/tests/remote.rs",
+        "name": "smtp_uncertainty_persists_across_host_reopen_and_requires_no_blind_retry"
+      },
+      {
+        "path": "crates/letterkeeper/tests/remote.rs",
+        "name": "mcp_receives_inert_network_content_and_rejects_path_policy_inputs"
+      },
+      {
+        "path": "crates/letterkeeper/tests/remote.rs",
+        "name": "missing_credentials_do_not_consume_a_draft_sync_revision"
+      },
+      {
+        "path": "crates/letterkeeper/tests/remote.rs",
+        "name": "server_managed_sent_policy_never_issues_client_append"
+      },
+      {
+        "path": "crates/letterkeeper/tests/remote.rs",
+        "name": "failed_send_has_safe_persistent_diagnostic"
+      },
+      {
+        "path": "crates/letterkeeper/tests/remote.rs",
+        "name": "tls_preflight_failure_never_reads_credentials"
+      },
+      {
+        "path": "crates/letterkeeper/tests/remote.rs",
+        "name": "unavailable_credentials_are_diagnostic_and_do_not_connect"
+      },
+      {
+        "path": "crates/letterkeeper/tests/remote.rs",
+        "name": "cli_status_matches_remote_diagnostic_without_sensitive_reply_text"
+      },
+      {
+        "path": "crates/letterkeeper/tests/remote.rs",
+        "name": "submissions_finished_without_diagnostics_remain_explicitly_unknown"
+      },
+      {
+        "path": "crates/letterkeeper/tests/remote.rs",
+        "name": "diagnostic_query_failure_keeps_known_host_and_cli_status"
+      },
+      {
+        "path": "crates/letterkeeper/tests/sandbox.rs",
+        "name": "isolated_worker_reads_chinese_without_active_content"
+      },
+      {
+        "path": "crates/letterkeeper/tests/sandbox.rs",
+        "name": "missing_sandbox_refuses_processing_instead_of_falling_back"
+      },
+      {
+        "path": "crates/letterkeeper/tests/sandbox.rs",
+        "name": "oversized_raw_message_is_rejected_before_launch"
+      },
+      {
+        "path": "crates/letterkeeper/tests/sandbox.rs",
+        "name": "internal_worker_cannot_be_used_as_an_unconfined_reader"
+      },
+      {
+        "path": "crates/letterkeeper/tests/sandbox.rs",
+        "name": "parser_network_namespace_blocks_http_dns_and_host_files"
+      },
+      {
+        "path": "crates/letterkeeper/tests/shared_fixtures.rs",
+        "name": "shared_tls_endpoint_preserves_synthetic_scenario"
+      },
+      {
+        "path": "crates/letterkeeper/tests/smtp.rs",
+        "name": "prepared_envelope_includes_bcc_but_headers_do_not"
+      },
+      {
+        "path": "crates/letterkeeper/tests/smtp.rs",
+        "name": "smtp_acceptance_and_actual_envelope_are_recorded"
+      },
+      {
+        "path": "crates/letterkeeper/tests/smtp.rs",
+        "name": "explicit_smtp_rejection_is_a_definite_failure"
+      },
+      {
+        "path": "crates/letterkeeper/tests/smtp.rs",
+        "name": "disconnect_after_data_is_uncertain_and_not_retried"
+      },
+      {
+        "path": "crates/letterkeeper/tests/smtp.rs",
+        "name": "test_transport_rejects_non_loopback_endpoints_before_network"
+      },
+      {
+        "path": "crates/letterkeeper/tests/smtp.rs",
+        "name": "host_requires_approval_and_preserves_uncertain_state_across_restart"
+      },
+      {
+        "path": "crates/letterkeeper/tests/smtp.rs",
+        "name": "readonly_host_cannot_consume_an_approval_or_create_drafts"
+      },
+      {
+        "path": "crates/letterkeeper/tests/smtp.rs",
+        "name": "prototype_rejects_real_recipients_and_cross_account_input"
+      },
+      {
+        "path": "crates/letterkeeper/tests/terminal_network.rs",
+        "name": "network_tui_child"
+      },
+      {
+        "path": "crates/letterkeeper/tests/terminal_network.rs",
+        "name": "real_tls_terminal_reads_on_demand_resizes_and_restores_terminal"
+      },
+      {
+        "path": "crates/letterkeeper/tests/terminal_workflow.rs",
+        "name": "workspace_pty_child"
+      },
+      {
+        "path": "crates/letterkeeper/tests/terminal_workflow.rs",
+        "name": "workspace_smtp_pty_child"
+      },
+      {
+        "path": "crates/letterkeeper/tests/terminal_workflow.rs",
+        "name": "remote_human_workspace_shares_controlled_tls_mail_and_drafts"
+      },
+      {
+        "path": "crates/letterkeeper/tests/terminal_workflow.rs",
+        "name": "workspace_four_sizes_editing_q_and_terminal_restore"
+      },
+      {
+        "path": "crates/letterkeeper/tests/terminal_workflow.rs",
+        "name": "pty_approval_requires_full_digest_and_f9_sends_once"
+      },
+      {
+        "path": "crates/letterkeeper/tests/terminal_workflow.rs",
+        "name": "workspace_remote_send_child"
+      },
+      {
+        "path": "crates/letterkeeper/tests/terminal_workflow.rs",
+        "name": "pty_f9_uses_remote_host_tls_and_persists_safe_diagnostics"
+      },
+      {
+        "path": "crates/letterkeeper/tests/tui_cli.rs",
+        "name": "tui_help_exposes_read_only_and_explicit_synthetic_transport"
+      },
+      {
+        "path": "crates/letterkeeper/tests/tui_cli.rs",
+        "name": "noninteractive_tui_rejects_before_reading_mail_or_creating_storage"
+      },
+      {
+        "path": "crates/letterkeeper/tests/tui_cli.rs",
+        "name": "draft_only_tui_starts_without_eml_input"
+      },
+      {
+        "path": "crates/letterkeeper/tests/worker_composition.rs",
+        "name": "isolated_worker_returns_thread_metadata_and_exact_attachment_bytes"
+      },
+      {
+        "path": "crates/letterkeeper/tests/worker_composition.rs",
+        "name": "new_worker_entries_fail_closed_without_isolation"
+      },
+      {
+        "path": "crates/letterkeeper/tests/worker_composition.rs",
+        "name": "attachment_files_are_explicit_private_and_never_overwrite_or_follow_links"
+      },
+      {
+        "path": "crates/letterkeeper/tests/worker_composition.rs",
+        "name": "smtp_builder_emits_approved_thread_headers_without_bcc"
+      },
+      {
+        "path": "crates/letterkeeper/tests/workflow.rs",
+        "name": "trusted_workflow_scopes_and_approval_transition"
+      },
+      {
+        "path": "crates/letterkeeper/tests/workflow.rs",
+        "name": "read_only_and_attachment_path_denial_precede_io"
+      },
+      {
+        "path": "crates/letterkeeper/tests/workflow.rs",
+        "name": "read_only_can_review_existing_draft_but_cannot_approve_it"
+      },
+      {
+        "path": "crates/letterkeeper/tests/workflow.rs",
+        "name": "configured_transport_still_requires_an_unexpired_approval"
+      },
+      {
+        "path": "crates/letterkeeper/tests/workflow.rs",
+        "name": "offline_unavailable_operations_are_explicit"
+      },
+      {
+        "path": "crates/letterkeeper/tests/workflow.rs",
+        "name": "attachment_bytes_are_reviewed_and_mutation_invalidates_revision"
+      },
+      {
+        "path": "crates/letterkeeper/tests/workflow.rs",
+        "name": "identity_and_attachment_failures_leave_revision_unchanged"
+      },
+      {
+        "path": "crates/letterkeeper/tests/workflow.rs",
+        "name": "approval_rejects_oversized_mime_before_grant"
+      },
+      {
+        "path": "crates/letterkeeper/tests/workflow.rs",
+        "name": "approval_uses_actual_message_id_length_at_wire_boundary"
+      },
+      {
+        "path": "crates/letterkeeper/tests/workflow_mcp.rs",
+        "name": "mcp_draft_is_human_editable_and_approval_never_sends"
+      },
+      {
+        "path": "crates/letterkeeper/tests/workflow_mcp.rs",
+        "name": "another_store_revision_invalidates_reviewed_digest"
+      },
+      {
+        "path": "crates/letterkeeper/tests/workflow_mcp.rs",
+        "name": "attachment_review_hashes_exact_bytes_and_large_body"
+      }
+    ]
+  },
+  "moved_benchmark_workloads": [
+    "workspace_benchmark_child",
+    "workspace_tls_benchmark_child",
+    "workspace_tls_mcp_benchmark_child"
+  ]
+}

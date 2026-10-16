@@ -95,7 +95,7 @@ def main():
                 assert "letterkeeper" in reply.read().decode()
             with opener.open("http://127.0.0.1:4747/api/graph?repo=letterkeeper", timeout=30) as reply:
                 graph = json.load(reply)
-                assert graph["nodes"] and graph["edges"], "empty graph"
+                assert graph["nodes"] and graph["relationships"], "empty graph"
             print("Loopback HTTP health, packaged Web UI, repository list and nonempty graph: passed")
         finally:
             server.terminate()

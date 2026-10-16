@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: GPL-3.0-only
+name: Developer tools
+on:
+  push:
+    paths: ['tools/**', 'tests/tools/**', '.github/workflows/developer-tools.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+# Keep failed RED runs as immutable evidence.
+jobs:
+  source-boundaries:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Exact revision and raw test result
+        run: |
+          git rev-parse HEAD
+          python3 tests/tools/test_gitnexus.py

@@ -7,3 +7,5 @@
 - 应用：二进制入口只负责 worker 入口识别及参数解析，CLI 参数和命令派发分别放入 `cli_args`、`commands`。`remote` 保留完整 HumanWorkspace/Host trait 实现，转交 authentication、mail、drafts、send、sync 中的内部方法；账户配置、凭据库和 OAuth 既有边界保持。
 
 没有改变依赖、数据库 schema、线上协议、授权、超时或正文处理策略。原公开路径经重导出保留；跨子模块必要的内部可见性只扩至父模块。未执行本机 Rust build/check/test/Clippy；本机仅执行 rustfmt、差异检查与静态搬移核对。新 revision 的完整远程 CI 结果在完成后追加；本记录不代表新增真实 Gmail、凭据服务或全部 P0 验收。
+
+首个拆分 SHA `7e3964ec8990db6e18a904f41d21111e99f97ac0` 的 [CI 38842684705](https://github.com/szchan/letterkeeper/actions/runs/38842684705) 在 workspace Clippy 编译阶段发现 MCP 子模块缺少 `std::io` 导入；该失败是搬移错误，不是产品行为 RED。补齐显式导入后重新提交完整 CI，不跳过原门禁。

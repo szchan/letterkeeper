@@ -33,3 +33,13 @@
 核心/协议分支最终 SHA `50dbf68709cd31317f97ab42d5795937fec2f822` 的 [38843099344](https://github.com/szchan/letterkeeper/actions/runs/38843099344)、适配/正文/应用分支最终 SHA `a8ef645c5a915a21b8648bbe5d5b947af80c2b87` 的 [38843415945](https://github.com/szchan/letterkeeper/actions/runs/38843415945) 均完整通过。集成 `2a74c883ac9822143d72baeffc1328695c302ad9` 的 [38843865264](https://github.com/szchan/letterkeeper/actions/runs/38843865264) 完整通过，原基准参数 RED 对应的精确 [GREEN 38843893315](https://github.com/szchan/letterkeeper/actions/runs/38843893315) 通过。
 
 独立审查逐字确认共享性能服务和协议场景实现保持原样，只替换生产专用类型与凭据构造。没有生产依赖环。审查发现 Cargo 会在 crate 根目录启动基准，文档 `target/...` 相对路径不能按 cwd 解释。回归 SHA `87ba551bd29486238c6323b15070a66b22303da1` 的 [精确 RED 38844237242](https://github.com/szchan/letterkeeper/actions/runs/38844237242) 正确选中并执行 1 个测试，因找不到 workspace-relative 合成二进制失败；`test_finished` / raw exit 101。等待真实 failure 后才修复：两类显式路径统一以 workspace 根目录解析，绝对路径不变。release 原本传绝对路径，既有负载、指标和门槛未因此改变。
+
+## 集成源码验收
+
+源码 SHA `6321cfe4730b513ef389584875dea274fd7be184` 的 [完整 CI 38844476241](https://github.com/szchan/letterkeeper/actions/runs/38844476241) success，含 fmt、Clippy all-targets、workspace 测试、真实 PTY、人工工作区、HTTP/DNS 观察器和实际 Codex 路径；路径回归的 [精确 GREEN 38844514059](https://github.com/szchan/letterkeeper/actions/runs/38844514059) success。PTY 覆盖 120×40、80×24、40×12、20×6，另保留 24×12 浏览；HTTP/DNS 正向控制可达，正文新增 DNS/HTTP 请求均为 0，未修改宿主网络配置。
+
+[源码测试声明清单](../testing/structure-test-inventory.json) 保存基线 272 个和重组后 273 个 `#[test]`/`#[tokio::test]` 函数的路径及名字；差集恰为 3 个迁到 benches 的旧 helper 和 4 个新检查。该清单是静态声明，不等于新增独立产品覆盖，也不累加子进程再次运行 helper 时打印的 harness 结果。原有成功、拒绝、边界、状态/并发和隔离回归保留。385 个 registry lock 条目逐项与基线相等，原 LICENSE 字节未变。
+
+首轮正式 Cargo bench/release 验证在 `2a74c883ac9822143d72baeffc1328695c302ad9` 上的 [38843890485](https://github.com/szchan/letterkeeper/actions/runs/38843890485) success，执行 release workspace 测试、`cargo bench --bench read` 和 `--bench workspace`，打包 source/vendor/原始 notices/manifest/SHA256SUMS 的既有白名单。此预合并样本不替代合并后 main 的新构建。
+
+最终文档 revision 的完整 `ci-gate` 及合并后 main 的新门禁/构建以 [PR #20](https://github.com/szchan/letterkeeper/pull/20) 的不可变 SHA 与 Actions 链接继续登记；不因文档或分支旧 SHA 通过而跳过新 revision。全部子任务保留独立分支/worktree：核心/协议使用 Sol high，常规模块使用 Sol medium，文档索引使用 Luna，主代理负责共享设施/基准/CI、接口审查和集成。没有真实账户操作或发行版发布，原 P0 缺口不变。

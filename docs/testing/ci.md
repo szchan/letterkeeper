@@ -31,7 +31,7 @@ action/tag/asset 元数据使用 `gh api` 从官方仓库读取；更新版本�
 
 ## 远程 TDD 原始证据
 
-`.github/workflows/tdd.yml` 的 `workflow_dispatch` 输入为 `commit`（40 位小写 SHA）、`crate`（六个工作区 crate 之一）、`test`（准确 Rust test 名称）、`phase`（RED/GREEN）。先从 workflow ref 读取验证脚本，目标 SHA 独立 checkout 至 subject，比较实际 HEAD，列举测试确认恰好一个匹配，再 `cargo test --locked -p CRATE TEST -- --exact --nocapture`。用户输入仅放 env、受限 checkout ref 和 Python 参数数组，不插入 shell 代码。
+`.github/workflows/tdd.yml` 的 `workflow_dispatch` 输入为 `commit`（40 位小写 SHA）、`crate`（生产 crate 或 `letterkeeper-test-support`）、`test`（准确 Rust test 名称）、`phase`（RED/GREEN）。先从 workflow ref 的 `.github/ci/` 读取验证和环境脚本，目标 SHA 独立 checkout 至 subject（即使目标仍是旧 `scripts/` 布局），比较实际 HEAD，列举测试确认恰好一个匹配，再 `cargo test --locked -p CRATE TEST -- --exact --nocapture`。用户输入仅放 env、受限 checkout ref 和 Python 参数数组，不插入 shell 代码。
 
 ```sh
 # 把 test 参数换成本次提交新增的准确测试名；先 push 目标提交。

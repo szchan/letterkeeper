@@ -6,6 +6,8 @@
 
 版本和元数据来自集成 worktree 的 `cargo metadata --offline --locked --format-version 1` 输出；完整 JSON 仅保留 name/version/license/repository/rust_version 五字段，没有绝对路径或包内容。直接依赖用途及已配置安全边界按 manifest、代码和 ADR 0002/0003 记录交叉核对。没有声称依赖版本是最新或已完成安全审计。仓库地址仅作上游来源线索，不代表已审计代码或维护状态。对所有依赖的漏洞、安全、许可证兼容性均未完成审计或法律审查；发布前仍须核对依赖实际许可证原文、传递依赖和目标平台要求。项目原创源码与文档继续采用 `GPL-3.0-only`，不改变 [LICENSE](../LICENSE)。
 
+2026-10-16 结构整理新增本地 `letterkeeper-test-support`（`publish=false`），仅由应用和协议 crate 的 dev-dependencies 使用。它复用锁文件中的 rcgen、Rustls、Tokio 和 tokio-rustls 提供合成 loopback 服务，不依赖生产 crate；不新增/升级第三方 registry 包，第三方清单及原许可证保持。详见 [ADR 0007](decisions/0007-project-structure.md)。
+
 ## 直接依赖
 
 下表记录 Stage A、Stage B 与 Stage C 当前直接依赖的用途和 Cargo feature。维护证据仅限 Cargo 包元数据给出的上游仓库；没有核查近期提交、响应速度或安全公告，故均待发布前核实。

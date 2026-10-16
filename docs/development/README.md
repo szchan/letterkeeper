@@ -10,3 +10,9 @@
 - [历史开发记录：2026-10-15 Gmail 配置兼容](2026-10-15-gmail-config-compat.md)：配置标签兼容修复。
 - [历史开发记录：2026-10-15 有界分页](2026-10-15-imap-bounded-paging.md)：IMAP 搜索/列表分页修复。
 - [历史开发记录：2026-10-15 发送诊断](2026-10-15-send-diagnostics.md)：发送结果诊断持久化。
+
+- [2026-10-16 结构整理集成与 RED/GREEN](2026-10-16-project-structure.md)。
+
+- [2026-10-16 核心/协议模块拆分](2026-10-16-structure-core-protocol.md)。
+
+- [2026-10-16 适配/正文/应用模块拆分](2026-10-16-structure-modules.md)。

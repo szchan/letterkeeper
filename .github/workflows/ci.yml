@@ -32,6 +32,8 @@ jobs:
           key: cargo-ubuntu24-rust1.99-${{ hashFiles('Cargo.lock') }}
       - name: CI orchestration tests
         run: python3 tests/ci/test_ci.py
+      - name: Developer source snapshot boundaries
+        run: python3 tests/tools/test_gitnexus.py
       - name: Format
         run: cargo fmt --all -- --check
       - name: Clippy

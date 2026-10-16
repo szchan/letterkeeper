@@ -28,6 +28,8 @@ LetterKeeper 是隐私优先、轻量、面向人和 Agent 的开源邮件客户
 
 ## 代码与验证
 
+- 可选代码关系查询见 [GitNexus 开发图谱](docs/development/gitnexus.md)。先核对索引源码 SHA；图谱用于导航和影响分析，不能代替源码审查、远程 TDD 或安全验收。仅通过 `tools/gitnexus.py` 的源码快照入口使用，不直接扫描含私有数据的项目工作目录，不运行自动 setup 或通过图工具自我扩大权限。
+
 - 2026-10-14 用户已授权建立公开 GitHub `szchan/letterkeeper`、推送开发分支与远程 CI。发行版发布、真实账户操作仍另行授权；历史提交身份公开处理由主代理按本次用户决定执行。
 - 本机不执行重型 Rust 构建/check/测试/Clippy、release 基准或安装编译。重型验证全部提交到 GitHub Actions；关闭当前项目会话中的编辑器自动 Cargo check/build，不修改无关系统配置。远程环境不能运行隔离测试时报告失败并修复环境，不跳过安全项。
 - 每个子代理独立分支/worktree、限定可改文件；先提交并推送 RED，在精确 SHA 上保留真实失败 Actions run，再实现 GREEN。主代理集成后的新 revision 必须重新跑完整门禁；分支旧 SHA 通过不替代集成验收。见 [远程 CI 决定](docs/decisions/0004-hosted-ci.md) 和 [CI 验证](docs/testing/ci.md)。

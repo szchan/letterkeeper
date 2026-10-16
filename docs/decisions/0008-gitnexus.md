@@ -7,8 +7,8 @@
 ## 范围与边界
 
 - 从当前 Git HEAD 导出有限的已提交 Rust/Python/shell 源码与 Cargo 清单，创建独立快照；不扫描工作目录、邮件样本、文档、账户配置或历史提交。私有目录即使误被 Git 跟踪也不进入该快照。未提交改动不在索引中。
-- 工具、快照、索引和专用注册表均保存在当前 checkout 被忽略的 `.local/gitnexus/`。不使用用户全局 GitNexus 注册表，不运行自动 editor setup，不修改已有 Agent 指引或安装 hooks。
-- 使用官方 npm 固定版本和 Linux x64 预编译依赖，安装时禁用 lifecycle scripts，不在本机编译。索引不启用 embeddings 或 LLM wiki，不继承模型密钥/端点环境配置。只读 MCP 提供关系查询；图谱 HTTP 服务仅绑定 127.0.0.1。
+- 工具、快照、索引和专用注册表均保存在当前 checkout 被忽略的 `.local/gitnexus/`；LadybugDB 官方 FTS 预编译扩展使用其固定的 `~/.lbdb/extension/` 缓存。该缓存不存邮件或项目配置。不使用用户全局 GitNexus 注册表，不运行自动 editor setup，不生成/替换已有 Agent 指引或安装 hooks。
+- 使用官方 npm 固定版本和 Linux x64 预编译依赖，安装时禁用 lifecycle scripts，显式下载官方 FTS 扩展，不在本机编译。索引与查询仅加载已安装扩展，不启用 embeddings 或 LLM wiki，不继承模型密钥/端点环境配置。FTS 不可用时拒绝发布新索引。只读 MCP 提供关系查询；图谱 HTTP 服务仅绑定 127.0.0.1。
 - 导出是输入范围控制，不是针对任意恶意开发工具的 OS 沙箱。邮件正文仍只能走现有受限 worker；开发工具不得取得真实邮箱操作权限。
 
 ## 许可证与局限

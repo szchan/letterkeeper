@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -80,6 +81,30 @@ class SnapshotTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "budget"):
             self.tool.export_snapshot(self.root, self.dest, max_bytes=1024)
         self.assertFalse(self.dest.exists())
+
+    def test_drops_inherited_secrets_and_tool_configuration(self):
+        with patch.dict("os.environ", {"OPENAI_API_KEY": "synthetic", "NODE_OPTIONS": "--inspect", "GITNEXUS_EMBEDDING_URL": "https://example.invalid", "GITNEXUS_MCP_READ_ONLY": "0"}):
+            env = self.tool.environment(self.dest)
+        for name in ["OPENAI_API_KEY", "NODE_OPTIONS", "GITNEXUS_EMBEDDING_URL"]:
+            self.assertNotIn(name, env)
+        self.assertEqual(env["GITNEXUS_MCP_READ_ONLY"], "1")
+        self.assertEqual(env["GITNEXUS_HOME"], str(self.dest))
+        self.assertEqual(env["GITNEXUS_LBUG_EXTENSION_INSTALL"], "load-only")
+
+    def test_requires_working_search_before_publishing_index(self):
+        with self.assertRaisesRegex(ValueError, "FTS"):
+            self.tool.verify_index({"stats": {"nodes": 12}, "capabilities": {"fts": {"status": "unavailable"}}})
+        with self.assertRaisesRegex(ValueError, "no nodes"):
+            self.tool.verify_index({"stats": {"nodes": 0}})
+        self.tool.verify_index({"stats": {"nodes": 12}, "capabilities": {"fts": {"status": "available"}}})
+
+    def test_current_pointer_cannot_escape_snapshot_directory(self):
+        base = Path(self.tmp.name) / "state"
+        base.mkdir()
+        (base / "current.json").write_text(json.dumps({"commit": "a" * 40, "snapshot": "../../outside"}))
+        with patch.object(self.tool, "BASE", base):
+            with self.assertRaisesRegex(ValueError, "generation"):
+                self.tool.current()
 
 
 if __name__ == "__main__":

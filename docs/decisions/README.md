@@ -11,3 +11,4 @@ ADR 文件记录决策形成时的范围与状态。较早 ADR 是历史决定�
 - [历史 ADR 0005：账户引导](0005-account-onboarding.md)：只读诊断与配置创建。
 - [历史 ADR 0006：发送诊断](0006-send-diagnostics.md)：发送结果诊断持久化。
 - [ADR 0007：workspace、模块与验证目录结构](0007-project-structure.md)：当前结构约定；集成后的代码和 CI 仍需确认。
+- [ADR 0008：GitNexus 开发辅助图谱](0008-gitnexus.md)：独立工具、源码快照及只读查询边界。

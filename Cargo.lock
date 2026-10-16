@@ -1515,6 +1515,7 @@ dependencies = [
  "letterkeeper-content",
  "letterkeeper-core",
  "letterkeeper-protocol",
+ "letterkeeper-test-support",
  "lettre",
  "libc",
  "rcgen",
@@ -1596,6 +1597,7 @@ version = "0.1.0"
 dependencies = [
  "async-imap",
  "futures-util",
+ "letterkeeper-test-support",
  "lettre",
  "log",
  "rcgen",
@@ -1633,6 +1635,16 @@ dependencies = [
  "tokio-rustls",
  "url",
  "webpki-roots",
+]
+
+[[package]]
+name = "letterkeeper-test-support"
+version = "0.1.0"
+dependencies = [
+ "rcgen",
+ "rustls",
+ "tokio",
+ "tokio-rustls",
 ]
 
 [[package]]

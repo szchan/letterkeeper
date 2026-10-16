@@ -11,7 +11,7 @@ on:
         description: Workspace package
         required: true
         type: choice
-        options: [letterkeeper, letterkeeper-content, letterkeeper-core, letterkeeper-adapters, letterkeeper-protocol, letterkeeper-accounts]
+        options: [letterkeeper, letterkeeper-content, letterkeeper-core, letterkeeper-adapters, letterkeeper-protocol, letterkeeper-accounts, letterkeeper-test-support]
       test:
         description: Exact Rust test name (module::test), one matching test required
         required: true
@@ -40,14 +40,14 @@ jobs:
           persist-credentials: false
       - name: Validate dispatch values before target checkout
         id: validate
-        run: python3 scripts/ci/tdd.py --validate-only
+        run: python3 .github/ci/tdd.py --validate-only
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ steps.validate.outputs.commit }}
           path: subject
           persist-credentials: false
-      - run: bash scripts/ci/setup-linux.sh
-      - run: bash ../scripts/ci/toolchain.sh
+      - run: bash .github/ci/setup-linux.sh
+      - run: bash ../.github/ci/toolchain.sh
         working-directory: subject
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
@@ -57,4 +57,4 @@ jobs:
           key: cargo-ubuntu24-rust1.99-${{ hashFiles('subject/Cargo.lock') }}
       - name: Raw exact-test result and SHA evidence
         working-directory: subject
-        run: python3 ../scripts/ci/tdd.py
+        run: python3 ../.github/ci/tdd.py

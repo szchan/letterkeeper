@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
 """Small Linux baseline, using only bundled synthetic mail and /proc child stats."""
+import argparse
 import hashlib
 import json
 import os
@@ -12,8 +13,12 @@ import sys
 import tempfile
 import time
 
-ROOT = Path(__file__).resolve().parent.parent
-BINARY = Path(sys.argv[1] if len(sys.argv) > 1 else ROOT / "target/debug/letterkeeper").resolve()
+ROOT = Path(__file__).resolve().parents[4]
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--binary", required=True, type=Path)
+parser.add_argument("--output", required=True, type=Path)
+args = parser.parse_args()
+BINARY = args.binary.resolve()
 FIXTURE = ROOT / "tests/fixtures/welcome.eml"
 
 
@@ -74,8 +79,8 @@ with tempfile.TemporaryDirectory(prefix="letterkeeper-benchmark-") as tmp:
             process.wait()
 
 cpu = cpu_after.ru_utime + cpu_after.ru_stime - cpu_before.ru_utime - cpu_before.ru_stime
-print(json.dumps({
-    "binary_profile": "debug if using the default path; caller selects profile",
+result = {
+    "binary_profile": "caller selects explicit application binary; Cargo bench uses release by default",
     "fixture_bytes": FIXTURE.stat().st_size,
     "fixture_sha256": hashlib.sha256(FIXTURE.read_bytes()).hexdigest(),
     "runs": 20,
@@ -88,4 +93,5 @@ print(json.dumps({
     "mcp_preloaded_awaiting_handshake": {"rss_kib": max(x[0] for x in idle),
                                          "pss_kib": max(x[1] for x in idle)},
     "limits": "1ms sampling may miss peaks; no real account, search, authenticated MCP workload or cold-cache result",
-}, indent=2))
+}
+args.output.write_text(json.dumps(result, indent=2) + "\n")

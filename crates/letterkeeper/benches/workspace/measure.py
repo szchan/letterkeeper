@@ -1,11 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Release PTY benchmark for synthetic 1k/10k TUI workloads.
-
-Pass the release `terminal_workflow` test executable, found with:
-`cargo test --release -p letterkeeper --test terminal_workflow --no-run --message-format=json`.
-Runs both an injected Host and a sparse implicit-TLS IMAP RemoteHost fixture.
-"""
+"""Release PTY and active MCP measurements, launched by the workspace Cargo bench."""
+import argparse
 import fcntl
 import json
 import os
@@ -107,17 +103,18 @@ def await_marker(fd, marker, timeout=15):
     raise AssertionError(f"no marker {marker!r}; captured={data[-500:]!r}")
 
 
-def run(binary, count, body_bytes, mode):
+def run(driver, binary, count, body_bytes, mode):
     master, slave = os.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
     env = {**os.environ, "TERM": "xterm-256color", "LETTERKEEPER_BENCH_COUNT": str(count),
-           "LETTERKEEPER_BENCH_BODY_BYTES": str(body_bytes)}
+           "LETTERKEEPER_BENCH_BODY_BYTES": str(body_bytes),
+           "LETTERKEEPER_BENCH_BINARY": str(binary)}
     test_name = "workspace_benchmark_child"
     if mode == "tls_imap":
         env["LETTERKEEPER_BENCH_TLS_COUNT"] = str(count)
         test_name = "workspace_tls_benchmark_child"
     start = time.perf_counter()
-    proc = subprocess.Popen([str(binary), "--exact", test_name, "--nocapture"],
+    proc = subprocess.Popen([str(driver), "--child", test_name],
                             stdin=slave, stdout=slave, stderr=slave, env=env, start_new_session=True)
     sampler = TreeSampler(proc.pid)
     sampler.start()
@@ -199,10 +196,11 @@ def run(binary, count, body_bytes, mode):
         os.close(slave)
 
 
-def run_mcp(binary, count, raw_bytes):
+def run_mcp(driver, binary, count, raw_bytes):
     env = {**os.environ, "LETTERKEEPER_BENCH_MCP_COUNT": str(count),
-           "LETTERKEEPER_BENCH_BODY_BYTES": str(raw_bytes)}
-    proc = subprocess.Popen([str(binary), "--exact", "workspace_tls_mcp_benchmark_child", "--nocapture"],
+           "LETTERKEEPER_BENCH_BODY_BYTES": str(raw_bytes),
+           "LETTERKEEPER_BENCH_BINARY": str(binary)}
+    proc = subprocess.Popen([str(driver), "--child", "workspace_tls_mcp_benchmark_child"],
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                             env=env, bufsize=0)
     sampler = TreeSampler(proc.pid)
@@ -222,7 +220,7 @@ def run_mcp(binary, count, raw_bytes):
             try:
                 response = json.loads(line)
             except json.JSONDecodeError:
-                continue  # Rust test harness diagnostic line, not a protocol frame.
+                raise AssertionError("MCP driver emitted a non-protocol frame")
             if response.get("id") == wanted_id:
                 assert "error" not in response, response
                 return (time.perf_counter() - start) * 1000, response["result"]
@@ -262,15 +260,20 @@ def run_mcp(binary, count, raw_bytes):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        raise SystemExit("usage: benchmark_phase_c.py RELEASE_TERMINAL_WORKFLOW_TEST_BINARY")
-    binary = Path(sys.argv[1]).resolve()
-    assert binary.is_file()
-    results = [run(binary, count, body, mode) for mode in ("injected_host", "tls_imap")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--binary", required=True, type=Path)
+    parser.add_argument("--driver", required=True, type=Path)
+    parser.add_argument("--output", required=True, type=Path)
+    args = parser.parse_args()
+    binary, driver = args.binary.resolve(), args.driver.resolve()
+    assert binary.is_file() and driver.is_file()
+    results = [run(driver, binary, count, body, mode) for mode in ("injected_host", "tls_imap")
                for count in (1000, 10000) for body in (32768, 2 * 1024 * 1024)]
-    mcp_results = [run_mcp(binary, count, body) for count in (1000, 10000)
+    mcp_results = [run_mcp(driver, binary, count, body) for count in (1000, 10000)
                    for body in (32768, 2 * 1024 * 1024)]
-    print(json.dumps({"profile": "caller must provide a release test binary", "fixture": "synthetic sparse metadata; controlled TLS RemoteHost includes sandbox worker",
+    result = {"profile": "release Cargo bench target with explicit application binary", "fixture": "synthetic sparse metadata; controlled TLS RemoteHost includes sandbox worker",
                       "cache": "warm OS caches; no drop_caches", "tui_workloads": results,
                       "mcp_workloads":mcp_results,
-                      "limits": "fixture_bytes denotes injected SafeDocument text in injected_host mode and whole raw EML in tls_imap mode; TLS SafeDocument text is capped at 64 Ki characters. No real service, attachment, public MCP client, or cold cache. Background /proc polling every 5ms begins immediately after spawn and can still miss peaks shorter than a sampling interval. MCP test harness adds stdout diagnostics before SDK frames."}, indent=2))
+                      "limits": "fixture_bytes denotes injected SafeDocument text in injected_host mode and whole raw EML in tls_imap mode; TLS SafeDocument text is capped at 64 Ki characters. No real service, attachment, public MCP client, or cold cache. Background /proc polling every 5ms begins immediately after spawn and can still miss peaks shorter than a sampling interval. MCP driver emits SDK protocol frames directly."}
+    args.output.write_text(json.dumps(result, indent=2) + "\n")
+    assert all(row["input_budget_100ms_met"] and row["idle_cpu_budget_1pct_met"] for row in results), "performance budget exceeded"

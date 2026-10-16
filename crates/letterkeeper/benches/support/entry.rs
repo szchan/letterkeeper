@@ -14,7 +14,7 @@ impl Options {
     pub fn parse(arguments: &[OsString]) -> Result<Self, String> {
         let mut binary = None;
         let mut output = None;
-        let mut values = arguments.iter();
+        let mut values = arguments.iter().filter(|arg| *arg != "--bench");
         while let Some(name) = values.next() {
             let destination = match name.to_str() {
                 Some("--binary") => &mut binary,

@@ -2,9 +2,11 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Synthetic readiness state-machine tests; no Codex, Cargo or network calls."""
 import sys
+from pathlib import Path
 import unittest
 
 sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "e2e"))
 from verify_codex import wait_for_mcp_servers
 
 

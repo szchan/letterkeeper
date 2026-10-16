@@ -1,6 +1,28 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![allow(dead_code)]
-use letterkeeper_protocol::{Credentials, Endpoint, SmtpStage, TlsOptions};
+/// Protocol-independent endpoint and trust data; consumers adapt to their client API.
+#[derive(Clone)]
+pub struct Endpoint {
+    pub host: String,
+    pub port: u16,
+}
+#[derive(Clone, Default)]
+pub struct TlsOptions {
+    pub roots_pem: Option<Vec<u8>>,
+}
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum SmtpStage {
+    Preparation,
+    TlsConfiguration,
+    Connection,
+    TlsHandshake,
+    Greeting,
+    Authentication,
+    MailFrom,
+    Recipient,
+    DataCommand,
+    Submission,
+}
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, Ordering},
@@ -203,13 +225,6 @@ impl Server {
             transcript,
             thread: Some(thread),
             stop,
-        }
-    }
-    pub fn credentials() -> Credentials {
-        Credentials {
-            username: "person@example.test".into(),
-            secret: "synthetic-secret".into(),
-            oauth: false,
         }
     }
     pub fn finish(mut self) -> Vec<String> {

@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #[path = "support/send_server.rs"]
 mod send_server;
-#[path = "../../letterkeeper-protocol/tests/support.rs"]
-mod support;
 use letterkeeper::{remote::RemoteHost, sandbox::Sandbox};
 use letterkeeper_accounts::*;
 use letterkeeper_adapters::{Host, McpAdapter};
 use letterkeeper_core::{AccessPolicy, Permissions, Store, SubmissionState};
+use letterkeeper_test_support::mail as support;
 use serde_json::json;
 use std::{
     path::PathBuf,
@@ -134,11 +133,18 @@ fn accepted_sent_copy_uses_exact_wire_once_and_evidence_is_not_delivery() {
     let mut client_ca = imap.tls.roots_pem.clone().unwrap();
     client_ca.extend(smtp.tls.roots_pem.as_ref().unwrap());
     let client = letterkeeper_protocol::ImapClient::new(
-        imap.endpoint.clone(),
+        letterkeeper_protocol::Endpoint {
+            host: imap.endpoint.host.clone(),
+            port: imap.endpoint.port,
+        },
         letterkeeper_protocol::TlsOptions {
             roots_pem: Some(client_ca),
         },
-        support::Server::credentials(),
+        letterkeeper_protocol::Credentials {
+            username: "person@example.test".into(),
+            secret: "synthetic-secret".into(),
+            oauth: false,
+        },
     );
     let found = client.lookup_message_id("Sent", &message_id).unwrap();
     let stored = client

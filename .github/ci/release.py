@@ -63,26 +63,16 @@ def run(arguments, **options):
 def main():
     if os.environ.get("GITHUB_ACTIONS") != "true":
         raise SystemExit("release builds are restricted to GitHub Actions")
+    os.chdir(Path(__file__).resolve().parents[2])
     run(["cargo", "test", "--locked", "--release", "--workspace"])
     run(["cargo", "build", "--locked", "--release", "--workspace"])
-    build = run(["cargo", "test", "--locked", "--release", "-p", "letterkeeper",
-                 "--test", "terminal_workflow", "--no-run", "--message-format=json"],
-                stdout=subprocess.PIPE, text=True)
-    binaries = []
-    for line in build.stdout.splitlines():
-        message = json.loads(line)
-        if (message.get("reason") == "compiler-artifact" and message.get("executable")
-                and message["target"]["name"] == "terminal_workflow"):
-            binaries.append(message["executable"])
-    if len(binaries) != 1:
-        raise SystemExit("release_terminal_workflow_binary_not_unique")
     output = Path("target/ci-release")
     output.mkdir(parents=True, exist_ok=False)
-    for script, executable, name in (
-            ("scripts/benchmark.py", "target/release/letterkeeper", "performance-phase-a.json"),
-            ("scripts/benchmark_phase_c.py", binaries[0], "performance-phase-c.json")):
-        with (output / name).open("w") as stream:
-            run(["python3", script, executable], stdout=stream)
+    for target, name in (("read", "performance-phase-a.json"),
+                         ("workspace", "performance-phase-c.json")):
+        run(["cargo", "bench", "--locked", "-p", "letterkeeper", "--bench", target, "--",
+             "--binary", str(Path("target/release/letterkeeper").resolve()),
+             "--output", str((output / name).resolve())])
     shutil.copy2("target/release/letterkeeper", output / "letterkeeper")
     shutil.copy2("LICENSE", output / "LICENSE")
     commit = run(["git", "rev-parse", "HEAD"], stdout=subprocess.PIPE, text=True).stdout.strip()

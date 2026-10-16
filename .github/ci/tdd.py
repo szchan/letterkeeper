@@ -9,7 +9,7 @@ import re
 import subprocess
 
 CRATES = {"letterkeeper", "letterkeeper-content", "letterkeeper-core",
-          "letterkeeper-adapters", "letterkeeper-protocol", "letterkeeper-accounts"}
+          "letterkeeper-adapters", "letterkeeper-protocol", "letterkeeper-accounts", "letterkeeper-test-support"}
 
 
 def validate(commit, crate, test, phase):

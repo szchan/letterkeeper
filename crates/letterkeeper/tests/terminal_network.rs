@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Real PTY driver over the shared TLS IMAP fixture. No real vault is used.
-#[path = "../../letterkeeper-protocol/tests/support.rs"]
-mod support;
 use letterkeeper_accounts::*;
+use letterkeeper_test_support::mail as support;
 use std::{
     fs::File,
     io::{Read, Write},

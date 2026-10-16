@@ -10,6 +10,9 @@ pub struct Server {
     inner: mail::Server,
 }
 impl Server {
+    pub fn start_shared() -> Self {
+        Self::start(Scenario::Mailbox)
+    }
     pub fn start(scenario: Scenario) -> Self {
         Self::with_name(scenario, "localhost")
     }

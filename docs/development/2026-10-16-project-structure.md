@@ -19,3 +19,11 @@
 原 `terminal_workflow` 的 `workspace_benchmark_child`、`workspace_tls_benchmark_child`、`workspace_tls_mcp_benchmark_child` 已迁入 `benches/workspace/workloads.rs`，不再登记为普通测试。保留 8 个 TUI 样本（injected/TLS、1k/10k、32KiB/2MiB）、4 个活跃 MCP 样本，以及 read 20 次/预载 MCP 样本、进程树采样和原指标字段。正式目标 `read`/`workspace` 均 `harness=false`，显式 `--binary`/`--output`，普通 test 不运行基准负载。新增的 2 个基准入口检查与 1 个共享 TLS 实际往返检查独立登记，不用测试总数代替原安全覆盖。
 
 共享设施只依赖既有 rcgen/rustls/tokio，无生产 crate 依赖；通过工作区 dev-dependencies 消费，无循环。协议测试中的类型转换留在本 crate 的 tests/support；单独应用 SMTP 辅助服务仍在应用 tests/support。未升级注册表依赖、工具链或 schema。
+
+## GREEN 与兼容性
+
+实现 SHA `c47a2ade50eddb649113de0b7a66f8383822b938` 的精确 GREEN：基准进程边界 [38843440687](https://github.com/szchan/letterkeeper/actions/runs/38843440687)、共享 TLS [38843443155](https://github.com/szchan/letterkeeper/actions/runs/38843443155) 均 success。新 `.github/ci/` TDD 入口验证旧布局基线 `3cf6b01697a3dd31adbeaccb2a9cfdae27e5d279` 的 `folders_and_read_are_tls_peek`：[38843445825](https://github.com/szchan/letterkeeper/actions/runs/38843445825) success；准确目标 SHA、单一匹配与原始退出码均由 workflow 记录。
+
+首次完整 GREEN 实现 CI [38843418037](https://github.com/szchan/letterkeeper/actions/runs/38843418037) 在 Clippy 编译协议测试时发现本 crate 适配 helper 遗漏 `Server::start_shared`。共享设施与基准的精确测试已通过，但不能替代全 workspace 编译；补回委托原 Mailbox 场景的 helper 后重新跑完整门禁。该遗漏是搬移错误，不是新的产品行为 RED。
+
+本地静态检查：fmt、Python AST、shell `bash -n`、全部相对 Markdown 链接；CI Python 11 项与 readiness 8 项分别从项目根和 `/tmp` 运行通过。未发现运行中的 rust-analyzer/Cargo/rustc 自动构建进程，未改全局编辑器或系统配置。

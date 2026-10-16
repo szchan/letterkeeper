@@ -1,18 +1,18 @@
 # 使用指南
 
-本文记录离线演示、账户配置、CLI、TUI、MCP 与验证命令。产品验收状态以 [STATUS](STATUS.md) 为准。
+本文记录离线演示、账户配置、CLI、TUI、MCP 与验证命令。产品验收状态以 [STATUS](../STATUS.md) 为准。
 
 ## 远程构建与离线演示
 
 2026-10-14 起，用户授权建立公开仓库 [szchan/letterkeeper](https://github.com/szchan/letterkeeper)，并将重型构建和验证迁移到 GitHub Actions。本机保留编辑、Git/worktree、静态检查与结果审查，不执行 Cargo build/check/test/Clippy、release 基准或安装编译；编辑器自动 Cargo check、保存时构建也应在当前项目会话关闭，不能由 Agent 修改无关系统配置。
 
-公开仓库已建立，main 保护已启用：必须通过 PR、最新 `ci-gate`，管理员同样受约束，禁止强推和删除。首次 workflow bootstrap 使用了未保护的 main；后续开发通过独立分支和 PR 集成。[集成分支完整 CI](https://github.com/szchan/letterkeeper/actions/runs/38539664364) 已通过，精确版本和后续结果见[开发记录](development/2026-10-14-hosted-ci.md)。
+公开仓库已建立，main 保护已启用：必须通过 PR、最新 `ci-gate`，管理员同样受约束，禁止强推和删除。首次 workflow bootstrap 使用了未保护的 main；后续开发通过独立分支和 PR 集成。[集成分支完整 CI](https://github.com/szchan/letterkeeper/actions/runs/38539664364) 已通过，精确版本和后续结果见[开发记录](../development/2026-10-14-hosted-ci.md)。
 
-每个子任务使用独立分支/worktree；先推送测试提交，在远程记录精确 SHA 的真实 RED，再实现和推送 GREEN。测试、PTY、HTTP/DNS 隐私观察器、实际 Codex 数据路径和性能测量均在远程受控环境运行，不能删减安全测试以适配 runner。操作入口及环境要求见 [CI 验证](testing/ci.md) 与 [协作流程](WORKFLOW.md)。远程通过之前，阶段 C 的本机历史结果不能视为新环境通过。
+每个子任务使用独立分支/worktree；先推送测试提交，在远程记录精确 SHA 的真实 RED，再实现和推送 GREEN。测试、PTY、HTTP/DNS 隐私观察器、实际 Codex 数据路径和性能测量均在远程受控环境运行，不能删减安全测试以适配 runner。操作入口及环境要求见 [CI 验证](../testing/ci.md) 与 [协作流程](../WORKFLOW.md)。远程通过之前，阶段 C 的本机历史结果不能视为新环境通过。
 
-下载的 workflow 验证产物会放在 `target/artifacts/`；`cargo clean` 会清除这些文件，之后需重新下载。不要把私有账户、邮件或凭据放在 `target/`。以下 Cargo 命令供 **远程 runner** 使用；手动构建 workflow 的对应 commit 产物完成且可下载后，可在兼容 Linux 环境运行后续离线命令。workflow 产物属于该提交的验证构建，不表示发行版已经发布；未生成产物时不能声称已有可下载构建。不要在本机为演示重新编译。
+基准输出可通过 `--output` 放入 `target/artifacts/`；`cargo clean` 会清除这些文件，之后需重新生成。目录布局是本项目约定，不是 Cargo 对所有 benchmark 的默认行为。不要把私有账户、邮件或凭据放在 `target/`。以下 Cargo 命令供 **远程 runner** 使用；手动构建 workflow 的对应 commit 产物完成且可下载后，可在兼容 Linux 环境运行后续离线命令。workflow 产物属于该提交的验证构建，不表示发行版已经发布；未生成产物时不能声称已有可下载构建。不要在本机为演示重新编译。
 
-已验证：Arch x86_64，以及配置了专用 bwrap namespace 例外的 GitHub-hosted Ubuntu 24.04.5；Rust/Cargo 1.99.0，bubblewrap 分别为 0.12.0 / 0.9.0。工作区声明 Rust 1.89（未单独验收最低版本）、C 编译器和 `/usr/bin/bwrap`。系统须允许用户/网络 namespace；worker 只读挂载系统实际库目录，隔离不可用时拒绝处理。[Ubuntu 验证边界](testing/ubuntu-sandbox.md)不代表默认桌面策略已验收。Linux 账户认证还需要已解锁的 Secret Service 与私有 `/run/user/UID`。
+已验证：Arch x86_64，以及配置了专用 bwrap namespace 例外的 GitHub-hosted Ubuntu 24.04.5；Rust/Cargo 1.99.0，bubblewrap 分别为 0.12.0 / 0.9.0。工作区声明 Rust 1.89（未单独验收最低版本）、C 编译器和 `/usr/bin/bwrap`。系统须允许用户/网络 namespace；worker 只读挂载系统实际库目录，隔离不可用时拒绝处理。[Ubuntu 验证边界](../testing/ubuntu-sandbox.md)不代表默认桌面策略已验收。Linux 账户认证还需要已解锁的 Secret Service 与私有 `/run/user/UID`。
 
 ```sh
 cargo build --locked
@@ -55,11 +55,11 @@ TUI：`j/k` 或上下键选择/滚动，`Enter/Tab` 阅读，`r` 刷新，`n/p` 
 
 引导目前接受 ASCII dot-atom 邮箱地址、DNS/IP 端点及中文文件夹；带引号或国际化邮箱地址不在该入口支持范围。隐式 TLS 默认 IMAP 993 / SMTP 465，不把其他端口自动当作 STARTTLS。Gmail 默认文件夹名可覆盖，实际标签和非 ASCII mailbox 协议兼容性仍待独立验收。显式选择发送权限仍需既有人工批准流程。
 
-[合成配置示例](../tests/fixtures/account.example.json)展示配置形状，端口不是已启动的服务。`account import FILE` 导入不含凭据的配置，`account list` 列出本机账户。新建账户优先使用 `account add` 的类型化引导，避免手写配置标签。密码用 `account password ID` 的隐藏终端输入；Gmail 手写配置接受 `authentication.type=gmail_oauth` 或兼容的 `gmail_o_auth`，保存时仍输出 `gmail_o_auth`。填写自己的 Desktop client_id 及 client_secret_ref，后者启用时用 `account client-secret ID` 保存秘密。密码、token 和 client secret 均不放在普通配置或命令参数中，凭据库不可用时拒绝认证。
+[合成配置示例](../../tests/fixtures/account.example.json)展示配置形状，端口不是已启动的服务。`account import FILE` 导入不含凭据的配置，`account list` 列出本机账户。新建账户优先使用 `account add` 的类型化引导，避免手写配置标签。密码用 `account password ID` 的隐藏终端输入；Gmail 手写配置接受 `authentication.type=gmail_oauth` 或兼容的 `gmail_o_auth`，保存时仍输出 `gmail_o_auth`。填写自己的 Desktop client_id 及 client_secret_ref，后者启用时用 `account client-secret ID` 保存秘密。密码、token 和 client secret 均不放在普通配置或命令参数中，凭据库不可用时拒绝认证。
 
 旧 `64dd635` 下载构建的手写配置仅接受 `gmail_o_auth`；其 `account add` 可正常生成配置，已用于上述本机验收。别名兼容修复需使用包含该变更的新构建。
 
-旧构建的大邮箱列表也可能因全量 SEARCH 响应超过上限而失败；`5fde670` 验证构建已修复并通过真实只读 IMAP 重验，下载来源和二进制校验值见[验收记录](testing/live-imap-2026-10-15.md)。本机新旧构建分别保留。
+旧构建的大邮箱列表也可能因全量 SEARCH 响应超过上限而失败；`5fde670` 验证构建已修复并通过真实只读 IMAP 重验，下载来源和二进制校验值见[验收记录](../testing/live-imap-2026-10-15.md)。本机新旧构建分别保留。
 
 `account login ID` 打印供用户在系统浏览器打开的 OAuth URL，使用 S256 PKCE、state 和临时 loopback 回调；支持续期、`account logout ID` 本地注销及 `account revoke ID` 远程撤销。使用用户自己的 Desktop client；本机个人 OAuth 登录、保存及自然到期后的续期已通过；真实撤销及公开发布的 OAuth client 流程仍待验收。
 
@@ -78,11 +78,11 @@ TUI：`j/k` 或上下键选择/滚动，`Enter/Tab` 阅读，`r` 刷新，`n/p` 
 
 私有目录/文件要求 0700/0600，配置使用 descriptor walk 和原子替换；SQLite 的既有路径重新打开限制仍在。草稿数据库未加密。读取/发送原文上限 2 MiB，单附件导入/导出 512 KiB；SafeDocument 显示预算 64 Ki 字符，回复元数据另有字段限制。同步 Pending/Uncertain 不自动重试；目前明确 Failed 同步也不能重认领同一版本，旧服务器草稿不会自动删除。
 
-发送诊断将状态库自动迁移到 schema 3，保留既有草稿、批准、提交和发送字节；旧记录不会补造诊断。升级前退出旧进程并备份状态库；旧构建不能打开升级后的数据库。旧备份用于迁移失败时恢复，发生新发送后须保留新库，不能依据旧备份重发。设计见 [ADR 0006](decisions/0006-send-diagnostics.md)。
+发送诊断将状态库自动迁移到 schema 3，保留既有草稿、批准、提交和发送字节；旧记录不会补造诊断。升级前退出旧进程并备份状态库；旧构建不能打开升级后的数据库。旧备份用于迁移失败时恢复，发生新发送后须保留新库，不能依据旧备份重发。设计见 [ADR 0006](../decisions/0006-send-diagnostics.md)。
 
 ## 验证与开发
 
-下面命令在远程受控 runner 执行，完整流程见 [CI 验证](testing/ci.md)。公开 Actions 的日志与产物只使用合成邮件、虚构身份和受控服务；不得上传 `.local/`、用户配置或真实凭据。
+下面命令在远程受控 runner 执行，完整流程见 [CI 验证](../testing/ci.md)。公开 Actions 的日志与产物只使用合成邮件、虚构身份和受控服务；不得上传 `.local/`、用户配置或真实凭据。
 
 ```sh
 cargo test --locked --workspace
@@ -93,15 +93,15 @@ python3 tests/e2e/verify_workspace.py target/debug/letterkeeper
 python3 tests/e2e/verify_privacy_workspace.py target/debug/letterkeeper
 # 需要已安装 Codex；临时配置、禁网，无模型调用
 python3 tests/e2e/verify_codex.py target/debug/letterkeeper
-python3 crates/letterkeeper/benches/read/measure.py target/debug/letterkeeper
+cargo bench --locked -p letterkeeper --bench read -- --binary target/release/letterkeeper --output target/artifacts/read-performance.json
 ```
 
 测试使用合成邮件、本机 TLS IMAP/SMTP/OAuth、HTTP/DNS 观察器与 PTY；不调用真实凭据库。全套测试须有 loopback、PTY 和 bubblewrap 权限，不能跳过隔离项后宣称通过；缓存依赖时可添加 `--offline`。真实 TLS 终端往返也包含在 Rust 集成测试中。
 
-release 的 1k/10k 合成邮箱、32 KiB/2 MiB 原文与 32 KiB/1 MiB 编辑输入实测见 [阶段 C 性能](testing/performance-phase-c.md)。测量采用从进程启动开始的子进程树采样；输入与空闲 CPU 门槛在该样本上通过，不等于真实服务性能承诺。
+release 的 1k/10k 合成邮箱、32 KiB/2 MiB 原文与 32 KiB/1 MiB 编辑输入实测见 [阶段 C 性能](../testing/performance-phase-c.md)。测量采用从进程启动开始的子进程树采样；输入与空闲 CPU 门槛在该样本上通过，不等于真实服务性能承诺。
 
-已记录 [GitHub runner 性能基线](testing/hosted-performance.md)及原始合成 JSON，不能直接用 Arch 本机历史样本认定远程回归通过。真实服务按独立授权关卡分步执行；已完成的本机凭据往返与 OAuth 登录及剩余范围见[真实验收记录](testing/live-keyring-2026-10-15.md)。
+已记录 [GitHub runner 性能基线](../testing/hosted-performance.md)及原始合成 JSON，不能直接用 Arch 本机历史样本认定远程回归通过。真实服务按独立授权关卡分步执行；已完成的本机凭据往返与 OAuth 登录及剩余范围见[真实验收记录](../testing/live-keyring-2026-10-15.md)。
 
-开发继续使用独立分支/worktree、远程独立编译目录、TDD 和按任务选择模型的子代理，见 [协作流程](WORKFLOW.md)。真实服务操作清单见 [独立验收关卡](testing/live-acceptance.md)。
+开发继续使用独立分支/worktree、远程独立编译目录、TDD 和按任务选择模型的子代理，见 [协作流程](../WORKFLOW.md)。真实服务操作清单见 [独立验收关卡](../testing/live-acceptance.md)。
 
 

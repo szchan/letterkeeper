@@ -55,3 +55,37 @@ pathlib.Path(a.output).write_text('{"synthetic":true}')
     std::fs::write(&script, "raise SystemExit(7)\n").unwrap();
     assert!(entry::measure(&script, &options, None).is_err());
 }
+
+#[test]
+fn benchmark_relative_paths_are_anchored_to_workspace() {
+    let workspace = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .unwrap();
+    let dir = tempfile::Builder::new()
+        .prefix(".benchmark-contract-")
+        .tempdir_in(&workspace)
+        .unwrap();
+    let binary = dir.path().join("synthetic app");
+    std::fs::write(&binary, b"synthetic placeholder").unwrap();
+    let script = dir.path().join("measure.py");
+    std::fs::write(
+        &script,
+        r#"import argparse, pathlib
+p=argparse.ArgumentParser()
+p.add_argument('--binary', required=True)
+p.add_argument('--output', required=True)
+a=p.parse_args()
+assert pathlib.Path(a.binary).is_file()
+pathlib.Path(a.output).write_text('{}')
+"#,
+    )
+    .unwrap();
+    let output = dir.path().join("result.json");
+    let options = entry::Options {
+        binary: binary.strip_prefix(&workspace).unwrap().into(),
+        output: output.strip_prefix(&workspace).unwrap().into(),
+    };
+    entry::measure(&script, &options, None).unwrap();
+    assert_eq!(std::fs::read_to_string(output).unwrap(), "{}");
+}

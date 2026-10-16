@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::*;
+use crate::mcp::{id_check, query_check};
+use crate::{FolderSummary, Host, HostError, MessageSummary, UiState, inert_text, render};
+use crossterm::event::KeyCode;
+use letterkeeper_content::SafeDocument;
+use ratatui::{Frame, widgets::Paragraph};
+use std::sync::Arc;
 #[derive(Debug, Clone)]
 pub enum BrowserJob {
     Folders,

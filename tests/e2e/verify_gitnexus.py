@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 import selectors
+import socket
 import subprocess
 import sys
 import tempfile
@@ -53,7 +54,8 @@ def main():
             assert not {"rename", "cypher", "group_sync", "group_list", "read_file", "grep"} & names
             response = rpc(3, "tools/call", {"name": "query", "arguments": {"query": "parse_message", "repo": "letterkeeper"}})
             assert "error" not in response and not response["result"].get("isError"), response
-            assert "crates/letterkeeper-content/src/mime.rs" in json.dumps(response), response
+            # query ranks keyword/process matches; exact symbol lookup is context.
+            assert '"filePath"' in response["result"]["content"][0]["text"], response
             response = rpc(4, "tools/call", {"name": "context", "arguments": {"name": "parse_message", "repo": "letterkeeper"}})
             assert "error" not in response and not response["result"].get("isError"), response
             assert "crates/letterkeeper-content/src/mime.rs" in json.dumps(response), response
@@ -70,22 +72,28 @@ def main():
                 mcp.kill()
                 mcp.wait()
 
+        # Refuse a pre-existing server instead of accidentally testing another repo.
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 4747))
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         server = subprocess.Popen([*LAUNCH, "serve"], cwd=ROOT, stdout=log, stderr=log)
         try:
             deadline = time.monotonic() + 30
             while True:
                 try:
-                    with urllib.request.urlopen("http://127.0.0.1:4747/api/health", timeout=1) as reply:
+                    with opener.open("http://127.0.0.1:4747/api/health", timeout=1) as reply:
                         assert reply.status == 200
                     break
                 except OSError:
                     if server.poll() is not None or time.monotonic() >= deadline:
                         raise RuntimeError("loopback graph server did not start")
-            with urllib.request.urlopen("http://127.0.0.1:4747/", timeout=10) as reply:
+                    time.sleep(0.1)
+            assert server.poll() is None, "graph server exited"
+            with opener.open("http://127.0.0.1:4747/", timeout=10) as reply:
                 assert b"/assets/" in reply.read(), "packaged graph UI missing"
-            with urllib.request.urlopen("http://127.0.0.1:4747/api/repos", timeout=10) as reply:
+            with opener.open("http://127.0.0.1:4747/api/repos", timeout=10) as reply:
                 assert "letterkeeper" in reply.read().decode()
-            with urllib.request.urlopen("http://127.0.0.1:4747/api/graph?repo=letterkeeper", timeout=30) as reply:
+            with opener.open("http://127.0.0.1:4747/api/graph?repo=letterkeeper", timeout=30) as reply:
                 graph = json.load(reply)
                 assert graph["nodes"] and graph["edges"], "empty graph"
             print("Loopback HTTP health, packaged Web UI, repository list and nonempty graph: passed")

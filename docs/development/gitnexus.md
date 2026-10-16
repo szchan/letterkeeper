@@ -42,7 +42,7 @@ python3 tools/gitnexus.py trace --help
 
 ## Codex MCP
 
-按 [Codex 官方 MCP 文档](https://developers.openai.com/codex/mcp)，在该项目 `.codex/config.toml` 中合并以下配置。`args` 中的路径替换为本 checkout 的绝对路径；已有配置保留。新建/重新加载聊天后查看 MCP 工具是否已连接：
+按 [Codex 官方 MCP 文档](https://developers.openai.com/codex/mcp)，在该项目 `.codex/config.toml` 中合并以下配置。该本机配置已被 Git 忽略；`args` 中的路径替换为本 checkout 的绝对路径；已有配置保留。新建/重新加载聊天后查看 MCP 工具是否已连接：
 
 ```toml
 [mcp_servers.gitnexus]

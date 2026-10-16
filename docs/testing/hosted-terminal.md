@@ -4,7 +4,7 @@
 
 ## 远程失败证据
 
-[Actions run 38536633653](https://github.com/szchan/letterkeeper/actions/runs/38536633653)，被测 SHA `79b447b2cc5d72818cc75a8b14d533c36f26489b` 的 `workspace` 在 `python3 scripts/verify_terminal.py target/debug/letterkeeper` 失败。应用仍运行，但 80×24 缩放至 24×12 后立即输入 `?`，十秒内未观察到“帮助”。捕获的输出是一帧 24×12 的安全正文，而非帮助页；不把此前 Rust 测试、fmt、Clippy 的通过当作这项 PTY 验收通过。
+[Actions run 38536633653](https://github.com/szchan/letterkeeper/actions/runs/38536633653)，被测 SHA `79b447b2cc5d72818cc75a8b14d533c36f26489b` 的 `workspace` 在 `python3 tests/e2e/verify_terminal.py target/debug/letterkeeper` 失败。应用仍运行，但 80×24 缩放至 24×12 后立即输入 `?`，十秒内未观察到“帮助”。捕获的输出是一帧 24×12 的安全正文，而非帮助页；不把此前 Rust 测试、fmt、Clippy 的通过当作这项 PTY 验收通过。
 
 脚本使用 `start_new_session=True`，却没有为新会话获取控制终端；此外，发送 SIGWINCH 后紧接按键，没有等到实际尺寸变化的帧。两项属于验证夹具缺口，尚不能仅据日志断言它们是远程失败的唯一原因。
 
@@ -18,13 +18,13 @@
 
 本机仅对脚本做 AST 语法检查、`git diff --check` 与轻量 Python 夹具检查：合成子进程成功打开 `/dev/tty`，确认自己是控制终端前台会话/进程组；PTY 缩放自动触发 SIGWINCH；完整的新尺寸帧被接受，缺清屏、错误末行和未完成帧被拒绝。夹具不是 LetterKeeper，不验证应用帮助或批准行为。本机没有执行 Cargo、LetterKeeper 或实际应用 PTY 验收。
 
-GREEN 由远程 runner 执行原始 `python3 scripts/verify_terminal.py target/debug/letterkeeper`；主代理集成产生的新 SHA 仍须运行完整 CI。失败时继续修复，不删除帮助、缩放、批准或隐私门禁。
+GREEN 由远程 runner 执行原始 `python3 tests/e2e/verify_terminal.py target/debug/letterkeeper`；主代理集成产生的新 SHA 仍须运行完整 CI。失败时继续修复，不删除帮助、缩放、批准或隐私门禁。
 
 ## 四尺寸工作区夹具的后续 RED
 
 [父分支 run 38538057660](https://github.com/szchan/letterkeeper/actions/runs/38538057660)（被测 SHA `a449a77270c2c0c7736fdf23995726eee028c602`）和 [子分支 run 38538084342](https://github.com/szchan/letterkeeper/actions/runs/38538084342) 未通过。父分支 Codex 项成功，但 `workspace_four_sizes_editing_q_and_terminal_restore` 在缩放后立即输入 Esc，未观察到“未保存”，捕获 1016 字节。这是另一个实际 PTY 失败，不把前一脚本修复写成完整终端 GREEN。
 
-Rust 四尺寸测试已有控制终端；本次增加两处可观察同步：先看到编辑字段中的 `q`，确认编辑事件已处理，再缩放；缩放后看到清屏、新尺寸末行及帧末隐藏光标，再输入 Esc。移除重复的手工 SIGWINCH，保留原八秒输出超时、未保存提示、丢弃退出及 termios 恢复检查。`scripts/verify_workspace.py` 同样补上控制终端和上述同步，四个尺寸与全部断言保留。
+Rust 四尺寸测试已有控制终端；本次增加两处可观察同步：先看到编辑字段中的 `q`，确认编辑事件已处理，再缩放；缩放后看到清屏、新尺寸末行及帧末隐藏光标，再输入 Esc。移除重复的手工 SIGWINCH，保留原八秒输出超时、未保存提示、丢弃退出及 termios 恢复检查。`tests/e2e/verify_workspace.py` 同样补上控制终端和上述同步，四个尺寸与全部断言保留。
 
 只读检查本机 crossterm 0.28.1 的 Unix mio 事件源发现，它会在处理一个 readiness token 得到按键或 resize 时立即返回。这个实现说明同时输入/缩放值得单独验证，但不足以确认所有丢键原因；本次仅修复夹具调度，不声称应用的同时缩放与按键行为已修复。若同步后仍失败，必须继续调查应用事件处理。
 

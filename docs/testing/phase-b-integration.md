@@ -55,7 +55,7 @@ Sent Append 使用 SQLite 中保存的原 SMTP MIME 字节，重读服务器副�
 
 ### 终端与测试观察
 
-`python3 scripts/verify_terminal.py target/debug/letterkeeper` 通过：真实 PTY 的中文/宽字符、80×24/24×12、j/Enter/?/q、resize、精确终端属性恢复及完整摘要批准。新增 `terminal_network` 使用实际 PTY 和 TLS IMAP、注入合成凭据，验证按需列表/正文、resize/退出/恢复，且无 UID STORE。
+`python3 tests/e2e/verify_terminal.py target/debug/letterkeeper` 通过：真实 PTY 的中文/宽字符、80×24/24×12、j/Enter/?/q、resize、精确终端属性恢复及完整摘要批准。新增 `terminal_network` 使用实际 PTY 和 TLS IMAP、注入合成凭据，验证按需列表/正文、resize/退出/恢复，且无 UID STORE。
 
 新增 PTY 测试第一次把光标控制和跳过空白单元造成的字节差异误认为缺字；诊断确认正文已经显示，修正观察方式后通过，未宣称为应用缺陷。Ratatui 布局/宽字符和慢 Host 取消/单作业仍由独立测试覆盖。进程锁测试最初临时目录没有设 0700，被安全检查正确拒绝；补全夹具权限后通过。
 

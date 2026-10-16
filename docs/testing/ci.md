@@ -4,13 +4,13 @@
 
 ## RED 记录
 
-`python3 scripts/test_ci.py`：编排接口 stub 抛出 `NotImplementedError`，7 个测试、17 个测试/子用例错误；这是实现前真实失败，不是 Rust 业务断言失败。
+`python3 tests/ci/test_ci.py`：编排接口 stub 抛出 `NotImplementedError`，7 个测试、17 个测试/子用例错误；这是实现前真实失败，不是 Rust 业务断言失败。
 
 首次完整托管验证和后续 RED/GREEN 已实际执行；运行链接见下方和[开发记录](../development/2026-10-14-hosted-ci.md)。
 
 ## GREEN 与运行环境
 
-`python3 scripts/test_ci.py`：初次实现 9 项通过，源码产物补充后共 11 项通过（子用例覆盖非法 SHA、crate、test、phase）；调用 Cargo 的接口在本地使用替身，仅验证参数数组、准确选择、拒绝零/多个匹配、SHA 不符拒绝执行、编译 RED 与原始失败不转绿，另覆盖源码归档和摘要清单。脚本语法用 `bash -n scripts/ci/*.sh` 验证；本机没有执行 Cargo。
+`python3 tests/ci/test_ci.py`：初次实现 9 项通过，源码产物补充后共 11 项通过（子用例覆盖非法 SHA、crate、test、phase）；调用 Cargo 的接口在本地使用替身，仅验证参数数组、准确选择、拒绝零/多个匹配、SHA 不符拒绝执行、编译 RED 与原始失败不转绿，另覆盖源码归档和摘要清单。脚本语法用 `bash -n .github/ci/*.sh` 验证；本机没有执行 Cargo。
 
 `.github/workflows/ci.yml` 在完整 `ubuntu-24.04` VM 上运行，无 slim 容器。`workspace` 执行 fmt、Clippy、完整 workspace 测试、构建、真实终端、编辑/审阅/发送工作区及可达 HTTP/DNS 隐私脚本；独立 `codex-client` 安装公开 Codex CLI 并运行现有实际 app-server 脚本，无 auth、无模型回合。`ci-gate` 仅在两个 job 都为 success 时通过；失败、取消或跳过均不通过。权限仅 `contents: read`，checkout 不保留凭据，不使用个人 secret、不上传测试目录。只缓存 Cargo registry/git，不缓存 target。
 
@@ -45,7 +45,9 @@ phase 仅为记录标签，RED 断言/编译失败保留 Actions failure；没�
 
 ## 手动 release 与性能样本
 
-`.github/workflows/release.yml` 仅 `workflow_dispatch`，不作为每次提交的性能门禁、不发布 GitHub Release。运行完整 release workspace 测试/构建，再执行 `benchmark.py` 与 `benchmark_phase_c.py` 的合成邮件、1k/10k 邮箱、正文/编辑/TLS/MCP 样本；共享 VM 结果不是稳定专机基准。失败保留失败，不降低既有脚本断言。
+性能脚本分别位于 `crates/letterkeeper/benches/read/measure.py` 与 `benches/workspace/measure.py`，由 Cargo bench target 调用并将输出保存在 `target/artifacts/`。`cargo clean` 会删除构建输出和这些下载/测量产物；需要时重新下载。任何真实账户、正文、联系人、附件或凭据都不得放入 `target/`。
+
+`.github/workflows/release.yml` 仅 `workflow_dispatch`，不作为每次提交的性能门禁、不发布 GitHub Release。运行完整 release workspace 测试/构建，再执行 `read` 与 `workspace` Cargo bench targets 的合成邮件、1k/10k 邮箱、正文/编辑/TLS/MCP 样本；共享 VM 结果不是稳定专机基准。失败保留失败，不降低既有脚本断言。
 
 ```sh
 gh workflow run release.yml --repo szchan/letterkeeper --ref main
@@ -56,7 +58,7 @@ gh run list --repo szchan/letterkeeper --workflow release.yml
 
 ## 构建源码产物补充
 
-2026-10-14 本地轻量 RED：`python3 -B scripts/test_ci.py` 共 11 项，新增 2 项因 archive/hash helper stub 的 `NotImplementedError` 失败，既有 9 项通过；没有运行 Cargo。新增验收覆盖 vendor 归档保留原始 notice 字节、排除同目录 `.local`，产物摘要拒绝非 allowlist 文件及符号链接。
+2026-10-14 本地轻量 RED：`python3 -B tests/ci/test_ci.py` 共 11 项，新增 2 项因 archive/hash helper stub 的 `NotImplementedError` 失败，既有 9 项通过；没有运行 Cargo。新增验收覆盖 vendor 归档保留原始 notice 字节、排除同目录 `.local`，产物摘要拒绝非 allowlist 文件及符号链接。
 
 GREEN：同一轻量命令 11 项通过。托管 release 脚本增加 `cargo vendor --locked --versioned-dirs`，遵循 [Cargo 官方 vendor 命令说明](https://doc.rust-lang.org/cargo/commands/cargo-vendor.html)。在新临时目录使用显式 workspace manifest、相对 vendor 路径，完整保留上游源码与原始 LICENSE/COPYING/NOTICE 等文件；归档仅含 `vendor/` 与 Cargo 生成的 `.cargo/config.toml`，不复制 Cargo cache、用户目录或相邻私有文件。先用该配置 `cargo metadata --locked --offline` 验证依赖图解析，再生成 `vendor.tar.gz`。
 

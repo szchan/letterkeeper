@@ -56,3 +56,5 @@ cargo bench --locked -p letterkeeper --bench workspace -- --binary target/releas
 ```
 
 结构整理只调整代码边界和文档入口，不更改稳定需求编号、安全边界或历史验收证据。重构后的集成 revision 仍须通过远程完整门禁；本 ADR 不声称该验证已完成。
+
+基准要求显式传入 `--binary` 和 `--output`；相对路径统一以 workspace 根目录为准，绝对路径原样使用。这样从任意目录用 `cargo bench --manifest-path /path/to/letterkeeper/Cargo.toml …` 启动时不会受 Cargo 的 crate 工作目录影响。Cargo 的工作目录行为见[官方 cargo bench 说明](https://doc.rust-lang.org/cargo/commands/cargo-bench.html)。

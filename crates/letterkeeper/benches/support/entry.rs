@@ -38,11 +38,20 @@ impl Options {
 }
 
 pub fn measure(script: &Path, options: &Options, driver: Option<&Path>) -> Result<(), String> {
-    let binary = options.binary.canonicalize().map_err(|e| e.to_string())?;
+    // Cargo starts benchmarks in the member package directory. CLI paths are
+    // workspace-relative so the documented target/... paths work from any cwd.
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .map_err(|e| e.to_string())?;
+    let binary = workspace
+        .join(&options.binary)
+        .canonicalize()
+        .map_err(|e| e.to_string())?;
     if !binary.is_file() {
         return Err("benchmark binary must be a regular file".into());
     }
-    let output = std::path::absolute(&options.output).map_err(|e| e.to_string())?;
+    let output = std::path::absolute(workspace.join(&options.output)).map_err(|e| e.to_string())?;
     if output == binary || output.canonicalize().ok().as_ref() == Some(&binary) {
         return Err("benchmark output cannot overwrite the application".into());
     }

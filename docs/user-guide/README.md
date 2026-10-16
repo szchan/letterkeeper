@@ -105,3 +105,5 @@ release 的 1k/10k 合成邮箱、32 KiB/2 MiB 原文与 32 KiB/1 MiB 编辑输�
 开发继续使用独立分支/worktree、远程独立编译目录、TDD 和按任务选择模型的子代理，见 [协作流程](../WORKFLOW.md)。真实服务操作清单见 [独立验收关卡](../testing/live-acceptance.md)。
 
 
+
+基准要求显式传入 `--binary` 和 `--output`；相对路径统一以 workspace 根目录为准，绝对路径原样使用。这样从任意目录用 `cargo bench --manifest-path /path/to/letterkeeper/Cargo.toml …` 启动时不会受 Cargo 的 crate 工作目录影响。Cargo 的工作目录行为见[官方 cargo bench 说明](https://doc.rust-lang.org/cargo/commands/cargo-bench.html)。

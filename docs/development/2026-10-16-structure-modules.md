@@ -6,6 +6,8 @@
 - `letterkeeper-content`：公开值类型、MIME 解析/正文选择、HTML 无资源遍历、既有 composition 分开。共享字符预算仅在 crate 内可见；原 `parse_message`、`sanitize_text` 和类型路径保持。
 - 应用：二进制入口只负责 worker 入口识别及参数解析，CLI 参数和命令派发分别放入 `cli_args`、`commands`。`remote` 保留完整 HumanWorkspace/Host trait 实现，转交 authentication、mail、drafts、send、sync 中的内部方法；账户配置、凭据库和 OAuth 既有边界保持。
 
-没有改变依赖、数据库 schema、线上协议、授权、超时或正文处理策略。原公开路径经重导出保留；跨子模块必要的内部可见性只扩至父模块。未执行本机 Rust build/check/test/Clippy；本机仅执行 rustfmt、差异检查与静态搬移核对。新 revision 的完整远程 CI 结果在完成后追加；本记录不代表新增真实 Gmail、凭据服务或全部 P0 验收。
+没有改变依赖、数据库 schema、线上协议、授权、超时或正文处理策略。原公开路径经重导出保留；跨子模块必要的内部可见性只扩至父模块。未执行本机 Rust build/check/test/Clippy；本机仅执行 rustfmt、差异检查与静态搬移核对。以下记录完整远程 CI；本记录不代表新增真实 Gmail、凭据服务或全部 P0 验收。
 
 首个拆分 SHA `7e3964ec8990db6e18a904f41d21111e99f97ac0` 的 [CI 38842684705](https://github.com/szchan/letterkeeper/actions/runs/38842684705) 在 workspace Clippy 编译阶段发现 MCP 子模块缺少 `std::io` 导入；该失败是搬移错误，不是产品行为 RED。补齐显式导入后重新提交完整 CI，不跳过原门禁。
+
+修正后代码 SHA `72224ec8154933e67e3dc15ed7158ab3930dcd63` 的 [完整 CI 38843057573](https://github.com/szchan/letterkeeper/actions/runs/38843057573) 已通过 workspace、codex-client、ci-gate，包含 fmt/Clippy、全工作区测试、实际 PTY/中文/宽字符、人工审批发送工作区、可达 HTTP/DNS 隐私观察器与实际 Codex MCP 数据路径。本机静态核对同时确认原 57 个 RemoteHost 方法及 19 个人工 TUI 方法的函数体搬移保持；未新增依赖或修改测试。后续集成 revision 仍须重新通过完整门禁。

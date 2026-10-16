@@ -14,8 +14,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - run: bash scripts/ci/setup-linux.sh
-      - run: bash scripts/ci/toolchain.sh
+      - run: bash .github/ci/setup-linux.sh
+      - run: bash .github/ci/toolchain.sh
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
@@ -23,7 +23,7 @@ jobs:
             ~/.cargo/git
           key: cargo-ubuntu24-rust1.99-${{ hashFiles('Cargo.lock') }}
       - name: Release workspace tests, build and synthetic performance workload
-        run: python3 scripts/ci/release.py
+        run: python3 .github/ci/release.py
       - name: Binary, project/dependency sources, original notices and synthetic measurements
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

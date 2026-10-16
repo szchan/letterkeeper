@@ -14,7 +14,7 @@ import tempfile
 import termios
 import time
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 BINARY = Path(sys.argv[1] if len(sys.argv) > 1 else ROOT / "target/debug/letterkeeper").resolve()
 
 

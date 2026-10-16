@@ -30,7 +30,19 @@ fn benchmark_measurement_passes_paths_and_preserves_failure() {
     let binary = dir.path().join("synthetic app");
     std::fs::write(&binary, b"synthetic binary placeholder").unwrap();
     let script = dir.path().join("measure.py");
-    std::fs::write(&script, "import argparse, pathlib\np=argparse.ArgumentParser()\np.add_argument('--binary', required=True)\np.add_argument('--output', required=True)\np.add_argument('--driver')\na=p.parse_args()\nassert pathlib.Path(a.binary).is_file()\npathlib.Path(a.output).write_text('{\"synthetic\":true}')\n").unwrap();
+    std::fs::write(
+        &script,
+        r#"import argparse, pathlib
+p=argparse.ArgumentParser()
+p.add_argument('--binary', required=True)
+p.add_argument('--output', required=True)
+p.add_argument('--driver')
+a=p.parse_args()
+assert pathlib.Path(a.binary).is_file()
+pathlib.Path(a.output).write_text('{"synthetic":true}')
+"#,
+    )
+    .unwrap();
     let options = entry::Options {
         binary,
         output: dir.path().join("result.json"),
@@ -38,7 +50,7 @@ fn benchmark_measurement_passes_paths_and_preserves_failure() {
     entry::measure(&script, &options, None).unwrap();
     assert_eq!(
         std::fs::read_to_string(&options.output).unwrap(),
-        "{\"synthetic\":true}"
+        r#"{"synthetic":true}"#
     );
     std::fs::write(&script, "raise SystemExit(7)\n").unwrap();
     assert!(entry::measure(&script, &options, None).is_err());

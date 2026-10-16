@@ -3,3 +3,19 @@
 基线：`3cf6b01697a3dd31adbeaccb2a9cfdae27e5d279`，[完整远程 CI](https://github.com/szchan/letterkeeper/actions/runs/38736285052) success。开始前工作目录干净，现有 worktree 保留。已登记 272 项 Rust 测试（包括 3 个基准辅助入口，不把 helper 数量当成产品覆盖）。
 
 纯模块移动复用完整回归；共享测试设施及正式基准入口先提交调用方测试，预期 RED 为缺失模块和开发依赖导致的编译失败，不能称为业务断言失败。新增检查覆盖显式路径、拒绝遗漏/重复/未知参数、带空格路径、子进程失败传播，以及共享受控 TLS 场景的实际往返和无 STORE。全部 Rust 执行在 GitHub worker。
+
+## RED 证据
+
+- 正式基准入口：`0172d118ec2c368716fa8dfb7e5d665c7dc6af24`，[TDD 38842619615](https://github.com/szchan/letterkeeper/actions/runs/38842619615)，failure，`test_inventory_failed` / Cargo exit 101；准确 checkout 后缺少 `benches/support/entry.rs`，属于编译 RED。
+- 共享设施：`78e6d54de677fdbb6e7928001c1449faeca9024e`，[TDD 38843068306](https://github.com/szchan/letterkeeper/actions/runs/38843068306)，failure，`test_inventory_failed` / exit 101；准确 checkout 后缺少 `letterkeeper_test_support` 开发依赖。
+- 一次占位输入 dispatch 被输入校验拒绝（38842606951），不当作 TDD 证据。
+
+## 本地产物迁移
+
+三个历史下载构建 `64dd635`、`5fde670`、`a6fbd5f` 已从根 `output/` 完整移动至 `target/artifacts/`。迁移前原 SHA256SUMS 每包 8 项全部通过；迁移后每包全部 9 个文件逐项 SHA-256 与迁移前一致，共 27 个文件。空 `output/` 已移除。仅更新被忽略的私有启动/升级脚本中的二进制路径，未执行脚本、登录、同步或收发真实邮件。账户状态和其他历史 worktree 保留。下载可重建且会被 `cargo clean` 清除。
+
+## 测试与基准清单
+
+原 `terminal_workflow` 的 `workspace_benchmark_child`、`workspace_tls_benchmark_child`、`workspace_tls_mcp_benchmark_child` 已迁入 `benches/workspace/workloads.rs`，不再登记为普通测试。保留 8 个 TUI 样本（injected/TLS、1k/10k、32KiB/2MiB）、4 个活跃 MCP 样本，以及 read 20 次/预载 MCP 样本、进程树采样和原指标字段。正式目标 `read`/`workspace` 均 `harness=false`，显式 `--binary`/`--output`，普通 test 不运行基准负载。新增的 2 个基准入口检查与 1 个共享 TLS 实际往返检查独立登记，不用测试总数代替原安全覆盖。
+
+共享设施只依赖既有 rcgen/rustls/tokio，无生产 crate 依赖；通过工作区 dev-dependencies 消费，无循环。协议测试中的类型转换留在本 crate 的 tests/support；单独应用 SMTP 辅助服务仍在应用 tests/support。未升级注册表依赖、工具链或 schema。

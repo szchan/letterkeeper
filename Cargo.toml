@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
 [workspace]
-members = ["crates/letterkeeper-content", "crates/letterkeeper-core", "crates/letterkeeper-adapters", "crates/letterkeeper-protocol", "crates/letterkeeper-accounts", "crates/letterkeeper"]
+members = ["crates/*"]
 resolver = "2"
 
 [workspace.package]
@@ -20,3 +20,4 @@ letterkeeper-core = { path = "crates/letterkeeper-core" }
 letterkeeper-adapters = { path = "crates/letterkeeper-adapters" }
 letterkeeper-protocol = { path = "crates/letterkeeper-protocol" }
 letterkeeper-accounts = { path = "crates/letterkeeper-accounts" }
+letterkeeper-test-support = { path = "crates/letterkeeper-test-support" }

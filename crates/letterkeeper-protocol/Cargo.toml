@@ -21,4 +21,5 @@ zeroize = "1"
 log = { version = "0.4", features = ["max_level_debug", "release_max_level_debug"] }
 
 [dev-dependencies]
+letterkeeper-test-support.workspace = true
 rcgen = "0.14"

@@ -769,7 +769,10 @@ fn smtp_reports_success_and_each_explicit_refusal_without_retry() {
         (SmtpStage::Submission, 550),
         (SmtpStage::Submission, 451),
     ] {
-        let server = Server::start(Scenario::SmtpReply { stage, code });
+        let server = Server::start(Scenario::SmtpReply {
+            stage: support::smtp_stage(stage),
+            code,
+        });
         let report = smtp_report(&server);
         let transcript = server.finish();
         assert_eq!(
@@ -819,7 +822,10 @@ fn smtp_unexpected_and_malformed_responses_are_bounded_diagnostics() {
             Some(354),
         ),
     ] {
-        let server = Server::start(Scenario::SmtpReply { stage, code });
+        let server = Server::start(Scenario::SmtpReply {
+            stage: support::smtp_stage(stage),
+            code,
+        });
         let report = smtp_report(&server);
         server.finish();
         assert_eq!(
@@ -1076,7 +1082,7 @@ fn smtp_deadline_retains_phase_and_submission_uncertainty() {
         (SmtpStage::Authentication, WriteOutcome::Failed),
         (SmtpStage::Submission, WriteOutcome::Uncertain),
     ] {
-        let server = Server::start(Scenario::SmtpStall(stage));
+        let server = Server::start(Scenario::SmtpStall(support::smtp_stage(stage)));
         let started = std::time::Instant::now();
         let report = smtp_report(&server);
         assert!(started.elapsed() >= std::time::Duration::from_secs(14));

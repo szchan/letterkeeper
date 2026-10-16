@@ -10,11 +10,11 @@ import tempfile
 import unittest
 
 sys.dont_write_bytecode = True
-ROOT = Path(__file__).resolve().parents[1]
-SPEC = importlib.util.spec_from_file_location("tdd", ROOT / "scripts/ci/tdd.py")
+ROOT = Path(__file__).resolve().parents[2]
+SPEC = importlib.util.spec_from_file_location("tdd", ROOT / ".github/ci/tdd.py")
 tdd = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(tdd)
-RELEASE_SPEC = importlib.util.spec_from_file_location("release", ROOT / "scripts/ci/release.py")
+RELEASE_SPEC = importlib.util.spec_from_file_location("release", ROOT / ".github/ci/release.py")
 release = importlib.util.module_from_spec(RELEASE_SPEC)
 RELEASE_SPEC.loader.exec_module(release)
 SHA = "a" * 40

@@ -25,4 +25,4 @@ profile bwrap /usr/bin/bwrap flags=(unconfined) {
 PROFILE
     sudo apparmor_parser -r /etc/apparmor.d/letterkeeper-ci-bwrap
 fi
-python3 scripts/ci/preflight.py
+python3 "$(dirname -- "${BASH_SOURCE[0]}")/preflight.py"

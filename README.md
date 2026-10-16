@@ -10,12 +10,13 @@ LetterKeeper 是隐私优先、面向人和 Agent 的开源邮件客户端。它
 
 ## 快速开始
 
-在支持 bubblewrap、用户/网络 namespace 与 Secret Service 的 Linux 环境中，先从 [Actions 验证构建](docs/testing/ci.md) 获取对应提交的构建产物，再按 [使用指南](docs/user-guide/README.md) 运行。离线帮助示例：
+在支持 bubblewrap、用户/网络 namespace 与 Secret Service 的 Linux 环境中，先从 [Actions 验证构建](docs/testing/ci.md) 获取对应提交的构建产物，再按 [使用指南](docs/user-guide/README.md) 运行。在空目录解包下载产物后，解开所附源码以取得合成样本：
 
 ```sh
-./target/debug/letterkeeper --help
-./target/debug/letterkeeper read tests/fixtures/welcome.eml
-./target/debug/letterkeeper tui --read-only --mail tests/fixtures/welcome.eml
+tar -xzf source.tar.gz
+./letterkeeper --help
+./letterkeeper read tests/fixtures/welcome.eml
+./letterkeeper tui --read-only --mail tests/fixtures/welcome.eml
 ```
 
 本机开发会话不运行 Cargo build/check/test/Clippy 或 release 基准；这些工作由 GitHub Actions 执行。操作限制与离线演示见 [使用指南](docs/user-guide/README.md)。

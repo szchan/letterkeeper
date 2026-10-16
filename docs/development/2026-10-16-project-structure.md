@@ -16,7 +16,7 @@
 
 ## 测试与基准清单
 
-原 `terminal_workflow` 的 `workspace_benchmark_child`、`workspace_tls_benchmark_child`、`workspace_tls_mcp_benchmark_child` 已迁入 `benches/workspace/workloads.rs`，不再登记为普通测试。保留 8 个 TUI 样本（injected/TLS、1k/10k、32KiB/2MiB）、4 个活跃 MCP 样本，以及 read 20 次/预载 MCP 样本、进程树采样和原指标字段。正式目标 `read`/`workspace` 均 `harness=false`，显式 `--binary`/`--output`，普通 test 不运行基准负载。新增的 2 个基准入口检查与 1 个共享 TLS 实际往返检查独立登记，不用测试总数代替原安全覆盖。
+原 `terminal_workflow` 的 `workspace_benchmark_child`、`workspace_tls_benchmark_child`、`workspace_tls_mcp_benchmark_child` 已迁入 `benches/workspace/workloads.rs`，不再登记为普通测试。保留 8 个 TUI 样本（injected/TLS、1k/10k、32KiB/2MiB）、4 个活跃 MCP 样本，以及 read 20 次/预载 MCP 样本、进程树采样和原指标字段。正式目标 `read`/`workspace` 均 `harness=false`，显式 `--binary`/`--output`，普通 test 不运行基准负载。新增的 3 个基准入口/路径检查与 1 个共享 TLS 实际往返检查独立登记，不用测试总数代替原安全覆盖。
 
 共享设施只依赖既有 rcgen/rustls/tokio，无生产 crate 依赖；通过工作区 dev-dependencies 消费，无循环。协议测试中的类型转换留在本 crate 的 tests/support；单独应用 SMTP 辅助服务仍在应用 tests/support。未升级注册表依赖、工具链或 schema。
 
@@ -27,3 +27,9 @@
 首次完整 GREEN 实现 CI [38843418037](https://github.com/szchan/letterkeeper/actions/runs/38843418037) 在 Clippy 编译协议测试时发现本 crate 适配 helper 遗漏 `Server::start_shared`。共享设施与基准的精确测试已通过，但不能替代全 workspace 编译；补回委托原 Mailbox 场景的 helper 后重新跑完整门禁。该遗漏是搬移错误，不是新的产品行为 RED。
 
 本地静态检查：fmt、Python AST、shell `bash -n`、全部相对 Markdown 链接；CI Python 11 项与 readiness 8 项分别从项目根和 `/tmp` 运行通过。未发现运行中的 rust-analyzer/Cargo/rustc 自动构建进程，未改全局编辑器或系统配置。
+
+## 独立审查与路径回归
+
+核心/协议分支最终 SHA `50dbf68709cd31317f97ab42d5795937fec2f822` 的 [38843099344](https://github.com/szchan/letterkeeper/actions/runs/38843099344)、适配/正文/应用分支最终 SHA `a8ef645c5a915a21b8648bbe5d5b947af80c2b87` 的 [38843415945](https://github.com/szchan/letterkeeper/actions/runs/38843415945) 均完整通过。集成 `2a74c883ac9822143d72baeffc1328695c302ad9` 的 [38843865264](https://github.com/szchan/letterkeeper/actions/runs/38843865264) 完整通过，原基准参数 RED 对应的精确 [GREEN 38843893315](https://github.com/szchan/letterkeeper/actions/runs/38843893315) 通过。
+
+独立审查逐字确认共享性能服务和协议场景实现保持原样，只替换生产专用类型与凭据构造。没有生产依赖环。审查发现 Cargo 会在 crate 根目录启动基准，文档 `target/...` 相对路径不能按 cwd 解释。回归 SHA `87ba551bd29486238c6323b15070a66b22303da1` 的 [精确 RED 38844237242](https://github.com/szchan/letterkeeper/actions/runs/38844237242) 正确选中并执行 1 个测试，因找不到 workspace-relative 合成二进制失败；`test_finished` / raw exit 101。等待真实 failure 后才修复：两类显式路径统一以 workspace 根目录解析，绝对路径不变。release 原本传绝对路径，既有负载、指标和门槛未因此改变。

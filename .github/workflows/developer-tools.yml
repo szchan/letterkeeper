@@ -2,7 +2,7 @@
 name: Developer tools
 on:
   push:
-    paths: ['tools/**', 'tests/tools/**', '.github/workflows/developer-tools.yml']
+    paths: ['tools/**', 'tests/tools/**', 'tests/e2e/verify_gitnexus.py', '.github/workflows/developer-tools.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -10,7 +10,7 @@ permissions:
 jobs:
   source-boundaries:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -19,3 +19,12 @@ jobs:
         run: |
           git rev-parse HEAD
           python3 tests/tools/test_gitnexus.py
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24.11.0'
+      - name: Install pinned prebuilt graph tool (no compilation)
+        run: python3 tools/gitnexus.py install
+      - name: Index this exact source revision
+        run: python3 tools/gitnexus.py index
+      - name: Actual stdio MCP and loopback graph browser
+        run: python3 tests/e2e/verify_gitnexus.py

@@ -16,3 +16,6 @@
 # Lightweight CI orchestration checks
 **/__pycache__/
 *.pyc
+
+# Optional code graph artifacts (normal use stays under .local/)
+/.gitnexus/

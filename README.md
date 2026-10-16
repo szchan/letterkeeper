@@ -26,4 +26,5 @@ tar -xzf source.tar.gz
 - [文档总览](docs/README.md)：需求、用户指南、架构决定、开发与验证记录索引。
 - [需求](docs/REQUIREMENTS.md) · [验收状态](docs/STATUS.md) · [开发协作流程](docs/WORKFLOW.md)
 - [架构决定](docs/decisions/README.md) · [开发记录](docs/development/README.md) · [验证记录](docs/testing/README.md)
+- [GitNexus 代码图谱](docs/development/gitnexus.md)：开发者本机浏览调用关系与只读 MCP 查询。
 - [许可证](LICENSE)：GPL-3.0-only；开源许可证本身不构成隐私或安全保证。

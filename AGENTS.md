@@ -52,3 +52,11 @@ LetterKeeper 是隐私优先、轻量、面向人和 Agent 的开源邮件客户
 - 发布前检查源码、构建脚本、依赖许可证及仓库中是否含私有数据。开源许可证本身不构成隐私或安全保证。
 - 不擅自改变许可证、公开仓库、发布发行版或向外发送消息。是否提交、推送或发布按当前会话授权处理。
 - 开发工作位于本项目目录；不把系统维护仓库当成应用源码仓库，也不修改无关系统配置。
+
+## Cursor Cloud specific instructions
+
+Cloud Agent install 安装 bubblewrap 0.9.0，并把 Rust 默认工具链设为 1.99.0，与 [CI 验证](docs/testing/ci.md) 一致。基础镜像自带的 1.83 不能编译 edition 2024，install 会卸掉它。`/usr/local/cargo` 与 `/usr/local/rustup` 已在登录 shell 的 PATH 中。install 只执行 `cargo fetch --locked`，不编译。
+
+此内核没有 AppArmor。用户命名空间可用，因此不加载 GitHub Actions 里仅针对 hosted runner 的 bwrap profile。阅读和沙箱 worker 依赖 `/usr/bin/bwrap`。
+
+离线命令：`cargo build --locked -p letterkeeper --bin letterkeeper`，然后 `letterkeeper read tests/fixtures/welcome.eml`，以及在权限为 0700 的 `--state-dir` 中执行 `draft create` / `draft show`。没有私有 `/run/user` 和 Secret Service 时，`letterkeeper doctor` 以非零退出；此时 `sandbox` 仍应为 `ready`。fmt、Clippy、完整 workspace 测试和 release 基准仍由 GitHub Actions 承担，本环境的单次构建不代替 `ci-gate`。

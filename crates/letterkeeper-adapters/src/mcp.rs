@@ -3,7 +3,7 @@ use super::{DraftInput, Host, HostError, inert_text};
 use rmcp::{RoleServer, ServerHandler, ServiceExt, model::*, service::RequestContext};
 use serde::Deserialize;
 use serde_json::{Value, json};
-use std::sync::Arc;
+use std::{io, sync::Arc};
 fn output_truncated(v: &Value) -> bool {
     match v {
         Value::String(s) => s.chars().count() > 16384,
